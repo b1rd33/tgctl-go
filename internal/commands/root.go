@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/b1rd33/tgctl-go/internal/output"
 )
 
 type RootConfig struct {
@@ -32,6 +34,7 @@ func NewRootCommand() *cobra.Command {
 	cmd.PersistentFlags().BoolVar(&cfg.Full, "full", false, "Disable column truncation in human-mode output.")
 	cmd.PersistentFlags().StringVar(&cfg.Account, "account", "", "Account name (uses accounts/<NAME>/). Default selected via accounts-use or TG_ACCOUNT env.")
 	cmd.SetContext(context.WithValue(context.Background(), rootConfigKey{}, cfg))
+	registerVersion(cmd)
 	return cmd
 }
 
@@ -40,6 +43,27 @@ func RootConfigFrom(cmd *cobra.Command) RootConfig {
 		return *cfg
 	}
 	return RootConfig{}
+}
+
+func registerVersion(root *cobra.Command) {
+	v := &cobra.Command{
+		Use:          "version",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			env := output.Success("version", map[string]any{"version": "dev"}, output.NewRequestID(), nil)
+			code := output.Emit(env, output.EmitOptions{
+				JSON:   jsonMode(cmd),
+				Stdout: cmd.OutOrStdout(),
+				Stderr: cmd.ErrOrStderr(),
+			})
+			if code != output.OK {
+				return fmt.Errorf("version failed")
+			}
+			return nil
+		},
+	}
+	AddOutputFlags(v)
+	root.AddCommand(v)
 }
 
 func ExecuteRoot(root *cobra.Command) int {

@@ -62,3 +62,22 @@ func TestRootCommandPropagatesGlobalFlagValues(t *testing.T) {
 		t.Fatalf("Account = %q, want work", cfg.Account)
 	}
 }
+
+func TestVersionCommandRegistered(t *testing.T) {
+	var stdout bytes.Buffer
+	root := NewRootCommand()
+	root.SetOut(&stdout)
+	root.SetErr(io.Discard)
+	root.SetArgs([]string{"version", "--json"})
+
+	code := ExecuteRoot(root)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	if !bytes.Contains(stdout.Bytes(), []byte(`"command":"version"`)) {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+	if !bytes.Contains(stdout.Bytes(), []byte(`"warnings":[]`)) {
+		t.Fatalf("stdout = %q, want success envelope with warnings", stdout.String())
+	}
+}
