@@ -1,6 +1,7 @@
 package output
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -85,5 +86,31 @@ func TestFailEnvelopeShape(t *testing.T) {
 	}
 	if got := env.Error.Extra["retry_after_seconds"]; got != 30 {
 		t.Fatalf("retry_after_seconds = %#v, want 30", got)
+	}
+}
+
+func TestEnvelopeJSONMatchesPythonShape(t *testing.T) {
+	env := Fail("x", LocalRateLimit, "slow down", "req-1", map[string]any{
+		"retry_after_seconds": 2.5,
+	})
+	got, err := json.Marshal(env)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	want := `{"ok":false,"command":"x","request_id":"req-1","error":{"code":"LOCAL_RATE_LIMIT","message":"slow down","retry_after_seconds":2.5}}`
+	if string(got) != want {
+		t.Fatalf("json = %s, want %s", got, want)
+	}
+}
+
+func TestSuccessEnvelopeJSONIncludesEmptyWarnings(t *testing.T) {
+	env := Success("stats", map[string]any{"x": 1}, "r", nil)
+	got, err := json.Marshal(env)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	want := `{"ok":true,"command":"stats","request_id":"r","data":{"x":1},"warnings":[]}`
+	if string(got) != want {
+		t.Fatalf("json = %s, want %s", got, want)
 	}
 }
