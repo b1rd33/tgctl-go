@@ -118,6 +118,41 @@ type SessionRef struct {
 	IsCurrent  bool
 }
 
+type ChatInfo struct {
+	ID       int64
+	Type     string
+	Title    string
+	Username string
+}
+
+type ContactInfo struct {
+	UserID    int64
+	Phone     string
+	FirstName string
+	LastName  string
+	Username  string
+	IsMutual  bool
+}
+
+type BackfillReq struct {
+	ChatID int64
+	Limit  int
+}
+
+type BackfillMessage struct {
+	ChatID       int64
+	MessageID    int64
+	SenderID     int64
+	Date         string
+	Text         string
+	IsOutgoing   bool
+	ReplyToMsgID int64
+	HasMedia     bool
+	MediaType    string
+	MediaPath    string
+	RawJSON      string
+}
+
 // TerminateSessionReq mirrors account.ResetAuthorization.
 type TerminateSessionReq struct {
 	Hash int64
@@ -139,6 +174,9 @@ type Client interface {
 	UnblockUser(ctx context.Context, req BlockUserReq) error
 	ListSessions(ctx context.Context) ([]SessionRef, error)
 	TerminateSession(ctx context.Context, req TerminateSessionReq) error
+	DiscoverDialogs(ctx context.Context, limit int) ([]ChatInfo, error)
+	SyncContacts(ctx context.Context) ([]ContactInfo, error)
+	BackfillMessages(ctx context.Context, req BackfillReq) ([]BackfillMessage, error)
 	Close() error
 }
 

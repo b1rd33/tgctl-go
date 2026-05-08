@@ -44,6 +44,7 @@ func runRoot(t *testing.T, cfg CommandsConfig, args ...string) (string, int) {
 	registerReadCommands(root, cfg.Paths)
 	registerAuth(root, cfg.Paths)
 	registerDestructiveCommands(root, cfg)
+	registerLocalDBCommands(root, cfg)
 	var stdout, stderr bytes.Buffer
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)

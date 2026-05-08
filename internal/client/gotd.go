@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
@@ -624,6 +625,129 @@ func (g *GotdClient) ListSessions(ctx context.Context) ([]SessionRef, error) {
 func (g *GotdClient) TerminateSession(ctx context.Context, req TerminateSessionReq) error {
 	_, err := g.api.AccountResetAuthorization(ctx, req.Hash)
 	return mapRPCErr(err)
+}
+
+func (g *GotdClient) DiscoverDialogs(ctx context.Context, limit int) ([]ChatInfo, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	dialogs, err := g.api.MessagesGetDialogs(ctx, &tg.MessagesGetDialogsRequest{
+		OffsetPeer: &tg.InputPeerEmpty{},
+		Limit:      limit,
+	})
+	if err != nil {
+		return nil, mapRPCErr(err)
+	}
+	var users []tg.UserClass
+	var chats []tg.ChatClass
+	switch d := dialogs.(type) {
+	case *tg.MessagesDialogs:
+		users, chats = d.Users, d.Chats
+	case *tg.MessagesDialogsSlice:
+		users, chats = d.Users, d.Chats
+	}
+	var out []ChatInfo
+	for _, u := range users {
+		if user, ok := u.(*tg.User); ok && !user.Min {
+			g.persistEntitiesFromResolved([]tg.UserClass{u}, nil)
+			out = append(out, ChatInfo{ID: user.ID, Type: "user", Title: DisplayName(user.FirstName, user.LastName, user.Username, user.ID), Username: user.Username})
+		}
+	}
+	for _, c := range chats {
+		switch v := c.(type) {
+		case *tg.Channel:
+			g.persistEntitiesFromResolved(nil, []tg.ChatClass{c})
+			kind := "channel"
+			if v.Megagroup {
+				kind = "supergroup"
+			}
+			out = append(out, ChatInfo{ID: v.ID, Type: kind, Title: v.Title, Username: v.Username})
+		case *tg.Chat:
+			g.persistEntitiesFromResolved(nil, []tg.ChatClass{c})
+			out = append(out, ChatInfo{ID: v.ID, Type: "group", Title: v.Title})
+		}
+	}
+	return out, nil
+}
+
+func (g *GotdClient) SyncContacts(ctx context.Context) ([]ContactInfo, error) {
+	resp, err := g.api.ContactsGetContacts(ctx, 0)
+	if err != nil {
+		return nil, mapRPCErr(err)
+	}
+	cc, ok := resp.(*tg.ContactsContacts)
+	if !ok {
+		return nil, nil
+	}
+	g.persistEntitiesFromResolved(cc.Users, nil)
+	out := make([]ContactInfo, 0, len(cc.Users))
+	for _, u := range cc.Users {
+		if user, ok := u.(*tg.User); ok {
+			out = append(out, ContactInfo{
+				UserID: user.ID, Phone: user.Phone, FirstName: user.FirstName,
+				LastName: user.LastName, Username: user.Username, IsMutual: user.MutualContact,
+			})
+		}
+	}
+	return out, nil
+}
+
+func (g *GotdClient) BackfillMessages(ctx context.Context, req BackfillReq) ([]BackfillMessage, error) {
+	peer, err := g.peerFromChatID(ctx, req.ChatID)
+	if err != nil {
+		return nil, err
+	}
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 100
+	}
+	resp, err := g.api.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{Peer: peer, Limit: limit})
+	if err != nil {
+		return nil, mapRPCErr(err)
+	}
+	var msgs []tg.MessageClass
+	switch m := resp.(type) {
+	case *tg.MessagesMessages:
+		msgs = m.Messages
+	case *tg.MessagesMessagesSlice:
+		msgs = m.Messages
+	}
+	out := make([]BackfillMessage, 0, len(msgs))
+	for _, mc := range msgs {
+		m, ok := mc.(*tg.Message)
+		if !ok {
+			continue
+		}
+		row := BackfillMessage{
+			ChatID: req.ChatID, MessageID: int64(m.ID), Date: timeFromUnix(m.Date),
+			Text: m.Message, IsOutgoing: m.Out, HasMedia: m.Media != nil,
+		}
+		row.SenderID = peerID(m.FromID)
+		if m.Media != nil {
+			row.MediaType = fmt.Sprintf("%T", m.Media)
+		}
+		out = append(out, row)
+	}
+	return out, nil
+}
+
+func peerID(p tg.PeerClass) int64 {
+	switch v := p.(type) {
+	case *tg.PeerUser:
+		return v.UserID
+	case *tg.PeerChat:
+		return v.ChatID
+	case *tg.PeerChannel:
+		return v.ChannelID
+	}
+	return 0
+}
+
+func timeFromUnix(ts int) string {
+	if ts == 0 {
+		return ""
+	}
+	return time.Unix(int64(ts), 0).UTC().Format(time.RFC3339)
 }
 
 // extractAllNewMessageIDs returns the message ids of every new-message update

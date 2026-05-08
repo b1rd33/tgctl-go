@@ -19,7 +19,6 @@
 //                     set-permissions, chat-invite-link, promote, demote,
 //                     ban-from-chat, kick, unban-from-chat, chat-members,
 //                     chats-info, topics-list, account-sessions)
-//   14. Local DB ops (backfill, discover, sync-contacts)
 //   15. Live         (listen)
 //   plus: stats, contacts, unread, chats-info-style read commands
 //          that need real client integration to populate.
@@ -57,8 +56,6 @@ func registerStubCommands(root *cobra.Command, _ CommandsConfig) {
 			"promote", "demote", "ban-from-chat", "kick", "unban-from-chat",
 			"chat-members", "chats-info", "account-sessions",
 		},
-		// Phase 14
-		"localdb": {"backfill", "discover", "sync-contacts"},
 		// Phase 15 partial
 		"live": {"listen"},
 		// Read commands that need a populated cache (live integration).

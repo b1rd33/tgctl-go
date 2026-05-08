@@ -25,6 +25,13 @@ type FakeClient struct {
 	Unblocks []BlockUserReq
 	Sessions []SessionRef
 	Terms    []TerminateSessionReq
+	Dialogs  []ChatInfo
+	Contacts []ContactInfo
+
+	Discoveries  []int
+	ContactSyncs []bool
+	Backfills    []BackfillReq
+	BackfillRows []BackfillMessage
 
 	// LastMessageID is the next id returned by SendMessage. Tests override this.
 	NextMessageID int64
@@ -163,6 +170,30 @@ func (f *FakeClient) TerminateSession(_ context.Context, req TerminateSessionReq
 	}
 	f.Terms = append(f.Terms, req)
 	return nil
+}
+
+func (f *FakeClient) DiscoverDialogs(_ context.Context, limit int) ([]ChatInfo, error) {
+	if err := f.record("DiscoverDialogs"); err != nil {
+		return nil, err
+	}
+	f.Discoveries = append(f.Discoveries, limit)
+	return f.Dialogs, nil
+}
+
+func (f *FakeClient) SyncContacts(_ context.Context) ([]ContactInfo, error) {
+	if err := f.record("SyncContacts"); err != nil {
+		return nil, err
+	}
+	f.ContactSyncs = append(f.ContactSyncs, true)
+	return f.Contacts, nil
+}
+
+func (f *FakeClient) BackfillMessages(_ context.Context, req BackfillReq) ([]BackfillMessage, error) {
+	if err := f.record("BackfillMessages"); err != nil {
+		return nil, err
+	}
+	f.Backfills = append(f.Backfills, req)
+	return f.BackfillRows, nil
 }
 
 func (f *FakeClient) Close() error {
