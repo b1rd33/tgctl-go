@@ -1,12 +1,23 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
 )
 
+type RootConfig struct {
+	ReadOnly        bool
+	LockWaitSeconds float64
+	Full            bool
+	Account         string
+}
+
+type rootConfigKey struct{}
+
 func NewRootCommand() *cobra.Command {
+	cfg := &RootConfig{}
 	cmd := &cobra.Command{
 		Use:          "tg",
 		Short:        "Telegram agent CLI",
@@ -16,7 +27,19 @@ func NewRootCommand() *cobra.Command {
 			fmt.Fprintln(c.ErrOrStderr(), c.Long)
 		},
 	}
+	cmd.PersistentFlags().BoolVar(&cfg.ReadOnly, "read-only", false, "Reject any write to Telegram or local DB. Also via TG_READONLY=1.")
+	cmd.PersistentFlags().Float64Var(&cfg.LockWaitSeconds, "lock-wait", 0, "Seconds to wait for the Telegram session lock (default 0 = fail-fast).")
+	cmd.PersistentFlags().BoolVar(&cfg.Full, "full", false, "Disable column truncation in human-mode output.")
+	cmd.PersistentFlags().StringVar(&cfg.Account, "account", "", "Account name (uses accounts/<NAME>/). Default selected via accounts-use or TG_ACCOUNT env.")
+	cmd.SetContext(context.WithValue(context.Background(), rootConfigKey{}, cfg))
 	return cmd
+}
+
+func RootConfigFrom(cmd *cobra.Command) RootConfig {
+	if cfg, ok := cmd.Context().Value(rootConfigKey{}).(*RootConfig); ok && cfg != nil {
+		return *cfg
+	}
+	return RootConfig{}
 }
 
 func ExecuteRoot(root *cobra.Command) int {

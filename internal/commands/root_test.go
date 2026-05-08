@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"io"
 	"testing"
 )
 
@@ -23,5 +24,41 @@ func TestNewRootCommandHasNameAndNoCommandReturnsOK(t *testing.T) {
 	}
 	if !bytes.Contains(stderr.Bytes(), []byte("Telegram agent CLI")) {
 		t.Fatalf("stderr help = %q, want description", stderr.String())
+	}
+}
+
+func TestRootCommandGlobalFlags(t *testing.T) {
+	root := NewRootCommand()
+
+	flags := []string{"read-only", "lock-wait", "full", "account"}
+	for _, name := range flags {
+		if root.PersistentFlags().Lookup(name) == nil {
+			t.Fatalf("missing persistent flag --%s", name)
+		}
+	}
+}
+
+func TestRootCommandPropagatesGlobalFlagValues(t *testing.T) {
+	root := NewRootCommand()
+	root.SetArgs([]string{"--read-only", "--lock-wait", "1.5", "--full", "--account", "work"})
+	root.SetOut(io.Discard)
+	root.SetErr(io.Discard)
+
+	code := ExecuteRoot(root)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	cfg := RootConfigFrom(root)
+	if !cfg.ReadOnly {
+		t.Fatalf("ReadOnly = false")
+	}
+	if cfg.LockWaitSeconds != 1.5 {
+		t.Fatalf("LockWaitSeconds = %v, want 1.5", cfg.LockWaitSeconds)
+	}
+	if !cfg.Full {
+		t.Fatalf("Full = false")
+	}
+	if cfg.Account != "work" {
+		t.Fatalf("Account = %q, want work", cfg.Account)
 	}
 }
