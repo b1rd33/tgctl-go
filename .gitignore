@@ -4,3 +4,6 @@
 /dist/
 /accounts/
 /tg
+/.env
+*.session
+*.session.lock

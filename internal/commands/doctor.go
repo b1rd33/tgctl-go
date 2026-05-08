@@ -86,6 +86,6 @@ func doctorReport(m *accounts.Manager) map[string]any {
 		"db_schema_ok":         dbSchemaOK,
 		"session_exists":       sessionExists,
 		"session_lock_present": sessionLockHeld,
-		"client_kind":          "stub", // gotd wiring lands later
+		"client_kind":          "gotd",
 	}
 }

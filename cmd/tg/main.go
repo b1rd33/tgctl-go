@@ -23,7 +23,7 @@ func main() {
 
 	cfg := commands.CommandsConfig{
 		Paths:         mgr,
-		ClientFactory: stubClientFactory,
+		ClientFactory: gotdClientFactory,
 	}
 
 	cmd := commands.NewRootCommand()
@@ -42,11 +42,14 @@ func projectRoot() string {
 // stubClientFactory is the placeholder for the gotd/td-backed factory that
 // will land alongside the live MTProto wiring. It returns a clear error so
 // the dispatch layer maps it to NOT_AUTHED.
-func stubClientFactory(_ context.Context, _ string) (client.Client, error) {
-	return nil, safety.NewMissingCredentials(
-		"live Telegram client not wired in this Go build. " +
-			"The Python reference at github.com/b1rd33/tg-cli is the working " +
-			"implementation today; the Go port ships the safety, store, " +
-			"dispatch, and CLI layers.",
-	)
+// gotdClientFactory returns the real gotd/td-backed Client. It expects a
+// session at sessionPath created by `tg login`.
+func gotdClientFactory(ctx context.Context, sessionPath string) (client.Client, error) {
+	apiID, apiHash, err := client.EnsureCredentials()
+	if err != nil {
+		return nil, err
+	}
+	return client.New(ctx, apiID, apiHash, sessionPath)
 }
+
+var _ = safety.NewMissingCredentials // kept for any future fallback factory

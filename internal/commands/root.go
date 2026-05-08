@@ -108,5 +108,7 @@ func RegisterAll(root *cobra.Command, mgr *accounts.Manager, cfg CommandsConfig)
 	registerDestructiveCommands(root, cfg)
 	registerAccountCommands(root, mgr)
 	registerDoctor(root, mgr)
+	registerLogin(root, mgr)
+	registerSendByUsername(root, mgr)
 	registerStubCommands(root, cfg)
 }
