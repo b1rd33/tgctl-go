@@ -80,4 +80,27 @@ func TestVersionCommandRegistered(t *testing.T) {
 	if !bytes.Contains(stdout.Bytes(), []byte(`"warnings":[]`)) {
 		t.Fatalf("stdout = %q, want success envelope with warnings", stdout.String())
 	}
+	if !bytes.Contains(stdout.Bytes(), []byte(`"commit"`)) {
+		t.Fatalf("stdout = %q, want commit field", stdout.String())
+	}
+}
+
+func TestRootVersionFlagUsesInjectedVersion(t *testing.T) {
+	old := Version
+	Version = "v0.1.0-2-gabcdef0"
+	defer func() { Version = old }()
+
+	var stdout bytes.Buffer
+	root := NewRootCommand()
+	root.SetOut(&stdout)
+	root.SetErr(io.Discard)
+	root.SetArgs([]string{"--version"})
+
+	code := ExecuteRoot(root)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	if got := stdout.String(); got != "v0.1.0\n" {
+		t.Fatalf("stdout = %q, want v0.1.0", got)
+	}
 }

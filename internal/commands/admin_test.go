@@ -18,6 +18,28 @@ func TestChatTitleInvokesClient(t *testing.T) {
 	}
 }
 
+func TestSetPermissionsAcceptsSendMessagesFlag(t *testing.T) {
+	cfg, fc, _ := setupWriteEnv(t)
+	out, code := runRoot(t, cfg, "set-permissions", "1", "--send-messages", "--allow-write", "--dry-run", "--json")
+	if code != 0 {
+		t.Fatalf("code=%d\nout:%s", code, out)
+	}
+	if !strings.Contains(out, `"send_messages":true`) {
+		t.Fatalf("out=%s", out)
+	}
+	if len(fc.AdminActions) != 0 {
+		t.Fatalf("dry-run called client: %#v", fc.AdminActions)
+	}
+
+	out, code = runRoot(t, cfg, "set-permissions", "1", "--send-messages", "--allow-write", "--json")
+	if code != 0 {
+		t.Fatalf("code=%d\nout:%s", code, out)
+	}
+	if len(fc.AdminActions) != 1 || fc.AdminActions[0].Action != "set-permissions" || fc.AdminActions[0].Value != "send-messages" {
+		t.Fatalf("AdminActions=%#v", fc.AdminActions)
+	}
+}
+
 func TestBanFromChatRequiresTypedUserConfirm(t *testing.T) {
 	cfg, fc, _ := setupWriteEnv(t)
 	out, code := runRoot(t, cfg, "ban-from-chat", "1", "42", "--allow-write", "--json")

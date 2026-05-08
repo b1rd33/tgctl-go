@@ -15,7 +15,7 @@ func registerAdminCommands(root *cobra.Command, cfg CommandsConfig) {
 	root.AddCommand(adminValueCommand(cfg, "chat-title", "channels.EditTitle", "Edit chat title", "title"))
 	root.AddCommand(adminValueCommand(cfg, "chat-description", "channels.EditAbout", "Edit chat description", "description"))
 	root.AddCommand(adminValueCommand(cfg, "chat-photo", "channels.EditPhoto", "Edit chat photo", "photo"))
-	root.AddCommand(adminValueCommand(cfg, "set-permissions", "messages.EditChatDefaultBannedRights", "Set default chat permissions", "permissions"))
+	root.AddCommand(setPermissionsCommand(cfg))
 	root.AddCommand(adminNoValueCommand(cfg, "chat-invite-link", "messages.ExportChatInvite", "Export an invite link"))
 	root.AddCommand(adminUserCommand(cfg, "promote", "channels.EditAdmin", false))
 	root.AddCommand(adminUserCommand(cfg, "demote", "channels.EditAdmin", false))
@@ -25,6 +25,39 @@ func registerAdminCommands(root *cobra.Command, cfg CommandsConfig) {
 	root.AddCommand(chatMembersCommand(cfg))
 	root.AddCommand(chatsInfoCommand(cfg))
 	root.AddCommand(accountSessionsCommand(cfg))
+}
+
+func setPermissionsCommand(cfg CommandsConfig) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:          "set-permissions <chat> [permissions]",
+		Short:        "Set default chat permissions",
+		Args:         cobra.RangeArgs(1, 2),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			sendMessages, _ := cmd.Flags().GetBool("send-messages")
+			value := ""
+			if len(args) == 2 {
+				value = args[1]
+			}
+			if sendMessages {
+				value = "send-messages"
+			}
+			if value == "" {
+				return emitDispatchedFailure(cmd, "set-permissions", safety.NewBadArgs("permissions cannot be empty"))
+			}
+			payload := map[string]any{"permissions": value, "send_messages": sendMessages}
+			return runWrite(cmd, "set-permissions", "messages.EditChatDefaultBannedRights", args[0], cfg, payload,
+				func(ctx context.Context, c client.Client, chatID int64, _ string) (map[string]any, error) {
+					if _, err := c.AdminAction(ctx, client.AdminActionReq{Action: "set-permissions", ChatID: chatID, Value: value}); err != nil {
+						return nil, err
+					}
+					return map[string]any{"updated": true, "permissions": value, "send_messages": sendMessages}, nil
+				})
+		},
+	}
+	cmd.Flags().Bool("send-messages", false, "Allow sending messages")
+	addWriteFlags(cmd)
+	return cmd
 }
 
 func adminValueCommand(cfg CommandsConfig, name, method, short, field string) *cobra.Command {

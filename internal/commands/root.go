@@ -3,6 +3,8 @@ package commands
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -29,11 +31,13 @@ func NewRootCommand() *cobra.Command {
 		Use:          "tg",
 		Short:        "Telegram agent CLI",
 		Long:         "Telegram agent CLI — read/write/listen against your own Telegram account.",
+		Version:      semverVersion(),
 		SilenceUsage: true,
 		Run: func(c *cobra.Command, _ []string) {
 			fmt.Fprintln(c.ErrOrStderr(), c.Long)
 		},
 	}
+	cmd.SetVersionTemplate("{{.Version}}\n")
 	cmd.PersistentFlags().BoolVar(&cfg.ReadOnly, "read-only", false, "Reject any write to Telegram or local DB. Also via TG_READONLY=1.")
 	cmd.PersistentFlags().Float64Var(&cfg.LockWaitSeconds, "lock-wait", 0, "Seconds to wait for the Telegram session lock (default 0 = fail-fast).")
 	cmd.PersistentFlags().BoolVar(&cfg.Full, "full", false, "Disable column truncation in human-mode output.")
@@ -53,9 +57,13 @@ func RootConfigFrom(cmd *cobra.Command) RootConfig {
 func registerVersion(root *cobra.Command) {
 	v := &cobra.Command{
 		Use:          "version",
+		Short:        "Print build version",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			env := output.Success("version", map[string]any{"version": "dev"}, output.NewRequestID(), nil)
+			env := output.Success("version", map[string]any{
+				"version": semverVersion(),
+				"commit":  shortCommit(),
+			}, output.NewRequestID(), nil)
 			code := output.Emit(env, output.EmitOptions{
 				JSON:   jsonMode(cmd),
 				Stdout: cmd.OutOrStdout(),
@@ -69,6 +77,48 @@ func registerVersion(root *cobra.Command) {
 	}
 	AddOutputFlags(v)
 	root.AddCommand(v)
+}
+
+func semverVersion() string {
+	if strings.HasPrefix(Version, "v") {
+		if i := strings.IndexByte(Version, '-'); i > 0 {
+			return Version[:i]
+		}
+	}
+	return Version
+}
+
+func shortCommit() string {
+	if rev := vcsRevision(); rev != "" {
+		if len(rev) > 12 {
+			return rev[:12]
+		}
+		return rev
+	}
+	if i := strings.LastIndex(Version, "-g"); i >= 0 {
+		commit := Version[i+2:]
+		if j := strings.IndexByte(commit, '-'); j >= 0 {
+			commit = commit[:j]
+		}
+		return commit
+	}
+	if !strings.HasPrefix(Version, "v") && Version != "dev" {
+		return Version
+	}
+	return ""
+}
+
+func vcsRevision() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return ""
+	}
+	for _, setting := range info.Settings {
+		if setting.Key == "vcs.revision" {
+			return setting.Value
+		}
+	}
+	return ""
 }
 
 func ExecuteRoot(root *cobra.Command) int {
