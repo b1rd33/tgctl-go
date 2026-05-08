@@ -1,6 +1,7 @@
 package output
 
 import (
+	"bytes"
 	"encoding/json"
 	"regexp"
 	"testing"
@@ -128,5 +129,66 @@ func TestNewRequestIDFormatAndUniqueness(t *testing.T) {
 	}
 	if first == second {
 		t.Fatalf("request ids repeated: %q", first)
+	}
+}
+
+func TestEmitJSONSuccessReturnsZero(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Emit(Success("stats", map[string]any{"x": 1}, "r", nil), EmitOptions{
+		JSON:   true,
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+	if code != OK {
+		t.Fatalf("code = %d, want OK", code)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &parsed); err != nil {
+		t.Fatalf("unmarshal stdout: %v", err)
+	}
+	if parsed["ok"] != true {
+		t.Fatalf("ok = %#v", parsed["ok"])
+	}
+}
+
+func TestEmitJSONFailureReturnsMappedExitCode(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Emit(Fail("x", NotFound, "missing", "r", nil), EmitOptions{
+		JSON:   true,
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+	if code != NotFound {
+		t.Fatalf("code = %d, want NOT_FOUND", code)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	if !bytes.Contains(stdout.Bytes(), []byte(`"code":"NOT_FOUND"`)) {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+}
+
+func TestEmitHumanFailureWritesStderr(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Emit(Fail("stats", NotFound, "no DB", "r", nil), EmitOptions{
+		JSON:   false,
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+	if code != NotFound {
+		t.Fatalf("code = %d, want NOT_FOUND", code)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+	if !bytes.Contains(stderr.Bytes(), []byte("ERROR [NOT_FOUND]: no DB")) {
+		t.Fatalf("stderr = %q", stderr.String())
 	}
 }

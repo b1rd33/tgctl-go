@@ -5,7 +5,75 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 )
+
+type EmitOptions struct {
+	JSON           bool
+	Stdout         io.Writer
+	Stderr         io.Writer
+	HumanFormatter func(any)
+}
+
+func Emit(envelope Envelope, opts EmitOptions) ExitCode {
+	stdout := opts.Stdout
+	stderr := opts.Stderr
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+
+	if opts.JSON {
+		encoded, err := json.Marshal(envelope)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "ERROR [GENERIC]: %v\n", err)
+			return Generic
+		}
+		_, _ = fmt.Fprintln(stdout, string(encoded))
+	} else if envelope.OK {
+		if opts.HumanFormatter != nil {
+			opts.HumanFormatter(envelope.Data)
+		} else {
+			encoded, _ := json.MarshalIndent(envelope.Data, "", "  ")
+			_, _ = fmt.Fprintln(stdout, string(encoded))
+		}
+	} else {
+		_, _ = fmt.Fprintf(stderr, "ERROR [%s]: %s\n", envelope.Error.Code, envelope.Error.Message)
+	}
+
+	if envelope.OK {
+		return OK
+	}
+	return ExitCodeFromString(envelope.Error.Code)
+}
+
+func ExitCodeFromString(name string) ExitCode {
+	switch name {
+	case "OK":
+		return OK
+	case "BAD_ARGS":
+		return BadArgs
+	case "NOT_AUTHED":
+		return NotAuthed
+	case "NOT_FOUND":
+		return NotFound
+	case "FLOOD_WAIT":
+		return FloodWait
+	case "WRITE_DISALLOWED":
+		return WriteDisallowed
+	case "NEEDS_CONFIRM":
+		return NeedsConfirm
+	case "LOCAL_RATE_LIMIT":
+		return LocalRateLimit
+	case "PREMIUM_REQUIRED":
+		return PremiumRequired
+	default:
+		return Generic
+	}
+}
 
 func NewRequestID() string {
 	var b [4]byte
