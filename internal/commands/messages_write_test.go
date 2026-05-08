@@ -8,11 +8,13 @@ import (
 	"testing"
 
 	"github.com/b1rd33/tgctl-go/internal/client"
+	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
 func setupWriteEnv(t *testing.T) (CommandsConfig, *client.FakeClient, string) {
 	t.Helper()
+	safety.OutboundWriteLimiter = safety.NewRateLimiter(20, 60_000_000_000)
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "telegram.sqlite")
 	auditPath := filepath.Join(dir, "audit.log")
@@ -46,6 +48,7 @@ func runRoot(t *testing.T, cfg CommandsConfig, args ...string) (string, int) {
 	registerReadCommands(root, cfg.Paths)
 	registerAuth(root, cfg.Paths)
 	registerDestructiveCommands(root, cfg)
+	registerAdminCommands(root, cfg)
 	registerLocalDBCommands(root, cfg)
 	var stdout, stderr bytes.Buffer
 	root.SetOut(&stdout)

@@ -112,17 +112,17 @@ type BlockUserReq struct {
 
 // SessionRef is one row from account.GetAuthorizations.
 type SessionRef struct {
-	Hash       int64
-	DeviceName string
-	Platform   string
-	IsCurrent  bool
+	Hash       int64  `json:"hash"`
+	DeviceName string `json:"device_name"`
+	Platform   string `json:"platform"`
+	IsCurrent  bool   `json:"is_current"`
 }
 
 type ChatInfo struct {
-	ID       int64
-	Type     string
-	Title    string
-	Username string
+	ID       int64  `json:"chat_id"`
+	Type     string `json:"type"`
+	Title    string `json:"title"`
+	Username string `json:"username"`
 }
 
 type ContactInfo struct {
@@ -205,6 +205,26 @@ type FolderUpdateReq struct {
 	ExcludeChatIDs []int64
 }
 
+type AdminActionReq struct {
+	Action string
+	ChatID int64
+	UserID int64
+	Value  string
+	Path   string
+	Flags  map[string]bool
+}
+
+type InviteLinkResp struct {
+	Link string
+}
+
+type MemberInfo struct {
+	UserID      int64  `json:"user_id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	Role        string `json:"role"`
+}
+
 // TerminateSessionReq mirrors account.ResetAuthorization.
 type TerminateSessionReq struct {
 	Hash int64
@@ -238,6 +258,9 @@ type Client interface {
 	DeleteFolder(ctx context.Context, id int64) error
 	ReorderFolders(ctx context.Context, ids []int64) error
 	ListPinnedDialogs(ctx context.Context, chatID int64) ([]ChatInfo, error)
+	AdminAction(ctx context.Context, req AdminActionReq) (InviteLinkResp, error)
+	ListChatMembers(ctx context.Context, chatID int64, limit int) ([]MemberInfo, error)
+	GetChatsInfo(ctx context.Context, ids []int64) ([]ChatInfo, error)
 	Close() error
 }
 

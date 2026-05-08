@@ -43,6 +43,9 @@ type FakeClient struct {
 	FolderDeletes []int64
 	FolderReorders [][]int64
 	PinnedLists   []int64
+	AdminActions  []AdminActionReq
+	Members       []MemberInfo
+	ChatInfos     []ChatInfo
 
 	// LastMessageID is the next id returned by SendMessage. Tests override this.
 	NextMessageID int64
@@ -280,6 +283,35 @@ func (f *FakeClient) ListPinnedDialogs(_ context.Context, chatID int64) ([]ChatI
 	}
 	f.PinnedLists = append(f.PinnedLists, chatID)
 	return f.Dialogs, nil
+}
+
+func (f *FakeClient) AdminAction(_ context.Context, req AdminActionReq) (InviteLinkResp, error) {
+	if err := f.record("AdminAction"); err != nil {
+		return InviteLinkResp{}, err
+	}
+	f.AdminActions = append(f.AdminActions, req)
+	return InviteLinkResp{Link: "https://t.me/+fake"}, nil
+}
+
+func (f *FakeClient) ListChatMembers(_ context.Context, chatID int64, limit int) ([]MemberInfo, error) {
+	if err := f.record("ListChatMembers"); err != nil {
+		return nil, err
+	}
+	return f.Members, nil
+}
+
+func (f *FakeClient) GetChatsInfo(_ context.Context, ids []int64) ([]ChatInfo, error) {
+	if err := f.record("GetChatsInfo"); err != nil {
+		return nil, err
+	}
+	if len(f.ChatInfos) != 0 {
+		return f.ChatInfos, nil
+	}
+	out := make([]ChatInfo, len(ids))
+	for i, id := range ids {
+		out[i] = ChatInfo{ID: id}
+	}
+	return out, nil
 }
 
 func (f *FakeClient) Close() error {

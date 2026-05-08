@@ -10,10 +10,6 @@
 //   - keeps the JSON envelope shape uniform
 //
 // Stubbed phases:
-//   12. Admin        (chat-title, chat-photo, chat-description,
-//                     set-permissions, chat-invite-link, promote, demote,
-//                     ban-from-chat, kick, unban-from-chat, chat-members,
-//                     chats-info, topics-list, account-sessions)
 //   15. Live         (listen)
 //   plus: stats, contacts, unread, chats-info-style read commands
 //          that need real client integration to populate.
@@ -37,13 +33,6 @@ import (
 // dispatch-classified failure with code NOT_AUTHED so callers can trap it.
 func registerStubCommands(root *cobra.Command, _ CommandsConfig) {
 	stubGroups := map[string][]string{
-		// Phase 12
-		"admin": {
-			"chat-title", "chat-photo", "chat-description",
-			"set-permissions", "chat-invite-link",
-			"promote", "demote", "ban-from-chat", "kick", "unban-from-chat",
-			"chat-members", "chats-info", "account-sessions",
-		},
 		// Phase 15 partial
 		"live": {"listen"},
 		// Read commands that need a populated cache (live integration).

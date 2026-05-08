@@ -872,6 +872,86 @@ func (g *GotdClient) ListPinnedDialogs(ctx context.Context, chatID int64) ([]Cha
 	return nil, safety.NewBadArgs("chat-pinned-list is not supported by gotd adapter yet for chat_id %d", chatID)
 }
 
+func (g *GotdClient) AdminAction(ctx context.Context, req AdminActionReq) (InviteLinkResp, error) {
+	peer, err := g.peerFromChatID(ctx, req.ChatID)
+	if err != nil {
+		return InviteLinkResp{}, err
+	}
+	switch req.Action {
+	case "chat-title":
+		switch p := peer.(type) {
+		case *tg.InputPeerChannel:
+			_, err = g.api.ChannelsEditTitle(ctx, &tg.ChannelsEditTitleRequest{Channel: &tg.InputChannel{ChannelID: p.ChannelID, AccessHash: p.AccessHash}, Title: req.Value})
+		case *tg.InputPeerChat:
+			_, err = g.api.MessagesEditChatTitle(ctx, &tg.MessagesEditChatTitleRequest{ChatID: p.ChatID, Title: req.Value})
+		default:
+			err = safety.NewBadArgs("chat-title target must be a group or channel")
+		}
+		return InviteLinkResp{}, mapRPCErr(err)
+	case "chat-description":
+		return InviteLinkResp{}, safety.NewBadArgs("chat-description is not supported by gotd/td v0.144.0")
+	case "chat-invite-link":
+		invite, err := g.api.MessagesExportChatInvite(ctx, &tg.MessagesExportChatInviteRequest{Peer: peer})
+		if err != nil {
+			return InviteLinkResp{}, mapRPCErr(err)
+		}
+		return InviteLinkResp{Link: inviteLink(invite)}, nil
+	}
+	return InviteLinkResp{}, safety.NewBadArgs("%s is not implemented for this peer type", req.Action)
+}
+
+func (g *GotdClient) ListChatMembers(ctx context.Context, chatID int64, limit int) ([]MemberInfo, error) {
+	peer, err := g.peerFromChatID(ctx, chatID)
+	if err != nil {
+		return nil, err
+	}
+	ch, ok := peer.(*tg.InputPeerChannel)
+	if !ok {
+		return nil, safety.NewBadArgs("chat-members target must be a channel or supergroup")
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	resp, err := g.api.ChannelsGetParticipants(ctx, &tg.ChannelsGetParticipantsRequest{
+		Channel: &tg.InputChannel{ChannelID: ch.ChannelID, AccessHash: ch.AccessHash},
+		Filter:  &tg.ChannelParticipantsRecent{},
+		Limit:   limit,
+	})
+	if err != nil {
+		return nil, mapRPCErr(err)
+	}
+	cp, ok := resp.(*tg.ChannelsChannelParticipants)
+	if !ok {
+		return nil, nil
+	}
+	out := make([]MemberInfo, 0, len(cp.Users))
+	for _, u := range cp.Users {
+		if user, ok := u.(*tg.User); ok {
+			out = append(out, MemberInfo{UserID: user.ID, Username: user.Username, DisplayName: DisplayName(user.FirstName, user.LastName, user.Username, user.ID)})
+		}
+	}
+	return out, nil
+}
+
+func (g *GotdClient) GetChatsInfo(ctx context.Context, ids []int64) ([]ChatInfo, error) {
+	out := make([]ChatInfo, 0, len(ids))
+	for _, id := range ids {
+		var title, kind, username sql.NullString
+		if g.db != nil {
+			_ = g.db.QueryRow("SELECT title, type, username FROM tg_chats WHERE chat_id=?", id).Scan(&title, &kind, &username)
+		}
+		out = append(out, ChatInfo{ID: id, Type: kind.String, Title: title.String, Username: username.String})
+	}
+	return out, nil
+}
+
+func inviteLink(inv tg.ExportedChatInviteClass) string {
+	if v, ok := inv.(*tg.ChatInviteExported); ok {
+		return v.Link
+	}
+	return ""
+}
+
 func firstTopicID(updates tg.UpdatesClass) int64 {
 	if v, ok := updates.(*tg.Updates); ok {
 		for _, up := range v.Updates {
