@@ -31,6 +31,23 @@ type SendMessageResp struct {
 	Date      string
 }
 
+// UploadFileReq mirrors messages.SendMedia with an uploaded file.
+type UploadFileReq struct {
+	ChatID            int64
+	Path              string
+	Kind              string
+	Caption           string
+	ReplyTo           int64
+	Silent            bool
+	Filename          string
+	SupportsStreaming bool
+}
+
+type UploadFileResp struct {
+	MessageID int64
+	Date      string
+}
+
 // EditMessageReq mirrors messages.EditMessage.
 type EditMessageReq struct {
 	ChatID    int64
@@ -110,6 +127,7 @@ type TerminateSessionReq struct {
 type Client interface {
 	GetMe(ctx context.Context) (User, error)
 	SendMessage(ctx context.Context, req SendMessageReq) (SendMessageResp, error)
+	UploadFile(ctx context.Context, req UploadFileReq) (UploadFileResp, error)
 	EditMessage(ctx context.Context, req EditMessageReq) error
 	Forward(ctx context.Context, req ForwardReq) (ForwardResp, error)
 	Pin(ctx context.Context, req PinReq) error

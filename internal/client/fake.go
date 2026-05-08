@@ -13,6 +13,7 @@ type FakeClient struct {
 	Closed   bool
 	Calls    []string
 	Sent     []SendMessageReq
+	Uploads  []UploadFileReq
 	Edited   []EditMessageReq
 	Forwards []ForwardReq
 	Pins     []PinReq
@@ -59,6 +60,18 @@ func (f *FakeClient) SendMessage(_ context.Context, req SendMessageReq) (SendMes
 		id = int64(1000 + len(f.Sent))
 	}
 	return SendMessageResp{MessageID: id, Date: "2026-05-08T12:00:00"}, nil
+}
+
+func (f *FakeClient) UploadFile(_ context.Context, req UploadFileReq) (UploadFileResp, error) {
+	if err := f.record("UploadFile"); err != nil {
+		return UploadFileResp{}, err
+	}
+	f.Uploads = append(f.Uploads, req)
+	id := f.NextMessageID
+	if id == 0 {
+		id = int64(3000 + len(f.Uploads))
+	}
+	return UploadFileResp{MessageID: id, Date: "2026-05-08T12:00:00"}, nil
 }
 
 func (f *FakeClient) EditMessage(_ context.Context, req EditMessageReq) error {

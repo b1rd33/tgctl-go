@@ -10,6 +10,7 @@ import (
 	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/auth"
+	"github.com/gotd/td/telegram/uploader"
 	"github.com/gotd/td/tg"
 
 	"github.com/b1rd33/tgctl-go/internal/safety"
@@ -358,6 +359,68 @@ func (g *GotdClient) SendMessageBySelector(ctx context.Context, selector, text s
 		return SendMessageResp{}, mapRPCErr(err)
 	}
 	return SendMessageResp{MessageID: extractNewMessageID(updates)}, nil
+}
+
+func (g *GotdClient) UploadFile(ctx context.Context, req UploadFileReq) (UploadFileResp, error) {
+	peer, err := g.peerFromChatID(ctx, req.ChatID)
+	if err != nil {
+		return UploadFileResp{}, err
+	}
+	file, err := uploader.NewUploader(g.api).FromPath(ctx, req.Path)
+	if err != nil {
+		return UploadFileResp{}, err
+	}
+	var media tg.InputMediaClass
+	if req.Kind == "photo" {
+		media = &tg.InputMediaUploadedPhoto{File: file}
+	} else {
+		attrs := []tg.DocumentAttributeClass{}
+		if req.Filename != "" {
+			attrs = append(attrs, &tg.DocumentAttributeFilename{FileName: req.Filename})
+		}
+		switch req.Kind {
+		case "voice":
+			attrs = append(attrs, &tg.DocumentAttributeAudio{Voice: true})
+		case "video":
+			attrs = append(attrs, &tg.DocumentAttributeVideo{SupportsStreaming: req.SupportsStreaming})
+		}
+		media = &tg.InputMediaUploadedDocument{
+			File:       file,
+			MimeType:   mimeForUpload(req.Kind, req.Path),
+			Attributes: attrs,
+			ForceFile:  req.Kind == "document",
+		}
+	}
+	r := &tg.MessagesSendMediaRequest{
+		Peer:     peer,
+		Media:    media,
+		Message:  req.Caption,
+		RandomID: randomID(),
+		Silent:   req.Silent,
+	}
+	if req.ReplyTo != 0 {
+		r.ReplyTo = &tg.InputReplyToMessage{ReplyToMsgID: int(req.ReplyTo)}
+	}
+	updates, err := g.api.MessagesSendMedia(ctx, r)
+	if err != nil {
+		return UploadFileResp{}, mapRPCErr(err)
+	}
+	return UploadFileResp{MessageID: extractNewMessageID(updates)}, nil
+}
+
+func mimeForUpload(kind, path string) string {
+	switch kind {
+	case "voice":
+		return "audio/ogg"
+	case "video":
+		return "video/mp4"
+	case "photo":
+		return "image/jpeg"
+	}
+	if strings.HasSuffix(strings.ToLower(path), ".txt") {
+		return "text/plain"
+	}
+	return "application/octet-stream"
 }
 
 func extractNewMessageID(u tg.UpdatesClass) int64 {

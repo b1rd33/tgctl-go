@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // MessageSummary mirrors the Python `_message_summary` row shape.
@@ -237,6 +238,33 @@ func InsertMessage(db *sql.DB, m Message) error {
 		optStr(m.MediaType), optStr(m.MediaPath), optStr(m.RawJSON),
 	)
 	return err
+}
+
+// RecordUploadedMedia upserts the local cache row for a message created by an upload.
+func RecordUploadedMedia(db *sql.DB, chatID, messageID int64, text, mediaType, mediaPath string) error {
+	_, err := db.Exec(`
+		INSERT INTO tg_messages(
+			chat_id, message_id, date, text, is_outgoing,
+			has_media, media_type, media_path, deleted
+		) VALUES (?, ?, ?, ?, 1, 1, ?, ?, 0)
+		ON CONFLICT(chat_id, message_id) DO UPDATE SET
+			date = excluded.date,
+			text = excluded.text,
+			is_outgoing = 1,
+			has_media = 1,
+			media_type = excluded.media_type,
+			media_path = excluded.media_path,
+			deleted = 0`,
+		chatID, messageID, time.Now().UTC().Format(time.RFC3339), nullString(text), mediaType, mediaPath,
+	)
+	return err
+}
+
+func nullString(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 func boolInt(b bool) int {
