@@ -42,6 +42,7 @@ func runRoot(t *testing.T, cfg CommandsConfig, args ...string) (string, int) {
 	registerWriteCommands(root, cfg)
 	registerReadCommands(root, cfg.Paths)
 	registerAuth(root, cfg.Paths)
+	registerDestructiveCommands(root, cfg)
 	var stdout, stderr bytes.Buffer
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)

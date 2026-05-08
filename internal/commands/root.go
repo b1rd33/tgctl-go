@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/b1rd33/tgctl-go/internal/accounts"
 	"github.com/b1rd33/tgctl-go/internal/output"
 )
 
@@ -95,4 +96,17 @@ func rootConfigPtr(cmd *cobra.Command) *RootConfig {
 
 func Execute() int {
 	return ExecuteRoot(NewRootCommand())
+}
+
+// RegisterAll wires every command group onto root. The accounts manager is
+// the source of truth for per-account paths and also receives accounts-*
+// subcommand calls.
+func RegisterAll(root *cobra.Command, mgr *accounts.Manager, cfg CommandsConfig) {
+	registerAuth(root, mgr)
+	registerReadCommands(root, mgr)
+	registerWriteCommands(root, cfg)
+	registerDestructiveCommands(root, cfg)
+	registerAccountCommands(root, mgr)
+	registerDoctor(root, mgr)
+	registerStubCommands(root, cfg)
 }
