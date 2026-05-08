@@ -1,0 +1,94 @@
+package store
+
+import (
+	"database/sql"
+	"net/url"
+	"os"
+	"path/filepath"
+
+	_ "modernc.org/sqlite"
+
+	"github.com/b1rd33/tgctl-go/internal/resolve"
+)
+
+// Connect opens the DB read-write, applies schema, and runs idempotent
+// migrations. Mirrors tgcli.db.connect.
+func Connect(path string) (*sql.DB, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, err
+	}
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err := db.Exec(Schema); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := migrate(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+	_ = os.Chmod(path, 0o600)
+	return db, nil
+}
+
+// ConnectReadonly opens the DB read-only and never writes or migrates.
+// Returns *resolve.DatabaseMissing when the file does not exist.
+func ConnectReadonly(path string) (*sql.DB, error) {
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil, &resolve.DatabaseMissing{Path: path}
+		}
+		return nil, err
+	}
+	uri := "file:" + url.PathEscape(path) + "?mode=ro"
+	return sql.Open("sqlite", uri)
+}
+
+// migrate runs idempotent post-schema upgrades. The Schema constant already
+// reflects the final migrated state, so this exists to handle DBs created by
+// older versions in the field.
+func migrate(db *sql.DB) error {
+	if !columnExists(db, "tg_messages", "media_path") {
+		if _, err := db.Exec("ALTER TABLE tg_messages ADD COLUMN media_path TEXT"); err != nil {
+			return err
+		}
+	}
+	if !columnExists(db, "tg_messages", "deleted") {
+		if _, err := db.Exec("ALTER TABLE tg_messages ADD COLUMN deleted INTEGER DEFAULT 0"); err != nil {
+			return err
+		}
+	}
+	if !columnExists(db, "tg_chats", "left") {
+		if _, err := db.Exec("ALTER TABLE tg_chats ADD COLUMN left INTEGER DEFAULT 0"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func columnExists(db *sql.DB, table, column string) bool {
+	rows, err := db.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return false
+		}
+		if name == column {
+			return true
+		}
+	}
+	return false
+}
