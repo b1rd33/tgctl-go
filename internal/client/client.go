@@ -153,6 +153,58 @@ type BackfillMessage struct {
 	RawJSON      string
 }
 
+type TopicInfo struct {
+	ID             int64
+	Title          string
+	IconEmojiID    int64
+	Closed         bool
+	Hidden         bool
+	TopMessageID   int64
+	UnreadCount    int
+}
+
+type CreateTopicReq struct {
+	ChatID       int64
+	Title        string
+	IconColor    int
+	IconEmojiID  int64
+}
+
+type CreateTopicResp struct {
+	TopicID int64
+	Title   string
+}
+
+type EditTopicReq struct {
+	ChatID      int64
+	TopicID     int64
+	Title       string
+	IconEmojiID int64
+}
+
+type PinTopicReq struct {
+	ChatID  int64
+	TopicID int64
+	Pinned  bool
+}
+
+type FolderInfo struct {
+	ID             int64
+	Title          string
+	Emoji          string
+	IncludeChatIDs []int64
+	ExcludeChatIDs []int64
+	IsDefault      bool
+}
+
+type FolderUpdateReq struct {
+	ID             int64
+	Title          string
+	Emoji          string
+	IncludeChatIDs []int64
+	ExcludeChatIDs []int64
+}
+
 // TerminateSessionReq mirrors account.ResetAuthorization.
 type TerminateSessionReq struct {
 	Hash int64
@@ -177,6 +229,15 @@ type Client interface {
 	DiscoverDialogs(ctx context.Context, limit int) ([]ChatInfo, error)
 	SyncContacts(ctx context.Context) ([]ContactInfo, error)
 	BackfillMessages(ctx context.Context, req BackfillReq) ([]BackfillMessage, error)
+	ListTopics(ctx context.Context, chatID int64, limit int, query string) ([]TopicInfo, error)
+	CreateTopic(ctx context.Context, req CreateTopicReq) (CreateTopicResp, error)
+	EditTopic(ctx context.Context, req EditTopicReq) error
+	PinTopic(ctx context.Context, req PinTopicReq) error
+	ListFolders(ctx context.Context) ([]FolderInfo, error)
+	UpdateFolder(ctx context.Context, req FolderUpdateReq) error
+	DeleteFolder(ctx context.Context, id int64) error
+	ReorderFolders(ctx context.Context, ids []int64) error
+	ListPinnedDialogs(ctx context.Context, chatID int64) ([]ChatInfo, error)
 	Close() error
 }
 

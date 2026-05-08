@@ -32,6 +32,17 @@ type FakeClient struct {
 	ContactSyncs []bool
 	Backfills    []BackfillReq
 	BackfillRows []BackfillMessage
+	Topics       []TopicInfo
+	NextTopicID  int64
+	Folders      []FolderInfo
+
+	TopicCreates  []CreateTopicReq
+	TopicEdits    []EditTopicReq
+	TopicPins     []PinTopicReq
+	FolderUpdates []FolderUpdateReq
+	FolderDeletes []int64
+	FolderReorders [][]int64
+	PinnedLists   []int64
 
 	// LastMessageID is the next id returned by SendMessage. Tests override this.
 	NextMessageID int64
@@ -194,6 +205,81 @@ func (f *FakeClient) BackfillMessages(_ context.Context, req BackfillReq) ([]Bac
 	}
 	f.Backfills = append(f.Backfills, req)
 	return f.BackfillRows, nil
+}
+
+func (f *FakeClient) ListTopics(_ context.Context, chatID int64, limit int, query string) ([]TopicInfo, error) {
+	if err := f.record("ListTopics"); err != nil {
+		return nil, err
+	}
+	return f.Topics, nil
+}
+
+func (f *FakeClient) CreateTopic(_ context.Context, req CreateTopicReq) (CreateTopicResp, error) {
+	if err := f.record("CreateTopic"); err != nil {
+		return CreateTopicResp{}, err
+	}
+	f.TopicCreates = append(f.TopicCreates, req)
+	id := f.NextTopicID
+	if id == 0 {
+		id = int64(100 + len(f.TopicCreates))
+	}
+	return CreateTopicResp{TopicID: id, Title: req.Title}, nil
+}
+
+func (f *FakeClient) EditTopic(_ context.Context, req EditTopicReq) error {
+	if err := f.record("EditTopic"); err != nil {
+		return err
+	}
+	f.TopicEdits = append(f.TopicEdits, req)
+	return nil
+}
+
+func (f *FakeClient) PinTopic(_ context.Context, req PinTopicReq) error {
+	if err := f.record("PinTopic"); err != nil {
+		return err
+	}
+	f.TopicPins = append(f.TopicPins, req)
+	return nil
+}
+
+func (f *FakeClient) ListFolders(_ context.Context) ([]FolderInfo, error) {
+	if err := f.record("ListFolders"); err != nil {
+		return nil, err
+	}
+	return f.Folders, nil
+}
+
+func (f *FakeClient) UpdateFolder(_ context.Context, req FolderUpdateReq) error {
+	if err := f.record("UpdateFolder"); err != nil {
+		return err
+	}
+	f.FolderUpdates = append(f.FolderUpdates, req)
+	return nil
+}
+
+func (f *FakeClient) DeleteFolder(_ context.Context, id int64) error {
+	if err := f.record("DeleteFolder"); err != nil {
+		return err
+	}
+	f.FolderDeletes = append(f.FolderDeletes, id)
+	return nil
+}
+
+func (f *FakeClient) ReorderFolders(_ context.Context, ids []int64) error {
+	if err := f.record("ReorderFolders"); err != nil {
+		return err
+	}
+	cp := append([]int64(nil), ids...)
+	f.FolderReorders = append(f.FolderReorders, cp)
+	return nil
+}
+
+func (f *FakeClient) ListPinnedDialogs(_ context.Context, chatID int64) ([]ChatInfo, error) {
+	if err := f.record("ListPinnedDialogs"); err != nil {
+		return nil, err
+	}
+	f.PinnedLists = append(f.PinnedLists, chatID)
+	return f.Dialogs, nil
 }
 
 func (f *FakeClient) Close() error {

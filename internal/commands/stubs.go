@@ -10,11 +10,6 @@
 //   - keeps the JSON envelope shape uniform
 //
 // Stubbed phases:
-//   11. Topics       (topic-create, topic-edit, topic-pin, topic-unpin)
-//   11. Folders      (folder-create, folder-edit, folder-delete,
-//                     folder-add-chat, folder-remove-chat,
-//                     folders-reorder, folders-list, folder-show,
-//                     chat-pinned-list)
 //   12. Admin        (chat-title, chat-photo, chat-description,
 //                     set-permissions, chat-invite-link, promote, demote,
 //                     ban-from-chat, kick, unban-from-chat, chat-members,
@@ -42,13 +37,6 @@ import (
 // dispatch-classified failure with code NOT_AUTHED so callers can trap it.
 func registerStubCommands(root *cobra.Command, _ CommandsConfig) {
 	stubGroups := map[string][]string{
-		// Phase 11
-		"topics": {"topic-create", "topic-edit", "topic-pin", "topic-unpin", "topics-list"},
-		"folders": {
-			"folder-create", "folder-edit", "folder-delete",
-			"folder-add-chat", "folder-remove-chat", "folders-reorder",
-			"folders-list", "folder-show", "chat-pinned-list",
-		},
 		// Phase 12
 		"admin": {
 			"chat-title", "chat-photo", "chat-description",

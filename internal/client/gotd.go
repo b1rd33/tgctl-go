@@ -731,6 +731,158 @@ func (g *GotdClient) BackfillMessages(ctx context.Context, req BackfillReq) ([]B
 	return out, nil
 }
 
+func (g *GotdClient) ListTopics(ctx context.Context, chatID int64, limit int, query string) ([]TopicInfo, error) {
+	peer, err := g.peerFromChatID(ctx, chatID)
+	if err != nil {
+		return nil, err
+	}
+	ch, ok := peer.(*tg.InputPeerChannel)
+	if !ok {
+		return nil, safety.NewBadArgs("topics-list target is not a forum supergroup")
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	resp, err := g.api.MessagesGetForumTopics(ctx, &tg.MessagesGetForumTopicsRequest{
+		Peer:  ch,
+		Q:     query,
+		Limit: limit,
+	})
+	if err != nil {
+		return nil, mapRPCErr(err)
+	}
+	out := make([]TopicInfo, 0, len(resp.Topics))
+	for _, t := range resp.Topics {
+		switch v := t.(type) {
+		case *tg.ForumTopic:
+			out = append(out, TopicInfo{
+				ID: int64(v.ID), Title: v.Title, IconEmojiID: v.IconEmojiID,
+				Closed: v.Closed, Hidden: v.Hidden, TopMessageID: int64(v.TopMessage), UnreadCount: v.UnreadCount,
+			})
+		}
+	}
+	return out, nil
+}
+
+func (g *GotdClient) CreateTopic(ctx context.Context, req CreateTopicReq) (CreateTopicResp, error) {
+	peer, err := g.peerFromChatID(ctx, req.ChatID)
+	if err != nil {
+		return CreateTopicResp{}, err
+	}
+	ch, ok := peer.(*tg.InputPeerChannel)
+	if !ok {
+		return CreateTopicResp{}, safety.NewBadArgs("topic-create target is not a forum supergroup")
+	}
+	r := &tg.MessagesCreateForumTopicRequest{
+		Peer:     ch,
+		Title:    req.Title,
+		RandomID: randomID(),
+	}
+	if req.IconColor != 0 {
+		r.IconColor = req.IconColor
+	}
+	if req.IconEmojiID != 0 {
+		r.IconEmojiID = req.IconEmojiID
+	}
+	updates, err := g.api.MessagesCreateForumTopic(ctx, r)
+	if err != nil {
+		return CreateTopicResp{}, mapRPCErr(err)
+	}
+	return CreateTopicResp{TopicID: firstTopicID(updates), Title: req.Title}, nil
+}
+
+func (g *GotdClient) EditTopic(ctx context.Context, req EditTopicReq) error {
+	peer, err := g.peerFromChatID(ctx, req.ChatID)
+	if err != nil {
+		return err
+	}
+	ch, ok := peer.(*tg.InputPeerChannel)
+	if !ok {
+		return safety.NewBadArgs("topic-edit target is not a forum supergroup")
+	}
+	r := &tg.MessagesEditForumTopicRequest{
+		Peer:    ch,
+		TopicID: int(req.TopicID),
+	}
+	if req.Title != "" {
+		r.Title = req.Title
+	}
+	if req.IconEmojiID != 0 {
+		r.IconEmojiID = req.IconEmojiID
+	}
+	_, err = g.api.MessagesEditForumTopic(ctx, r)
+	return mapRPCErr(err)
+}
+
+func (g *GotdClient) PinTopic(ctx context.Context, req PinTopicReq) error {
+	peer, err := g.peerFromChatID(ctx, req.ChatID)
+	if err != nil {
+		return err
+	}
+	ch, ok := peer.(*tg.InputPeerChannel)
+	if !ok {
+		return safety.NewBadArgs("topic-pin target is not a forum supergroup")
+	}
+	_, err = g.api.MessagesUpdatePinnedForumTopic(ctx, &tg.MessagesUpdatePinnedForumTopicRequest{
+		Peer:    ch,
+		TopicID: int(req.TopicID),
+		Pinned:  req.Pinned,
+	})
+	return mapRPCErr(err)
+}
+
+func (g *GotdClient) ListFolders(ctx context.Context) ([]FolderInfo, error) {
+	filters, err := g.api.MessagesGetDialogFilters(ctx)
+	if err != nil {
+		return nil, mapRPCErr(err)
+	}
+	out := []FolderInfo{{ID: 0, Title: "All Chats", IsDefault: true}}
+	for _, f := range filters.Filters {
+		if _, ok := f.(*tg.DialogFilterDefault); ok {
+			continue
+		}
+		if df, ok := f.(*tg.DialogFilter); ok {
+			out = append(out, FolderInfo{ID: int64(df.ID), Title: df.Title.Text, Emoji: df.Emoticon})
+		}
+	}
+	return out, nil
+}
+
+func (g *GotdClient) UpdateFolder(ctx context.Context, req FolderUpdateReq) error {
+	filter := &tg.DialogFilter{ID: int(req.ID), Title: tg.TextWithEntities{Text: req.Title}, Emoticon: req.Emoji}
+	_, err := g.api.MessagesUpdateDialogFilter(ctx, &tg.MessagesUpdateDialogFilterRequest{ID: int(req.ID), Filter: filter})
+	return mapRPCErr(err)
+}
+
+func (g *GotdClient) DeleteFolder(ctx context.Context, id int64) error {
+	_, err := g.api.MessagesUpdateDialogFilter(ctx, &tg.MessagesUpdateDialogFilterRequest{ID: int(id)})
+	return mapRPCErr(err)
+}
+
+func (g *GotdClient) ReorderFolders(ctx context.Context, ids []int64) error {
+	order := make([]int, len(ids))
+	for i, id := range ids {
+		order[i] = int(id)
+	}
+	_, err := g.api.MessagesUpdateDialogFiltersOrder(ctx, order)
+	return mapRPCErr(err)
+}
+
+func (g *GotdClient) ListPinnedDialogs(ctx context.Context, chatID int64) ([]ChatInfo, error) {
+	return nil, safety.NewBadArgs("chat-pinned-list is not supported by gotd adapter yet for chat_id %d", chatID)
+}
+
+func firstTopicID(updates tg.UpdatesClass) int64 {
+	if v, ok := updates.(*tg.Updates); ok {
+		for _, up := range v.Updates {
+			if t, ok := up.(*tg.UpdateChannel); ok {
+				return t.ChannelID
+			}
+		}
+	}
+	return 0
+}
+
 func peerID(p tg.PeerClass) int64 {
 	switch v := p.(type) {
 	case *tg.PeerUser:
