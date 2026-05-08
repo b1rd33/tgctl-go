@@ -19,10 +19,3 @@ type Ambiguous struct {
 func (e *Ambiguous) Error() string {
 	return fmt.Sprintf("%q is ambiguous: %d matches", e.Raw, len(e.Candidates))
 }
-
-// DatabaseMissing → exit 4 (matches Python tgcli.db.DatabaseMissing).
-type DatabaseMissing struct{ Path string }
-
-func (e *DatabaseMissing) Error() string {
-	return fmt.Sprintf("database not found: %s", e.Path)
-}

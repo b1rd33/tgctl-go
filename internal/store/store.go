@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 
 	_ "modernc.org/sqlite"
-
-	"github.com/b1rd33/tgctl-go/internal/resolve"
 )
 
 // Connect opens the DB read-write, applies schema, and runs idempotent
@@ -42,7 +40,7 @@ func Connect(path string) (*sql.DB, error) {
 func ConnectReadonly(path string) (*sql.DB, error) {
 	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {
-			return nil, &resolve.DatabaseMissing{Path: path}
+			return nil, &DatabaseMissing{Path: path}
 		}
 		return nil, err
 	}

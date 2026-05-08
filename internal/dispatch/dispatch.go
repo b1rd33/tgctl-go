@@ -8,6 +8,7 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/output"
 	"github.com/b1rd33/tgctl-go/internal/resolve"
 	"github.com/b1rd33/tgctl-go/internal/safety"
+	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
 // Runner returns the success-envelope `data` payload, or an error.
@@ -43,7 +44,7 @@ func Classify(err error) (output.ExitCode, string, map[string]any) {
 	if errors.As(err, &notFound) {
 		return output.NotFound, notFound.Error(), nil
 	}
-	var dbMissing *resolve.DatabaseMissing
+	var dbMissing *store.DatabaseMissing
 	if errors.As(err, &dbMissing) {
 		return output.NotFound, dbMissing.Error(), nil
 	}

@@ -4,8 +4,6 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
-
-	"github.com/b1rd33/tgctl-go/internal/resolve"
 )
 
 func TestConnectCreatesAllTables(t *testing.T) {
@@ -104,7 +102,7 @@ func TestConnectReadonlyMissingReturnsDatabaseMissing(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "no.sqlite")
 	_, err := ConnectReadonly(path)
-	var dbm *resolve.DatabaseMissing
+	var dbm *DatabaseMissing
 	if !errors.As(err, &dbm) {
 		t.Fatalf("err = %v, want *DatabaseMissing", err)
 	}
