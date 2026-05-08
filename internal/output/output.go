@@ -41,3 +41,48 @@ func (c ExitCode) String() string {
 		return "GENERIC"
 	}
 }
+
+type Envelope struct {
+	OK        bool
+	Command   string
+	RequestID string
+	Data      any
+	Warnings  []string
+	Error     *ErrorBody
+}
+
+type ErrorBody struct {
+	Code    string
+	Message string
+	Extra   map[string]any
+}
+
+func Success(command string, data any, requestID string, warnings []string) Envelope {
+	w := []string{}
+	if warnings != nil {
+		w = append(w, warnings...)
+	}
+	return Envelope{
+		OK:        true,
+		Command:   command,
+		RequestID: requestID,
+		Data:      data,
+		Warnings:  w,
+	}
+}
+
+func Fail(command string, code ExitCode, message string, requestID string, extra map[string]any) Envelope {
+	if extra == nil {
+		extra = map[string]any{}
+	}
+	return Envelope{
+		OK:        false,
+		Command:   command,
+		RequestID: requestID,
+		Error: &ErrorBody{
+			Code:    code.String(),
+			Message: message,
+			Extra:   extra,
+		},
+	}
+}

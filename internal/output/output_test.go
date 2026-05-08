@@ -1,6 +1,8 @@
 package output
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestExitCodeValuesAreStable(t *testing.T) {
 	tests := map[ExitCode]int{
@@ -39,5 +41,49 @@ func TestExitCodeStringNamesMatchPythonEnum(t *testing.T) {
 		if got := code.String(); got != want {
 			t.Fatalf("String(%d) = %q, want %q", code, got, want)
 		}
+	}
+}
+
+func TestSuccessEnvelopeShape(t *testing.T) {
+	env := Success("stats", map[string]any{"chats": 5}, "req-abc", nil)
+	if !env.OK {
+		t.Fatalf("ok = false")
+	}
+	if env.Command != "stats" {
+		t.Fatalf("command = %q", env.Command)
+	}
+	if env.RequestID != "req-abc" {
+		t.Fatalf("request_id = %q", env.RequestID)
+	}
+	if len(env.Warnings) != 0 {
+		t.Fatalf("warnings = %#v, want empty slice", env.Warnings)
+	}
+}
+
+func TestSuccessEnvelopeWithWarnings(t *testing.T) {
+	env := Success("stats", map[string]any{}, "r", []string{"truncated"})
+	if len(env.Warnings) != 1 || env.Warnings[0] != "truncated" {
+		t.Fatalf("warnings = %#v", env.Warnings)
+	}
+}
+
+func TestFailEnvelopeShape(t *testing.T) {
+	env := Fail("messages.send", FloodWait, "wait 30s", "req-xyz", map[string]any{
+		"retry_after_seconds": 30,
+	})
+	if env.OK {
+		t.Fatalf("failure envelope ok = true")
+	}
+	if env.Command != "messages.send" {
+		t.Fatalf("command = %q", env.Command)
+	}
+	if env.Error == nil {
+		t.Fatalf("error is nil")
+	}
+	if env.Error.Code != "FLOOD_WAIT" || env.Error.Message != "wait 30s" {
+		t.Fatalf("error = %#v", env.Error)
+	}
+	if got := env.Error.Extra["retry_after_seconds"]; got != 30 {
+		t.Fatalf("retry_after_seconds = %#v, want 30", got)
 	}
 }
