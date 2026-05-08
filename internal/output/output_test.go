@@ -2,6 +2,7 @@ package output
 
 import (
 	"encoding/json"
+	"regexp"
 	"testing"
 )
 
@@ -112,5 +113,20 @@ func TestSuccessEnvelopeJSONIncludesEmptyWarnings(t *testing.T) {
 	want := `{"ok":true,"command":"stats","request_id":"r","data":{"x":1},"warnings":[]}`
 	if string(got) != want {
 		t.Fatalf("json = %s, want %s", got, want)
+	}
+}
+
+func TestNewRequestIDFormatAndUniqueness(t *testing.T) {
+	first := NewRequestID()
+	second := NewRequestID()
+	matched, err := regexp.MatchString(`^req-[0-9a-f]{8}$`, first)
+	if err != nil {
+		t.Fatalf("regexp: %v", err)
+	}
+	if !matched {
+		t.Fatalf("request id = %q, want req-<8 hex>", first)
+	}
+	if first == second {
+		t.Fatalf("request ids repeated: %q", first)
 	}
 }

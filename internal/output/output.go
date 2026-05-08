@@ -2,8 +2,18 @@ package output
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
+	"fmt"
 )
+
+func NewRequestID() string {
+	var b [4]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic(err)
+	}
+	return fmt.Sprintf("req-%x", b)
+}
 
 type ExitCode int
 
