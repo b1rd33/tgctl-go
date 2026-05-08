@@ -5,25 +5,151 @@ import (
 	"errors"
 )
 
-// FakeClient is the test double for the Client interface. Command tests build
-// one, set a Me value (or NextErr), and pass it to runners that depend on
-// Client. Mirrors the test-only `fake_client` used in Python tests.
+// FakeClient is the test double for the Client interface. It records every
+// call and lets tests assert on the captured arguments.
 type FakeClient struct {
-	Me      User
-	NextErr error
-	Closed  bool
-	Calls   []string
+	Me       User
+	NextErr  error
+	Closed   bool
+	Calls    []string
+	Sent     []SendMessageReq
+	Edited   []EditMessageReq
+	Forwards []ForwardReq
+	Pins     []PinReq
+	Reacts   []ReactReq
+	Reads    []MarkReadReq
+	Deletes  []DeleteMessagesReq
+	Leaves   []LeaveChatReq
+	Blocks   []BlockUserReq
+	Unblocks []BlockUserReq
+	Sessions []SessionRef
+	Terms    []TerminateSessionReq
+
+	// LastMessageID is the next id returned by SendMessage. Tests override this.
+	NextMessageID int64
+}
+
+func (f *FakeClient) record(name string) error {
+	f.Calls = append(f.Calls, name)
+	if f.NextErr != nil {
+		err := f.NextErr
+		f.NextErr = nil
+		return err
+	}
+	return nil
 }
 
 func (f *FakeClient) GetMe(_ context.Context) (User, error) {
-	f.Calls = append(f.Calls, "GetMe")
-	if f.NextErr != nil {
-		return User{}, f.NextErr
+	if err := f.record("GetMe"); err != nil {
+		return User{}, err
 	}
 	if f.Me.ID == 0 {
 		return User{}, errors.New("fake client: Me not set")
 	}
 	return f.Me, nil
+}
+
+func (f *FakeClient) SendMessage(_ context.Context, req SendMessageReq) (SendMessageResp, error) {
+	if err := f.record("SendMessage"); err != nil {
+		return SendMessageResp{}, err
+	}
+	f.Sent = append(f.Sent, req)
+	id := f.NextMessageID
+	if id == 0 {
+		id = int64(1000 + len(f.Sent))
+	}
+	return SendMessageResp{MessageID: id, Date: "2026-05-08T12:00:00"}, nil
+}
+
+func (f *FakeClient) EditMessage(_ context.Context, req EditMessageReq) error {
+	if err := f.record("EditMessage"); err != nil {
+		return err
+	}
+	f.Edited = append(f.Edited, req)
+	return nil
+}
+
+func (f *FakeClient) Forward(_ context.Context, req ForwardReq) (ForwardResp, error) {
+	if err := f.record("Forward"); err != nil {
+		return ForwardResp{}, err
+	}
+	f.Forwards = append(f.Forwards, req)
+	out := make([]int64, len(req.MessageIDs))
+	for i := range req.MessageIDs {
+		out[i] = int64(2000 + len(f.Forwards)*10 + i)
+	}
+	return ForwardResp{MessageIDs: out}, nil
+}
+
+func (f *FakeClient) Pin(_ context.Context, req PinReq) error {
+	if err := f.record("Pin"); err != nil {
+		return err
+	}
+	f.Pins = append(f.Pins, req)
+	return nil
+}
+
+func (f *FakeClient) React(_ context.Context, req ReactReq) error {
+	if err := f.record("React"); err != nil {
+		return err
+	}
+	f.Reacts = append(f.Reacts, req)
+	return nil
+}
+
+func (f *FakeClient) MarkRead(_ context.Context, req MarkReadReq) error {
+	if err := f.record("MarkRead"); err != nil {
+		return err
+	}
+	f.Reads = append(f.Reads, req)
+	return nil
+}
+
+func (f *FakeClient) DeleteMessages(_ context.Context, req DeleteMessagesReq) (DeleteMessagesResp, error) {
+	if err := f.record("DeleteMessages"); err != nil {
+		return DeleteMessagesResp{}, err
+	}
+	f.Deletes = append(f.Deletes, req)
+	return DeleteMessagesResp{Deleted: len(req.MessageIDs)}, nil
+}
+
+func (f *FakeClient) LeaveChat(_ context.Context, req LeaveChatReq) error {
+	if err := f.record("LeaveChat"); err != nil {
+		return err
+	}
+	f.Leaves = append(f.Leaves, req)
+	return nil
+}
+
+func (f *FakeClient) BlockUser(_ context.Context, req BlockUserReq) error {
+	if err := f.record("BlockUser"); err != nil {
+		return err
+	}
+	f.Blocks = append(f.Blocks, req)
+	return nil
+}
+
+func (f *FakeClient) UnblockUser(_ context.Context, req BlockUserReq) error {
+	if err := f.record("UnblockUser"); err != nil {
+		return err
+	}
+	f.Unblocks = append(f.Unblocks, req)
+	return nil
+}
+
+func (f *FakeClient) ListSessions(_ context.Context) ([]SessionRef, error) {
+	if err := f.record("ListSessions"); err != nil {
+		return nil, err
+	}
+	return f.Sessions, nil
+}
+
+func (f *FakeClient) TerminateSession(_ context.Context, req TerminateSessionReq) error {
+	if err := f.record("TerminateSession"); err != nil {
+		return err
+	}
+	f.Terms = append(f.Terms, req)
+	return nil
 }
 
 func (f *FakeClient) Close() error {

@@ -285,9 +285,7 @@ func runDispatchedRead(cmd *cobra.Command, name string, args map[string]any, pat
 	}, func(ctx context.Context) (any, error) {
 		return runner(ctx, p)
 	})
-	if code != 0 {
-		return fmt.Errorf("%s failed", name)
-	}
+	storeExitCode(cmd, code)
 	return nil
 }
 

@@ -1,14 +1,8 @@
 // Package client defines the narrow Telegram interface used by all command
-// runners. Production code wires this to gotd/td (added in a follow-up phase);
-// tests use an in-memory fake.
-//
-// Keeping commands behind this interface decouples them from any specific
-// MTProto library and lets the entire test suite run without network access.
+// runners. Production wires this to gotd/td; tests use FakeClient.
 package client
 
-import (
-	"context"
-)
+import "context"
 
 // User mirrors the subset of fields tgcli.commands.auth uses.
 type User struct {
@@ -22,17 +16,115 @@ type User struct {
 	RawJSON     string
 }
 
-// Client is the narrow API command runners use. Concrete implementations:
-// - gotdClient (production, wired in a follow-up phase)
-// - FakeClient (in tests)
+// SendMessageReq mirrors the input to messages.SendMessage.
+type SendMessageReq struct {
+	ChatID    int64
+	Text      string
+	ReplyTo   int64 // 0 = no reply
+	TopicID   int64 // 0 = no topic / general
+	Silent    bool
+	NoWebpage bool
+}
+
+type SendMessageResp struct {
+	MessageID int64
+	Date      string
+}
+
+// EditMessageReq mirrors messages.EditMessage.
+type EditMessageReq struct {
+	ChatID    int64
+	MessageID int64
+	NewText   string
+}
+
+// ForwardReq mirrors messages.ForwardMessages.
+type ForwardReq struct {
+	FromChatID int64
+	MessageIDs []int64
+	ToChatID   int64
+	TopicID    int64
+}
+
+type ForwardResp struct {
+	MessageIDs []int64
+}
+
+// PinReq mirrors messages.UpdatePinnedMessage / Unpin.
+type PinReq struct {
+	ChatID    int64
+	MessageID int64
+	Silent    bool
+	Unpin     bool // true = unpin
+}
+
+// ReactReq mirrors messages.SendReaction.
+type ReactReq struct {
+	ChatID    int64
+	MessageID int64
+	Emoji     string // empty = remove reaction
+	Big       bool
+}
+
+// MarkReadReq mirrors messages.ReadHistory.
+type MarkReadReq struct {
+	ChatID int64
+	UpToID int64
+}
+
+// DeleteMessagesReq mirrors messages.DeleteMessages.
+type DeleteMessagesReq struct {
+	ChatID      int64
+	MessageIDs  []int64
+	ForEveryone bool
+}
+
+type DeleteMessagesResp struct {
+	Deleted int
+}
+
+// LeaveChatReq mirrors channels.LeaveChannel / messages.DeleteChatUser.
+type LeaveChatReq struct {
+	ChatID int64
+}
+
+// BlockUserReq / UnblockUserReq mirror contacts.Block/Unblock.
+type BlockUserReq struct {
+	UserID int64
+}
+
+// SessionRef is one row from account.GetAuthorizations.
+type SessionRef struct {
+	Hash       int64
+	DeviceName string
+	Platform   string
+	IsCurrent  bool
+}
+
+// TerminateSessionReq mirrors account.ResetAuthorization.
+type TerminateSessionReq struct {
+	Hash int64
+}
+
+// Client is the narrow API command runners use.
 type Client interface {
 	GetMe(ctx context.Context) (User, error)
+	SendMessage(ctx context.Context, req SendMessageReq) (SendMessageResp, error)
+	EditMessage(ctx context.Context, req EditMessageReq) error
+	Forward(ctx context.Context, req ForwardReq) (ForwardResp, error)
+	Pin(ctx context.Context, req PinReq) error
+	React(ctx context.Context, req ReactReq) error
+	MarkRead(ctx context.Context, req MarkReadReq) error
+	DeleteMessages(ctx context.Context, req DeleteMessagesReq) (DeleteMessagesResp, error)
+	LeaveChat(ctx context.Context, req LeaveChatReq) error
+	BlockUser(ctx context.Context, req BlockUserReq) error
+	UnblockUser(ctx context.Context, req BlockUserReq) error
+	ListSessions(ctx context.Context) ([]SessionRef, error)
+	TerminateSession(ctx context.Context, req TerminateSessionReq) error
 	Close() error
 }
 
-// DisplayName mirrors tgcli.commands.messages._display_title for User-shaped
-// values, with the same fallback ordering: first+last → first → last → username
-// → "user_<id>".
+// DisplayName mirrors Python _display_title.
 func DisplayName(firstName, lastName, username string, id int64) string {
 	first := trim(firstName)
 	last := trim(lastName)
@@ -48,7 +140,7 @@ func DisplayName(firstName, lastName, username string, id int64) string {
 	if u := trim(username); u != "" {
 		return "@" + u
 	}
-	return userIDFallback(id)
+	return "user_" + itoa(id)
 }
 
 func trim(s string) string {
@@ -61,12 +153,7 @@ func trim(s string) string {
 	return s
 }
 
-func userIDFallback(id int64) string {
-	return "user_" + itoa(id)
-}
-
 func itoa(i int64) string {
-	// avoid strconv import to keep this file dependency-free
 	if i == 0 {
 		return "0"
 	}

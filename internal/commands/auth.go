@@ -103,9 +103,7 @@ func registerAuth(root *cobra.Command, paths AuthPathProvider) {
 			}, func(ctx context.Context) (any, error) {
 				return MeOfflineRunner(ctx, dbPath, sessionPath)
 			})
-			if code != 0 {
-				return fmt.Errorf("me failed")
-			}
+			storeExitCode(cmd, code)
 			return nil
 		},
 	}

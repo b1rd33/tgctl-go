@@ -14,6 +14,10 @@ type RootConfig struct {
 	LockWaitSeconds float64
 	Full            bool
 	Account         string
+	// ExitCode is set by command runners that emit their own envelope so the
+	// process exit matches the dispatch classification rather than cobra's
+	// default exit-1-on-RunE-error.
+	ExitCode int
 }
 
 type rootConfigKey struct{}
@@ -67,11 +71,26 @@ func registerVersion(root *cobra.Command) {
 }
 
 func ExecuteRoot(root *cobra.Command) int {
-	if err := root.Execute(); err != nil {
+	err := root.Execute()
+	cfg := rootConfigPtr(root)
+	if cfg != nil && cfg.ExitCode != 0 {
+		return cfg.ExitCode
+	}
+	if err != nil {
 		_, _ = fmt.Fprintln(root.ErrOrStderr(), err)
 		return 1
 	}
 	return 0
+}
+
+// rootConfigPtr exposes the live *RootConfig so command runners can write
+// their dispatch-issued exit code back into it. Distinct from RootConfigFrom,
+// which returns a copy for read-only consumers.
+func rootConfigPtr(cmd *cobra.Command) *RootConfig {
+	if v, ok := cmd.Context().Value(rootConfigKey{}).(*RootConfig); ok {
+		return v
+	}
+	return nil
 }
 
 func Execute() int {
