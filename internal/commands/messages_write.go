@@ -18,8 +18,10 @@ import (
 )
 
 // ClientFactory builds a per-command Telegram client. Production wires this
-// to gotd/td; tests inject a *client.FakeClient.
-type ClientFactory func(ctx context.Context, sessionPath string) (client.Client, error)
+// to gotd/td; tests inject a *client.FakeClient. The factory receives both
+// the session path (gotd auth state) and the per-account DB path (so the
+// gotd client can read tg_entities to turn chat_ids into InputPeers).
+type ClientFactory func(ctx context.Context, sessionPath, dbPath string) (client.Client, error)
 
 // CommandsConfig bundles dependencies the command tree needs.
 type CommandsConfig struct {
@@ -132,7 +134,7 @@ func runWrite(cmd *cobra.Command, name, telethonMethod, selector string, cfg Com
 			TelethonMethod: telethonMethod,
 			PayloadPreview: payloadPreview,
 			Run: func(ctx context.Context, chatID int64, chatTitle string) (map[string]any, error) {
-				c, err := cfg.ClientFactory(ctx, sessionPath)
+				c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
 				if err != nil {
 					return nil, err
 				}
@@ -304,7 +306,7 @@ func forwardCommand(cfg CommandsConfig) *cobra.Command {
 					DBPath: dbPath, AuditPath: auditPath, TelethonMethod: "messages.ForwardMessages",
 					PayloadPreview: payload,
 					Run: func(ctx context.Context, toChatID int64, toTitle string) (map[string]any, error) {
-						c, err := cfg.ClientFactory(ctx, sessionPath)
+						c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
 						if err != nil {
 							return nil, err
 						}

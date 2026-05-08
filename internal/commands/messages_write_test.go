@@ -29,7 +29,7 @@ func setupWriteEnv(t *testing.T) (CommandsConfig, *client.FakeClient, string) {
 	fc := &client.FakeClient{Me: client.User{ID: 99}, NextMessageID: 555}
 	cfg := CommandsConfig{
 		Paths: stubPaths{db: dbPath, session: sessionPath, audit: auditPath},
-		ClientFactory: func(ctx context.Context, _ string) (client.Client, error) {
+		ClientFactory: func(ctx context.Context, _, _ string) (client.Client, error) {
 			return fc, nil
 		},
 	}

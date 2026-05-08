@@ -67,4 +67,11 @@ CREATE TABLE IF NOT EXISTS tg_idempotency (
     result_json TEXT NOT NULL,
     created_at  TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS tg_entities (
+    id          INTEGER PRIMARY KEY,
+    kind        TEXT NOT NULL,
+    access_hash INTEGER,
+    updated_at  TEXT NOT NULL
+);
 `

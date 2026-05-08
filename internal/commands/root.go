@@ -111,5 +111,6 @@ func RegisterAll(root *cobra.Command, mgr *accounts.Manager, cfg CommandsConfig)
 	registerLogin(root, mgr)
 	registerImportTelethon(root, mgr)
 	registerSendByUsername(root, mgr)
+	registerBackfillEntities(root, mgr)
 	registerStubCommands(root, cfg)
 }

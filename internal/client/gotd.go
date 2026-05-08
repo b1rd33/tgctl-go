@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/gotd/td/tg"
 
 	"github.com/b1rd33/tgctl-go/internal/safety"
+	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
 // GotdClient is the production Client implementation backed by gotd/td.
@@ -25,6 +27,7 @@ type GotdClient struct {
 	tgc    *telegram.Client
 	cancel context.CancelFunc
 	done   chan error
+	db     *sql.DB // per-account entity cache; may be nil for ephemeral clients
 }
 
 // AuthPrompt is the interactive callback set used during `tg login`. Each
@@ -136,7 +139,7 @@ func (a fullAuthenticator) SignUp(_ context.Context) (auth.UserInfo, error) {
 // New opens a gotd client against an existing session, starts Run in a
 // goroutine, and returns a Client that proxies API calls into it. The
 // returned Client must be closed to release the connection.
-func New(ctx context.Context, apiID int, apiHash, sessionPath string) (*GotdClient, error) {
+func New(ctx context.Context, apiID int, apiHash, sessionPath, dbPath string) (*GotdClient, error) {
 	if apiID == 0 || apiHash == "" {
 		return nil, safety.NewMissingCredentials("TG_API_ID and TG_API_HASH must be set")
 	}
@@ -172,13 +175,22 @@ func New(ctx context.Context, apiID int, apiHash, sessionPath string) (*GotdClie
 		<-done
 		return nil, err
 	}
-	return &GotdClient{api: api, tgc: tgc, cancel: cancel, done: done}, nil
+	gc := &GotdClient{api: api, tgc: tgc, cancel: cancel, done: done}
+	if dbPath != "" {
+		if db, err := store.Connect(dbPath); err == nil {
+			gc.db = db
+		}
+	}
+	return gc, nil
 }
 
 // Close cancels the underlying client.Run and waits for it to drain.
 func (g *GotdClient) Close() error {
 	g.cancel()
 	err := <-g.done
+	if g.db != nil {
+		_ = g.db.Close()
+	}
 	if err != nil && !errors.Is(err, context.Canceled) {
 		return err
 	}
@@ -210,8 +222,9 @@ func userFromSelf(self *tg.User) User {
 //   - bare username (no @) — same path
 //   - me / self
 //
-// chat_id resolution requires a cached access_hash; that is the entity-cache
-// work that lands later. Until then, prefer @username for sends.
+// On a successful username resolution we persist the (id, kind, access_hash)
+// triple into tg_entities so subsequent chat_id-keyed operations can build an
+// InputPeer from the cache.
 func (g *GotdClient) resolvePeer(ctx context.Context, selector string) (tg.InputPeerClass, error) {
 	s := strings.TrimSpace(selector)
 	if s == "me" || s == "self" {
@@ -219,12 +232,13 @@ func (g *GotdClient) resolvePeer(ctx context.Context, selector string) (tg.Input
 	}
 	username := strings.TrimPrefix(s, "@")
 	if username == "" || strings.ContainsAny(username, " /\\") {
-		return nil, fmt.Errorf("cannot resolve %q: pass an @username (raw chat_ids need a cached access_hash, not yet wired)", selector)
+		return nil, fmt.Errorf("cannot resolve %q: pass an @username", selector)
 	}
 	resolved, err := g.api.ContactsResolveUsername(ctx, &tg.ContactsResolveUsernameRequest{Username: username})
 	if err != nil {
 		return nil, err
 	}
+	g.persistEntitiesFromResolved(resolved.Users, resolved.Chats)
 	switch p := resolved.Peer.(type) {
 	case *tg.PeerUser:
 		for _, u := range resolved.Users {
@@ -244,6 +258,30 @@ func (g *GotdClient) resolvePeer(ctx context.Context, selector string) (tg.Input
 		}
 	}
 	return nil, fmt.Errorf("could not build input peer for resolved username %q", username)
+}
+
+// persistEntitiesFromResolved writes user/chat/channel access_hashes into the
+// entity cache so future chat_id-keyed operations can run without hitting
+// ContactsResolveUsername. No-op when db is nil.
+func (g *GotdClient) persistEntitiesFromResolved(users []tg.UserClass, chats []tg.ChatClass) {
+	if g.db == nil {
+		return
+	}
+	for _, u := range users {
+		if user, ok := u.(*tg.User); ok && !user.Min {
+			_ = store.UpsertEntity(g.db, user.ID, store.EntityUser, user.AccessHash)
+		}
+	}
+	for _, c := range chats {
+		switch v := c.(type) {
+		case *tg.Channel:
+			if !v.Min {
+				_ = store.UpsertEntity(g.db, v.ID, store.EntityChannel, v.AccessHash)
+			}
+		case *tg.Chat:
+			_ = store.UpsertEntity(g.db, v.ID, store.EntityChat, 0)
+		}
+	}
 }
 
 func (g *GotdClient) SendMessage(ctx context.Context, req SendMessageReq) (SendMessageResp, error) {
@@ -276,13 +314,29 @@ func (g *GotdClient) SendMessage(ctx context.Context, req SendMessageReq) (SendM
 	return SendMessageResp{MessageID: id}, nil
 }
 
-// peerFromChatID is the chat_id→InputPeer lookup. Real implementation needs
-// access_hash from a cached entity. For the minimum-viable send path we
-// accept selectors that look like "@username" by stuffing them into ChatID
-// elsewhere isn't feasible; instead, use SendMessageBySelector below.
-func (g *GotdClient) peerFromChatID(ctx context.Context, chatID int64) (tg.InputPeerClass, error) {
-	return nil, fmt.Errorf("chat_id %d cannot be turned into an InputPeer without cached access_hash; "+
-		"use `tg send-by-username @name <text>` until the entity cache is wired", chatID)
+// peerFromChatID looks up an entity in tg_entities and builds the right
+// InputPeer for it. Returns a clear error pointing at backfill-entities
+// when nothing is cached.
+func (g *GotdClient) peerFromChatID(_ context.Context, chatID int64) (tg.InputPeerClass, error) {
+	if g.db == nil {
+		return nil, safety.NewBadArgs("chat_id %d cannot be resolved without an entity cache (no DB available)", chatID)
+	}
+	kind, accessHash, ok := store.LoadEntity(g.db, chatID)
+	if !ok {
+		return nil, safety.NewBadArgs(
+			"no cached access_hash for chat_id %d; run `tg backfill-entities` once or use `tg send-by-username @name`",
+			chatID,
+		)
+	}
+	switch kind {
+	case store.EntityUser:
+		return &tg.InputPeerUser{UserID: chatID, AccessHash: accessHash}, nil
+	case store.EntityChannel:
+		return &tg.InputPeerChannel{ChannelID: chatID, AccessHash: accessHash}, nil
+	case store.EntityChat:
+		return &tg.InputPeerChat{ChatID: chatID}, nil
+	}
+	return nil, safety.NewBadArgs("unknown entity kind %q for chat_id %d", string(kind), chatID)
 }
 
 // SendMessageBySelector resolves selector via Telegram and sends in one call.
@@ -335,28 +389,201 @@ func extractNewMessageID(u tg.UpdatesClass) int64 {
 	return 0
 }
 
-// ---- not-yet-wired methods on Client interface ----
+// ---- write methods backed by gotd ----
 
-var errNotWired = safety.NewMissingCredentials(
-	"this command's gotd/td path is not wired yet; the safety pipeline runs but the Telegram call is stubbed",
-)
+func (g *GotdClient) EditMessage(ctx context.Context, req EditMessageReq) error {
+	peer, err := g.peerFromChatID(ctx, req.ChatID)
+	if err != nil {
+		return err
+	}
+	_, err = g.api.MessagesEditMessage(ctx, &tg.MessagesEditMessageRequest{
+		Peer: peer, ID: int(req.MessageID), Message: req.NewText,
+	})
+	return mapRPCErr(err)
+}
 
-func (g *GotdClient) EditMessage(context.Context, EditMessageReq) error  { return errNotWired }
-func (g *GotdClient) Forward(context.Context, ForwardReq) (ForwardResp, error) {
-	return ForwardResp{}, errNotWired
+func (g *GotdClient) Forward(ctx context.Context, req ForwardReq) (ForwardResp, error) {
+	from, err := g.peerFromChatID(ctx, req.FromChatID)
+	if err != nil {
+		return ForwardResp{}, err
+	}
+	to, err := g.peerFromChatID(ctx, req.ToChatID)
+	if err != nil {
+		return ForwardResp{}, err
+	}
+	ids := make([]int, len(req.MessageIDs))
+	randomIDs := make([]int64, len(req.MessageIDs))
+	for i, id := range req.MessageIDs {
+		ids[i] = int(id)
+		randomIDs[i] = randomID()
+	}
+	r := &tg.MessagesForwardMessagesRequest{
+		FromPeer: from, ToPeer: to, ID: ids, RandomID: randomIDs,
+	}
+	if req.TopicID != 0 {
+		r.TopMsgID = int(req.TopicID)
+	}
+	updates, err := g.api.MessagesForwardMessages(ctx, r)
+	if err != nil {
+		return ForwardResp{}, mapRPCErr(err)
+	}
+	return ForwardResp{MessageIDs: extractAllNewMessageIDs(updates)}, nil
 }
-func (g *GotdClient) Pin(context.Context, PinReq) error                       { return errNotWired }
-func (g *GotdClient) React(context.Context, ReactReq) error                   { return errNotWired }
-func (g *GotdClient) MarkRead(context.Context, MarkReadReq) error             { return errNotWired }
-func (g *GotdClient) DeleteMessages(context.Context, DeleteMessagesReq) (DeleteMessagesResp, error) {
-	return DeleteMessagesResp{}, errNotWired
+
+func (g *GotdClient) Pin(ctx context.Context, req PinReq) error {
+	peer, err := g.peerFromChatID(ctx, req.ChatID)
+	if err != nil {
+		return err
+	}
+	_, err = g.api.MessagesUpdatePinnedMessage(ctx, &tg.MessagesUpdatePinnedMessageRequest{
+		Peer: peer, ID: int(req.MessageID),
+		Silent: req.Silent, Unpin: req.Unpin,
+	})
+	return mapRPCErr(err)
 }
-func (g *GotdClient) LeaveChat(context.Context, LeaveChatReq) error           { return errNotWired }
-func (g *GotdClient) BlockUser(context.Context, BlockUserReq) error           { return errNotWired }
-func (g *GotdClient) UnblockUser(context.Context, BlockUserReq) error         { return errNotWired }
-func (g *GotdClient) ListSessions(context.Context) ([]SessionRef, error)       { return nil, errNotWired }
-func (g *GotdClient) TerminateSession(context.Context, TerminateSessionReq) error {
-	return errNotWired
+
+func (g *GotdClient) React(ctx context.Context, req ReactReq) error {
+	peer, err := g.peerFromChatID(ctx, req.ChatID)
+	if err != nil {
+		return err
+	}
+	r := &tg.MessagesSendReactionRequest{
+		Peer: peer, MsgID: int(req.MessageID), Big: req.Big,
+	}
+	if req.Emoji != "" {
+		r.Reaction = []tg.ReactionClass{&tg.ReactionEmoji{Emoticon: req.Emoji}}
+	}
+	_, err = g.api.MessagesSendReaction(ctx, r)
+	return mapRPCErr(err)
+}
+
+func (g *GotdClient) MarkRead(ctx context.Context, req MarkReadReq) error {
+	peer, err := g.peerFromChatID(ctx, req.ChatID)
+	if err != nil {
+		return err
+	}
+	if ch, ok := peer.(*tg.InputPeerChannel); ok {
+		_, err := g.api.ChannelsReadHistory(ctx, &tg.ChannelsReadHistoryRequest{
+			Channel: &tg.InputChannel{ChannelID: ch.ChannelID, AccessHash: ch.AccessHash},
+			MaxID:   int(req.UpToID),
+		})
+		return mapRPCErr(err)
+	}
+	_, err = g.api.MessagesReadHistory(ctx, &tg.MessagesReadHistoryRequest{
+		Peer: peer, MaxID: int(req.UpToID),
+	})
+	return mapRPCErr(err)
+}
+
+func (g *GotdClient) DeleteMessages(ctx context.Context, req DeleteMessagesReq) (DeleteMessagesResp, error) {
+	peer, err := g.peerFromChatID(ctx, req.ChatID)
+	if err != nil {
+		return DeleteMessagesResp{}, err
+	}
+	ids := make([]int, len(req.MessageIDs))
+	for i, id := range req.MessageIDs {
+		ids[i] = int(id)
+	}
+	if ch, ok := peer.(*tg.InputPeerChannel); ok {
+		resp, err := g.api.ChannelsDeleteMessages(ctx, &tg.ChannelsDeleteMessagesRequest{
+			Channel: &tg.InputChannel{ChannelID: ch.ChannelID, AccessHash: ch.AccessHash},
+			ID:      ids,
+		})
+		if err != nil {
+			return DeleteMessagesResp{}, mapRPCErr(err)
+		}
+		return DeleteMessagesResp{Deleted: resp.PtsCount}, nil
+	}
+	resp, err := g.api.MessagesDeleteMessages(ctx, &tg.MessagesDeleteMessagesRequest{
+		ID: ids, Revoke: req.ForEveryone,
+	})
+	if err != nil {
+		return DeleteMessagesResp{}, mapRPCErr(err)
+	}
+	return DeleteMessagesResp{Deleted: resp.PtsCount}, nil
+}
+
+func (g *GotdClient) LeaveChat(ctx context.Context, req LeaveChatReq) error {
+	peer, err := g.peerFromChatID(ctx, req.ChatID)
+	if err != nil {
+		return err
+	}
+	switch p := peer.(type) {
+	case *tg.InputPeerChannel:
+		_, err := g.api.ChannelsLeaveChannel(ctx, &tg.InputChannel{
+			ChannelID: p.ChannelID, AccessHash: p.AccessHash,
+		})
+		return mapRPCErr(err)
+	case *tg.InputPeerChat:
+		_, err := g.api.MessagesDeleteChatUser(ctx, &tg.MessagesDeleteChatUserRequest{
+			ChatID: p.ChatID, UserID: &tg.InputUserSelf{},
+		})
+		return mapRPCErr(err)
+	}
+	return safety.NewBadArgs("leave-chat target must be a group or channel, not a 1-on-1 user")
+}
+
+func (g *GotdClient) BlockUser(ctx context.Context, req BlockUserReq) error {
+	peer, err := g.peerFromChatID(ctx, req.UserID)
+	if err != nil {
+		return err
+	}
+	_, err = g.api.ContactsBlock(ctx, &tg.ContactsBlockRequest{ID: peer})
+	return mapRPCErr(err)
+}
+
+func (g *GotdClient) UnblockUser(ctx context.Context, req BlockUserReq) error {
+	peer, err := g.peerFromChatID(ctx, req.UserID)
+	if err != nil {
+		return err
+	}
+	_, err = g.api.ContactsUnblock(ctx, &tg.ContactsUnblockRequest{ID: peer})
+	return mapRPCErr(err)
+}
+
+func (g *GotdClient) ListSessions(ctx context.Context) ([]SessionRef, error) {
+	resp, err := g.api.AccountGetAuthorizations(ctx)
+	if err != nil {
+		return nil, mapRPCErr(err)
+	}
+	out := make([]SessionRef, len(resp.Authorizations))
+	for i, a := range resp.Authorizations {
+		out[i] = SessionRef{
+			Hash:       a.Hash,
+			DeviceName: a.DeviceModel,
+			Platform:   a.Platform,
+			IsCurrent:  a.Current,
+		}
+	}
+	return out, nil
+}
+
+func (g *GotdClient) TerminateSession(ctx context.Context, req TerminateSessionReq) error {
+	_, err := g.api.AccountResetAuthorization(ctx, req.Hash)
+	return mapRPCErr(err)
+}
+
+// extractAllNewMessageIDs returns the message ids of every new-message update
+// inside an Updates response.
+func extractAllNewMessageIDs(u tg.UpdatesClass) []int64 {
+	var out []int64
+	if v, ok := u.(*tg.Updates); ok {
+		for _, up := range v.Updates {
+			switch n := up.(type) {
+			case *tg.UpdateNewMessage:
+				if msg, ok := n.Message.(*tg.Message); ok {
+					out = append(out, int64(msg.ID))
+				}
+			case *tg.UpdateNewChannelMessage:
+				if msg, ok := n.Message.(*tg.Message); ok {
+					out = append(out, int64(msg.ID))
+				}
+			case *tg.UpdateMessageID:
+				out = append(out, int64(n.ID))
+			}
+		}
+	}
+	return out
 }
 
 // mapRPCErr classifies a gotd RPC error into the dispatch error taxonomy.

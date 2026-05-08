@@ -77,7 +77,7 @@ func deleteMsgCommand(cfg CommandsConfig) *cobra.Command {
 						if noForEveryone {
 							effective = false
 						}
-						c, err := cfg.ClientFactory(ctx, sessionPath)
+						c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
 						if err != nil {
 							return nil, err
 						}
@@ -176,7 +176,7 @@ func leaveChatCommand(cfg CommandsConfig) *cobra.Command {
 						if err := safety.RequireTypedConfirm(wargs.Args, chatID, "chat_id"); err != nil {
 							return nil, err
 						}
-						c, err := cfg.ClientFactory(ctx, sessionPath)
+						c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
 						if err != nil {
 							return nil, err
 						}
@@ -243,7 +243,7 @@ func blockUserCommand(cfg CommandsConfig, unblock bool) *cobra.Command {
 						if err := safety.RequireTypedConfirm(wargs.Args, userID, "user_id"); err != nil {
 							return nil, err
 						}
-						c, err := cfg.ClientFactory(ctx, sessionPath)
+						c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
 						if err != nil {
 							return nil, err
 						}
@@ -285,7 +285,7 @@ func terminateSessionCommand(cfg CommandsConfig) *cobra.Command {
 					safety.NewBadArgs("session-hash must be an integer (got %q)", rawHash))
 			}
 			payload := map[string]any{"session_hash": hash}
-			_, sessionPath, auditPath := resolveWritePaths(cmd, cfg.Paths)
+			dbPath, sessionPath, auditPath := resolveWritePaths(cmd, cfg.Paths)
 			wargs := writeArgsFrom(cmd)
 			code := dispatch.Run("terminate-session", dispatch.Options{
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
@@ -297,7 +297,7 @@ func terminateSessionCommand(cfg CommandsConfig) *cobra.Command {
 				if err := safety.RequireTypedConfirm(wargs.Args, hash, "session_hash"); err != nil {
 					return nil, err
 				}
-				c, err := cfg.ClientFactory(ctx, sessionPath)
+				c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
 				if err != nil {
 					return nil, err
 				}

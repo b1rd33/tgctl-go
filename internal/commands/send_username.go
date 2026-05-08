@@ -82,7 +82,7 @@ func registerSendByUsername(root *cobra.Command, mgr *accounts.Manager) {
 					PayloadPreview:    payload,
 					DryRun:            false,
 				})
-				gc, err := client.New(ctx, apiID, apiHash, paths.SessionPath)
+				gc, err := client.New(ctx, apiID, apiHash, paths.SessionPath, paths.DBPath)
 				if err != nil {
 					return nil, err
 				}

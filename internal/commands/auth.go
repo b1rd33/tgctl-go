@@ -20,7 +20,7 @@ func MeLiveRunner(ctx context.Context, dbPath, sessionPath string) (any, error) 
 	if err != nil {
 		return nil, err
 	}
-	gc, err := client.New(ctx, apiID, apiHash, sessionPath)
+	gc, err := client.New(ctx, apiID, apiHash, sessionPath, dbPath)
 	if err != nil {
 		return nil, err
 	}

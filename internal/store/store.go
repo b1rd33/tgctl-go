@@ -67,7 +67,26 @@ func migrate(db *sql.DB) error {
 			return err
 		}
 	}
+	if !tableExists(db, "tg_entities") {
+		if _, err := db.Exec(`
+			CREATE TABLE tg_entities (
+				id          INTEGER PRIMARY KEY,
+				kind        TEXT NOT NULL,
+				access_hash INTEGER,
+				updated_at  TEXT NOT NULL
+			)`); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func tableExists(db *sql.DB, name string) bool {
+	var got string
+	err := db.QueryRow(
+		"SELECT name FROM sqlite_master WHERE type='table' AND name=?", name,
+	).Scan(&got)
+	return err == nil
 }
 
 func columnExists(db *sql.DB, table, column string) bool {

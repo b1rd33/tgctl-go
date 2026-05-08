@@ -43,13 +43,14 @@ func projectRoot() string {
 // will land alongside the live MTProto wiring. It returns a clear error so
 // the dispatch layer maps it to NOT_AUTHED.
 // gotdClientFactory returns the real gotd/td-backed Client. It expects a
-// session at sessionPath created by `tg login`.
-func gotdClientFactory(ctx context.Context, sessionPath string) (client.Client, error) {
+// session at sessionPath created by `tg login`. dbPath is the per-account
+// SQLite cache the client reads to turn chat_ids into InputPeers.
+func gotdClientFactory(ctx context.Context, sessionPath, dbPath string) (client.Client, error) {
 	apiID, apiHash, err := client.EnsureCredentials()
 	if err != nil {
 		return nil, err
 	}
-	return client.New(ctx, apiID, apiHash, sessionPath)
+	return client.New(ctx, apiID, apiHash, sessionPath, dbPath)
 }
 
 var _ = safety.NewMissingCredentials // kept for any future fallback factory
