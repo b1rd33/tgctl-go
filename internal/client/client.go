@@ -225,6 +225,15 @@ type MemberInfo struct {
 	Role        string `json:"role"`
 }
 
+type ListenEvent struct {
+	UpdateKind string `json:"update_kind"`
+	ChatID     int64  `json:"chat_id"`
+	MessageID  int64  `json:"message_id"`
+	SenderID   int64  `json:"sender_id,omitempty"`
+	Text       string `json:"text,omitempty"`
+	MediaType  string `json:"media_type,omitempty"`
+}
+
 // TerminateSessionReq mirrors account.ResetAuthorization.
 type TerminateSessionReq struct {
 	Hash int64
@@ -261,6 +270,7 @@ type Client interface {
 	AdminAction(ctx context.Context, req AdminActionReq) (InviteLinkResp, error)
 	ListChatMembers(ctx context.Context, chatID int64, limit int) ([]MemberInfo, error)
 	GetChatsInfo(ctx context.Context, ids []int64) ([]ChatInfo, error)
+	ListenOnce(ctx context.Context) (ListenEvent, error)
 	Close() error
 }
 

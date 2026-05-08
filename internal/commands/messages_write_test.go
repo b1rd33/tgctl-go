@@ -50,6 +50,7 @@ func runRoot(t *testing.T, cfg CommandsConfig, args ...string) (string, int) {
 	registerDestructiveCommands(root, cfg)
 	registerAdminCommands(root, cfg)
 	registerLocalDBCommands(root, cfg)
+	registerLiveCommands(root, cfg)
 	var stdout, stderr bytes.Buffer
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)

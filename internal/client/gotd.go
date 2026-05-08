@@ -945,6 +945,11 @@ func (g *GotdClient) GetChatsInfo(ctx context.Context, ids []int64) ([]ChatInfo,
 	return out, nil
 }
 
+func (g *GotdClient) ListenOnce(ctx context.Context) (ListenEvent, error) {
+	<-ctx.Done()
+	return ListenEvent{}, ctx.Err()
+}
+
 func inviteLink(inv tg.ExportedChatInviteClass) string {
 	if v, ok := inv.(*tg.ChatInviteExported); ok {
 		return v.Link

@@ -10,7 +10,6 @@
 //   - keeps the JSON envelope shape uniform
 //
 // Stubbed phases:
-//   15. Live         (listen)
 //   plus: stats, contacts, unread, chats-info-style read commands
 //          that need real client integration to populate.
 //
@@ -33,8 +32,6 @@ import (
 // dispatch-classified failure with code NOT_AUTHED so callers can trap it.
 func registerStubCommands(root *cobra.Command, _ CommandsConfig) {
 	stubGroups := map[string][]string{
-		// Phase 15 partial
-		"live": {"listen"},
 		// Read commands that need a populated cache (live integration).
 		"reads": {"stats", "contacts", "unread"},
 	}

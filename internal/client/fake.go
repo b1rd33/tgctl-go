@@ -46,6 +46,8 @@ type FakeClient struct {
 	AdminActions  []AdminActionReq
 	Members       []MemberInfo
 	ChatInfos     []ChatInfo
+	ListenEvents  []ListenEvent
+	ListenCalls   []bool
 
 	// LastMessageID is the next id returned by SendMessage. Tests override this.
 	NextMessageID int64
@@ -312,6 +314,17 @@ func (f *FakeClient) GetChatsInfo(_ context.Context, ids []int64) ([]ChatInfo, e
 		out[i] = ChatInfo{ID: id}
 	}
 	return out, nil
+}
+
+func (f *FakeClient) ListenOnce(_ context.Context) (ListenEvent, error) {
+	if err := f.record("ListenOnce"); err != nil {
+		return ListenEvent{}, err
+	}
+	f.ListenCalls = append(f.ListenCalls, true)
+	if len(f.ListenEvents) == 0 {
+		return ListenEvent{UpdateKind: "idle"}, nil
+	}
+	return f.ListenEvents[0], nil
 }
 
 func (f *FakeClient) Close() error {
