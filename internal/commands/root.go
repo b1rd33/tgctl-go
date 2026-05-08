@@ -109,6 +109,7 @@ func RegisterAll(root *cobra.Command, mgr *accounts.Manager, cfg CommandsConfig)
 	registerAccountCommands(root, mgr)
 	registerDoctor(root, mgr)
 	registerLogin(root, mgr)
+	registerImportTelethon(root, mgr)
 	registerSendByUsername(root, mgr)
 	registerStubCommands(root, cfg)
 }

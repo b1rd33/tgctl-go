@@ -8,10 +8,52 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/b1rd33/tgctl-go/internal/client"
 	"github.com/b1rd33/tgctl-go/internal/dispatch"
 	"github.com/b1rd33/tgctl-go/internal/resolve"
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
+
+// MeLiveRunner connects to Telegram via gotd and refreshes tg_me.
+func MeLiveRunner(ctx context.Context, dbPath, sessionPath string) (any, error) {
+	apiID, apiHash, err := client.EnsureCredentials()
+	if err != nil {
+		return nil, err
+	}
+	gc, err := client.New(ctx, apiID, apiHash, sessionPath)
+	if err != nil {
+		return nil, err
+	}
+	defer gc.Close()
+
+	me, err := gc.GetMe(ctx)
+	if err != nil {
+		return nil, err
+	}
+	db, err := store.Connect(dbPath)
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	row := store.MeRow{
+		UserID:      me.ID,
+		Username:    nullStringOf(me.Username),
+		Phone:       nullStringOf(me.Phone),
+		FirstName:   nullStringOf(me.FirstName),
+		LastName:    nullStringOf(me.LastName),
+		DisplayName: nullStringOf(me.DisplayName),
+		IsBot:       boolInt(me.IsBot),
+		CachedAt:    timeNow(),
+	}
+	if err := store.UpsertMe(db, row); err != nil {
+		return nil, err
+	}
+	loaded, err := store.LoadMe(db)
+	if err != nil {
+		return nil, err
+	}
+	return mePayload(loaded, "live", sessionPath), nil
+}
 
 // MeOfflineRunner returns the cached self-user envelope data, or
 // *resolve.NotFound when the cache is empty. Connecting and closing the DB is
@@ -82,11 +124,6 @@ func registerAuth(root *cobra.Command, paths AuthPathProvider) {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			offline, _ := cmd.Flags().GetBool("offline")
-			if !offline {
-				// Live login is wired in a follow-up phase; surface a clear,
-				// stable error instead of half-implementing it.
-				return fmt.Errorf("live `tg me` requires Telegram credentials and is not available in this build; use --offline")
-			}
 			cfg := RootConfigFrom(cmd.Root())
 			account := cfg.Account
 			if account == "" {
@@ -101,7 +138,10 @@ func registerAuth(root *cobra.Command, paths AuthPathProvider) {
 				AuditPath:      auditPath,
 				Args:           map[string]any{"offline": offline},
 			}, func(ctx context.Context) (any, error) {
-				return MeOfflineRunner(ctx, dbPath, sessionPath)
+				if offline {
+					return MeOfflineRunner(ctx, dbPath, sessionPath)
+				}
+				return MeLiveRunner(ctx, dbPath, sessionPath)
 			})
 			storeExitCode(cmd, code)
 			return nil
