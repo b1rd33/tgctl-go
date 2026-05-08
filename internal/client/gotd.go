@@ -30,6 +30,7 @@ type GotdClient struct {
 	cancel context.CancelFunc
 	done   chan error
 	db     *sql.DB // per-account entity cache; may be nil for ephemeral clients
+	events chan ListenEvent
 }
 
 // AuthPrompt is the interactive callback set used during `tg login`. Each
@@ -146,7 +147,19 @@ func New(ctx context.Context, apiID int, apiHash, sessionPath, dbPath string) (*
 		return nil, safety.NewMissingCredentials("TG_API_ID and TG_API_HASH must be set")
 	}
 	storage := &session.FileStorage{Path: sessionPath}
-	tgc := telegram.NewClient(apiID, apiHash, telegram.Options{SessionStorage: storage})
+	events := make(chan ListenEvent, 32)
+	tgc := telegram.NewClient(apiID, apiHash, telegram.Options{
+		SessionStorage: storage,
+		UpdateHandler: telegram.UpdateHandlerFunc(func(ctx context.Context, u tg.UpdatesClass) error {
+			for _, event := range listenEventsFromUpdates(u) {
+				select {
+				case events <- event:
+				default:
+				}
+			}
+			return nil
+		}),
+	})
 
 	runCtx, cancel := context.WithCancel(ctx)
 	ready := make(chan error, 1)
@@ -177,7 +190,7 @@ func New(ctx context.Context, apiID int, apiHash, sessionPath, dbPath string) (*
 		<-done
 		return nil, err
 	}
-	gc := &GotdClient{api: api, tgc: tgc, cancel: cancel, done: done}
+	gc := &GotdClient{api: api, tgc: tgc, cancel: cancel, done: done, events: events}
 	if dbPath != "" {
 		if db, err := store.Connect(dbPath); err == nil {
 			gc.db = db
@@ -869,7 +882,27 @@ func (g *GotdClient) ReorderFolders(ctx context.Context, ids []int64) error {
 }
 
 func (g *GotdClient) ListPinnedDialogs(ctx context.Context, chatID int64) ([]ChatInfo, error) {
-	return nil, safety.NewBadArgs("chat-pinned-list is not supported by gotd adapter yet for chat_id %d", chatID)
+	resp, err := g.api.MessagesGetPinnedDialogs(ctx, 0)
+	if err != nil {
+		return nil, mapRPCErr(err)
+	}
+	out := make([]ChatInfo, 0, len(resp.Chats)+len(resp.Users))
+	for _, c := range resp.Chats {
+		switch v := c.(type) {
+		case *tg.Channel:
+			out = append(out, ChatInfo{ID: v.ID, Type: "channel", Title: v.Title, Username: v.Username})
+		case *tg.Chat:
+			out = append(out, ChatInfo{ID: v.ID, Type: "group", Title: v.Title})
+		}
+	}
+	for _, u := range resp.Users {
+		if user, ok := u.(*tg.User); ok {
+			out = append(out, ChatInfo{
+				ID: user.ID, Type: "user", Title: DisplayName(user.FirstName, user.LastName, user.Username, user.ID), Username: user.Username,
+			})
+		}
+	}
+	return out, nil
 }
 
 func (g *GotdClient) AdminAction(ctx context.Context, req AdminActionReq) (InviteLinkResp, error) {
@@ -889,15 +922,115 @@ func (g *GotdClient) AdminAction(ctx context.Context, req AdminActionReq) (Invit
 		}
 		return InviteLinkResp{}, mapRPCErr(err)
 	case "chat-description":
-		return InviteLinkResp{}, safety.NewBadArgs("chat-description is not supported by gotd/td v0.144.0")
+		_, err = g.api.MessagesEditChatAbout(ctx, &tg.MessagesEditChatAboutRequest{Peer: peer, About: req.Value})
+		return InviteLinkResp{}, mapRPCErr(err)
+	case "chat-photo":
+		file, err := uploader.NewUploader(g.api).FromPath(ctx, req.Path)
+		if err != nil {
+			return InviteLinkResp{}, err
+		}
+		photo := &tg.InputChatUploadedPhoto{File: file}
+		switch p := peer.(type) {
+		case *tg.InputPeerChannel:
+			_, err = g.api.ChannelsEditPhoto(ctx, &tg.ChannelsEditPhotoRequest{
+				Channel: &tg.InputChannel{ChannelID: p.ChannelID, AccessHash: p.AccessHash},
+				Photo:   photo,
+			})
+		case *tg.InputPeerChat:
+			_, err = g.api.MessagesEditChatPhoto(ctx, &tg.MessagesEditChatPhotoRequest{ChatID: p.ChatID, Photo: photo})
+		default:
+			err = safety.NewBadArgs("chat-photo target must be a group or channel")
+		}
+		return InviteLinkResp{}, mapRPCErr(err)
+	case "set-permissions":
+		_, err = g.api.MessagesEditChatDefaultBannedRights(ctx, &tg.MessagesEditChatDefaultBannedRightsRequest{
+			Peer:         peer,
+			BannedRights: parseBannedRights(req.Value),
+		})
+		return InviteLinkResp{}, mapRPCErr(err)
 	case "chat-invite-link":
 		invite, err := g.api.MessagesExportChatInvite(ctx, &tg.MessagesExportChatInviteRequest{Peer: peer})
 		if err != nil {
 			return InviteLinkResp{}, mapRPCErr(err)
 		}
 		return InviteLinkResp{Link: inviteLink(invite)}, nil
+	case "promote", "demote":
+		ch, ok := peer.(*tg.InputPeerChannel)
+		if !ok {
+			return InviteLinkResp{}, safety.NewBadArgs("%s target must be a channel or supergroup", req.Action)
+		}
+		user, err := g.inputUserFromID(req.UserID)
+		if err != nil {
+			return InviteLinkResp{}, err
+		}
+		rights := tg.ChatAdminRights{}
+		if req.Action == "promote" {
+			rights = tg.ChatAdminRights{
+				ChangeInfo: true, DeleteMessages: true, BanUsers: true,
+				InviteUsers: true, PinMessages: true, Other: true, ManageTopics: true,
+			}
+		}
+		_, err = g.api.ChannelsEditAdmin(ctx, &tg.ChannelsEditAdminRequest{
+			Channel:     &tg.InputChannel{ChannelID: ch.ChannelID, AccessHash: ch.AccessHash},
+			UserID:      user,
+			AdminRights: rights,
+		})
+		return InviteLinkResp{}, mapRPCErr(err)
+	case "ban-from-chat", "kick", "unban-from-chat":
+		ch, ok := peer.(*tg.InputPeerChannel)
+		if !ok {
+			return InviteLinkResp{}, safety.NewBadArgs("%s target must be a channel or supergroup", req.Action)
+		}
+		participant, err := g.peerFromChatID(ctx, req.UserID)
+		if err != nil {
+			return InviteLinkResp{}, err
+		}
+		rights := tg.ChatBannedRights{}
+		switch req.Action {
+		case "ban-from-chat", "kick":
+			rights.ViewMessages = true
+			rights.SendMessages = true
+		case "unban-from-chat":
+			rights = tg.ChatBannedRights{}
+		}
+		_, err = g.api.ChannelsEditBanned(ctx, &tg.ChannelsEditBannedRequest{
+			Channel:      &tg.InputChannel{ChannelID: ch.ChannelID, AccessHash: ch.AccessHash},
+			Participant:  participant,
+			BannedRights: rights,
+		})
+		return InviteLinkResp{}, mapRPCErr(err)
 	}
-	return InviteLinkResp{}, safety.NewBadArgs("%s is not implemented for this peer type", req.Action)
+	return InviteLinkResp{}, safety.NewBadArgs("%s is unsupported for this peer type", req.Action)
+}
+
+func parseBannedRights(value string) tg.ChatBannedRights {
+	rights := tg.ChatBannedRights{}
+	if strings.Contains(strings.ToLower(value), "restrict") || strings.Contains(strings.ToLower(value), "read-only") {
+		rights.SendMessages = true
+		rights.SendMedia = true
+		rights.SendPhotos = true
+		rights.SendVideos = true
+		rights.SendDocs = true
+		rights.SendPlain = true
+	}
+	return rights
+}
+
+func (g *GotdClient) inputUserFromID(userID int64) (tg.InputUserClass, error) {
+	if userID == 0 {
+		return nil, safety.NewBadArgs("user_id cannot be 0")
+	}
+	if g.db == nil {
+		return nil, safety.NewBadArgs("chat_id %d cannot be resolved without an entity cache (no DB available)", userID)
+	}
+	kind, accessHash, ok := store.LoadEntity(g.db, userID)
+	if !ok || kind != store.EntityUser {
+		return nil, safety.NewBadArgs(
+			"no cached access_hash for chat_id %d; run `tg backfill-entities` once or use `tg send-by-username @name`",
+			userID,
+		)
+	}
+	return &tg.InputUser{UserID: userID, AccessHash: accessHash}, nil
 }
 
 func (g *GotdClient) ListChatMembers(ctx context.Context, chatID int64, limit int) ([]MemberInfo, error) {
@@ -946,8 +1079,66 @@ func (g *GotdClient) GetChatsInfo(ctx context.Context, ids []int64) ([]ChatInfo,
 }
 
 func (g *GotdClient) ListenOnce(ctx context.Context) (ListenEvent, error) {
-	<-ctx.Done()
-	return ListenEvent{}, ctx.Err()
+	select {
+	case event := <-g.events:
+		return event, nil
+	case <-ctx.Done():
+		return ListenEvent{}, ctx.Err()
+	}
+}
+
+func listenEventsFromUpdates(updates tg.UpdatesClass) []ListenEvent {
+	var out []ListenEvent
+	add := func(kind string, msg tg.MessageClass) {
+		m, ok := msg.(*tg.Message)
+		if !ok {
+			return
+		}
+		out = append(out, ListenEvent{
+			UpdateKind: kind,
+			ChatID:     peerID(m.PeerID),
+			MessageID:  int64(m.ID),
+			SenderID:   peerID(m.FromID),
+			Text:       m.Message,
+			MediaType:  messageMediaType(m.Media),
+		})
+	}
+	switch u := updates.(type) {
+	case *tg.Updates:
+		for _, update := range u.Updates {
+			switch v := update.(type) {
+			case *tg.UpdateNewMessage:
+				add("message", v.Message)
+			case *tg.UpdateNewChannelMessage:
+				add("channel_message", v.Message)
+			}
+		}
+	case *tg.UpdateShortMessage:
+		out = append(out, ListenEvent{UpdateKind: "message", ChatID: u.UserID, MessageID: int64(u.ID), Text: u.Message})
+	case *tg.UpdateShortChatMessage:
+		out = append(out, ListenEvent{UpdateKind: "chat_message", ChatID: u.ChatID, MessageID: int64(u.ID), SenderID: u.FromID, Text: u.Message})
+	case *tg.UpdateShort:
+		switch v := u.Update.(type) {
+		case *tg.UpdateNewMessage:
+			add("message", v.Message)
+		case *tg.UpdateNewChannelMessage:
+			add("channel_message", v.Message)
+		}
+	}
+	return out
+}
+
+func messageMediaType(media tg.MessageMediaClass) string {
+	switch media.(type) {
+	case nil:
+		return ""
+	case *tg.MessageMediaPhoto:
+		return "photo"
+	case *tg.MessageMediaDocument:
+		return "document"
+	default:
+		return fmt.Sprintf("%T", media)
+	}
 }
 
 func inviteLink(inv tg.ExportedChatInviteClass) string {

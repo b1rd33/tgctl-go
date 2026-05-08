@@ -21,8 +21,7 @@ import (
 	"github.com/gotd/td/tg"
 )
 
-// registerLogin replaces the stubbed `login` registration with a real
-// interactive flow against gotd/td.
+// registerLogin wires the interactive authorization flow against gotd/td.
 func registerLogin(root *cobra.Command, mgr *accounts.Manager) {
 	cmd := &cobra.Command{
 		Use:          "login",

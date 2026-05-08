@@ -10,7 +10,6 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/client"
 	"github.com/b1rd33/tgctl-go/internal/commands"
 	"github.com/b1rd33/tgctl-go/internal/env"
-	"github.com/b1rd33/tgctl-go/internal/safety"
 )
 
 func main() {
@@ -39,9 +38,6 @@ func projectRoot() string {
 	return filepath.Clean(wd)
 }
 
-// stubClientFactory is the placeholder for the gotd/td-backed factory that
-// will land alongside the live MTProto wiring. It returns a clear error so
-// the dispatch layer maps it to NOT_AUTHED.
 // gotdClientFactory returns the real gotd/td-backed Client. It expects a
 // session at sessionPath created by `tg login`. dbPath is the per-account
 // SQLite cache the client reads to turn chat_ids into InputPeers.
@@ -52,5 +48,3 @@ func gotdClientFactory(ctx context.Context, sessionPath, dbPath string) (client.
 	}
 	return client.New(ctx, apiID, apiHash, sessionPath, dbPath)
 }
-
-var _ = safety.NewMissingCredentials // kept for any future fallback factory

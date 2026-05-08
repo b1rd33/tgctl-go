@@ -262,6 +262,7 @@ func registerReadCommands(root *cobra.Command, paths AuthPathProvider) {
 	root.AddCommand(searchCommand(paths))
 	root.AddCommand(listMsgsCommand(paths))
 	root.AddCommand(getMsgCommand(paths))
+	registerExtraReadCommands(root, paths)
 }
 
 func resolvePaths(cmd *cobra.Command, paths AuthPathProvider) readPaths {
