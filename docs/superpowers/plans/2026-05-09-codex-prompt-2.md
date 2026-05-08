@@ -24,41 +24,157 @@
 
 ## Work order
 
-### 1. Live smoke tests against real Telegram
+### 1. Exhaustive live verification of every command against real Telegram
 
-Run each from a fresh shell (`./tg` rebuilt against latest main). All must succeed; capture the request_id from each JSON envelope and inspect `accounts/default/audit.log` afterwards to confirm the audit pre/post pair landed:
+Goal of this step: exercise EVERY command surface against the user's real account so any bug not covered by the FakeClient unit tests gets surfaced now, before the v0.1.0 tag. Every Telegram-side write must target `chat_id 1240314255` (Kris talking to Kris) so no other user is messaged. Read commands and local-DB commands have no destination concerns.
+
+Save the script as `scripts/live_verify.sh`, make it executable, run it, and commit the resulting transcript at `scripts/live_verify.transcript.txt` (created by piping the script's stdout/stderr to that file). The script must:
+
+- Use `set -euo pipefail` so the first failure halts.
+- Define `CHAT=1240314255`, `SELF_USERNAME="@la71bi33d"`, and `OUT=scripts/live_verify.transcript.txt` at the top, then `> "$OUT"`.
+- Use `run() { echo "+ $*" | tee -a "$OUT"; "$@" | tee -a "$OUT" || (echo "FAILED: $*" | tee -a "$OUT"; exit 1); echo | tee -a "$OUT"; }` so every invocation is logged with its exit status.
+- For each command below, assert the JSON envelope has `"ok":true` (or, where the contract requires failure, the expected error code) by piping through `jq -e '.ok == true'` or the matching predicate. A failed assertion = abort.
+
+Command matrix (every `tg --help` entry must appear in this script at least once unless explicitly skipped under "deliberate skips" below):
 
 ```bash
 go build -o ./tg ./cmd/tg
 
-# Phase 8 read regression — must still work:
-./tg show 1240314255 --limit 5 --json | jq '.data.messages | length'
+# ---- Foundation ----
+run ./tg version --json
+run ./tg doctor --json
+run ./tg me --json
+run ./tg me --offline --json
 
-# Phase 9 regression — must still work:
-./tg send 1240314255 "v0.1.0 acceptance run" --allow-write --json
-LAST_ID=$(./tg send 1240314255 "edit-me-acc" --allow-write --json | jq -r '.data.message_id')
-./tg edit-msg 1240314255 $LAST_ID "edited at acceptance" --allow-write --json
-./tg delete-msg 1240314255 $LAST_ID --allow-write --confirm 1240314255 --json
+# ---- Accounts (already-tested flow, just regress) ----
+run ./tg accounts-list --json
+run ./tg accounts-show --json
 
-# Phase 10 — media upload:
-echo "smoke" > /tmp/up.txt
-./tg upload-document 1240314255 /tmp/up.txt --caption "phase 10 acceptance" --allow-write --json | jq .
+# ---- Phase 8: reads ----
+run ./tg backfill-entities --json    # pre-populate cache
+run ./tg show $CHAT --limit 5 --json
+run ./tg show $CHAT --limit 3 --reverse --json
+run ./tg search $CHAT "tgctl-go" --limit 10 --json
+run ./tg list-msgs $CHAT --limit 5 --json
+run ./tg list-msgs $CHAT --since 2026-05-01 --until 2026-05-09 --limit 50 --json
+LAST_KNOWN=$(./tg show $CHAT --limit 1 --json | jq -r '.data.messages[0].message_id')
+run ./tg get-msg $CHAT $LAST_KNOWN --json
 
-# Phase 11 — folders read (list shouldn't need any write gate):
-./tg folders-list --json | jq '.data | keys'
+# ---- Phase 9: text writes ----
+run ./tg send $CHAT "live-verify: phase 9 send" --allow-write --json
+SENT_ID=$(./tg send $CHAT "live-verify: edit-me" --allow-write --json | jq -r '.data.message_id')
+run ./tg edit-msg $CHAT $SENT_ID "live-verify: edited body" --allow-write --json
+run ./tg pin-msg $CHAT $SENT_ID --allow-write --json
+run ./tg unpin-msg $CHAT $SENT_ID --allow-write --json
+run ./tg mark-read $CHAT --up-to $SENT_ID --allow-write --json
+FWD_SRC=$(./tg send $CHAT "live-verify: forward-source" --allow-write --json | jq -r '.data.message_id')
+run ./tg forward $CHAT $CHAT $FWD_SRC --allow-write --json
+# react: graceful Premium fallback. If the account is Premium, expect ok=true;
+# if not, expect ok=false AND .error.code == "PREMIUM_REQUIRED" (exit 9).
+./tg react $CHAT $SENT_ID "👍" --allow-write --json | tee -a "$OUT" | \
+    jq -e '.ok == true or .error.code == "PREMIUM_REQUIRED"' >/dev/null
+# Idempotency: same key twice -> idempotent_replay:true on the second hit.
+KEY="live-verify-$(date +%s)"
+run ./tg send $CHAT "live-verify: idempotency $KEY" --allow-write --idempotency-key "$KEY" --json
+./tg send $CHAT "live-verify: idempotency $KEY" --allow-write --idempotency-key "$KEY" --json | tee -a "$OUT" | \
+    jq -e '.data.idempotent_replay == true' >/dev/null
+# send-by-username route:
+run ./tg send-by-username "$SELF_USERNAME" "live-verify: send-by-username path" --allow-write --json
 
-# Phase 12 — chats-info read:
-./tg chats-info 1240314255 --json | jq .
+# ---- Phase 10: media (each kind, all to self) ----
+mkdir -p /tmp/tgctl-live
+echo "doc payload" > /tmp/tgctl-live/doc.txt
+# Tiny 1x1 png so we can exercise upload-photo without needing user assets:
+printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xfc\xff\xff?\x03\x00\x05\xfe\x02\xfe\xa3\x86\x9b\xa3\x00\x00\x00\x00IEND\xaeB`\x82' > /tmp/tgctl-live/pixel.png
+run ./tg upload-document $CHAT /tmp/tgctl-live/doc.txt --caption "live-verify: doc" --allow-write --json
+run ./tg upload-photo $CHAT /tmp/tgctl-live/pixel.png --caption "live-verify: photo" --allow-write --json
+# upload-voice and upload-video need real .ogg / .mp4 input. If the script
+# cannot synthesize one without ffmpeg, log it as a deliberate skip and DO
+# NOT abort (still must touch the dry-run path so the runner code is exercised):
+run ./tg upload-voice $CHAT /tmp/tgctl-live/doc.txt --allow-write --dry-run --json
+run ./tg upload-video $CHAT /tmp/tgctl-live/doc.txt --allow-write --dry-run --json
+# Safe-path rejection (must FAIL with BAD_ARGS=2):
+./tg upload-document $CHAT "/tmp/has?question.txt" --allow-write --json | tee -a "$OUT" | \
+    jq -e '.error.code == "BAD_ARGS"' >/dev/null
 
-# Phase 14 — sync-contacts (this writes to local DB only, no Telegram-side mutation):
-./tg sync-contacts --allow-write --json | jq '.data.synced'
-./tg backfill 1240314255 --max-messages 100 --allow-write --json | jq '.data.messages_inserted'
+# ---- Phase 11: topics + folders ----
+run ./tg folders-list --json
+FOLDER_COUNT=$(./tg folders-list --json | jq '.data.folders | length')
+if [ "$FOLDER_COUNT" -gt 0 ]; then
+  FIRST_FOLDER_ID=$(./tg folders-list --json | jq -r '.data.folders[0].id')
+  run ./tg folder-show "$FIRST_FOLDER_ID" --json
+fi
+# Folder id 0 is reserved -> BAD_ARGS:
+./tg folder-delete 0 --allow-write --confirm 0 --json | tee -a "$OUT" | \
+    jq -e '.error.code == "BAD_ARGS"' >/dev/null
+# Topics: exercise dry-run since topics require a forum-enabled channel that
+# the account may not own. The runner code path still gets covered.
+run ./tg topic-create $CHAT "live-verify-topic" --allow-write --dry-run --json
+run ./tg topic-edit $CHAT 1 --title "renamed" --allow-write --dry-run --json
+run ./tg topic-pin $CHAT 1 --allow-write --dry-run --json
+run ./tg topic-unpin $CHAT 1 --allow-write --dry-run --json
+run ./tg topics-list $CHAT --json
+run ./tg chat-pinned-list $CHAT --json
 
-# Phase 15 — listen (--once exits after first update; if no update arrives in 10s, that's OK):
-timeout 10 ./tg listen --once --json || true
+# ---- Phase 12: admin (most must be dry-run; the live ones target Saved Msgs) ----
+run ./tg chats-info $CHAT --json
+run ./tg chat-members $CHAT --limit 50 --json
+run ./tg account-sessions --json
+run ./tg chat-title $CHAT "live-verify-title" --allow-write --dry-run --json
+run ./tg chat-photo $CHAT /tmp/tgctl-live/pixel.png --allow-write --dry-run --json
+run ./tg chat-description $CHAT "live-verify desc" --allow-write --dry-run --json
+run ./tg set-permissions $CHAT --send-messages --allow-write --dry-run --json
+run ./tg chat-invite-link $CHAT --allow-write --dry-run --json
+run ./tg promote $CHAT $CHAT --allow-write --confirm $CHAT --dry-run --json
+run ./tg demote $CHAT $CHAT --allow-write --confirm $CHAT --dry-run --json
+run ./tg ban-from-chat $CHAT $CHAT --allow-write --confirm $CHAT --dry-run --json
+run ./tg unban-from-chat $CHAT $CHAT --allow-write --confirm $CHAT --dry-run --json
+run ./tg kick $CHAT $CHAT --allow-write --confirm $CHAT --dry-run --json
+
+# ---- Phase 13: destructive (delete-msg lands; the rest are dry-run) ----
+DEL_ID=$(./tg send $CHAT "live-verify: about-to-delete" --allow-write --json | jq -r '.data.message_id')
+run ./tg delete-msg $CHAT "$DEL_ID" --allow-write --confirm $CHAT --json
+run ./tg leave-chat $CHAT --allow-write --confirm $CHAT --dry-run --json
+run ./tg block-user $CHAT --allow-write --confirm $CHAT --dry-run --json
+run ./tg unblock-user $CHAT --allow-write --confirm $CHAT --dry-run --json
+SESSION_HASH=$(./tg account-sessions --json | jq -r '.data.sessions[0].hash // 0')
+if [ "$SESSION_HASH" != "0" ]; then
+  run ./tg terminate-session "$SESSION_HASH" --allow-write --confirm "$SESSION_HASH" --dry-run --json
+fi
+
+# ---- Phase 14: local DB ops ----
+run ./tg discover --json
+run ./tg sync-contacts --allow-write --json
+run ./tg backfill $CHAT --max-messages 100 --allow-write --json
+
+# ---- Phase 15: live ----
+timeout 8 ./tg listen --once --json | tee -a "$OUT" || \
+    echo "(no update inside 8s — acceptable)" | tee -a "$OUT"
+
+# ---- Phase 16 surface ----
+run ./tg --help > /dev/null && echo "help ok"
+COUNT=$(./tg --help | grep -E "^  [a-z]" | wc -l | tr -d ' ')
+echo "command count: $COUNT" | tee -a "$OUT"
+[ "$COUNT" -ge 62 ]
+
+# ---- Safety pipeline regressions (must all surface the right exit codes) ----
+./tg send $CHAT "no-allow" --json; [ $? -eq 6 ] && echo "WRITE_DISALLOWED ok"
+./tg --read-only send $CHAT "ro" --allow-write --json; [ $? -eq 6 ] && echo "read-only blocks ok"
+./tg send Bjorn "fuzzy" --allow-write --json; [ $? -eq 2 ] && echo "fuzzy gate ok"
+./tg delete-msg $CHAT 999999 --allow-write --json; [ $? -eq 2 ] && echo "needs-confirm ok"
+./tg get-msg $CHAT 999999999999 --json; [ $? -eq 4 ] && echo "not-found ok"
+
+echo "=== live verification complete ===" | tee -a "$OUT"
 ```
 
-Any test that fails: investigate, fix, commit with `fix(phase-N):`. If a fix changes behavior visibly, port a unit test that locks the new behavior so it doesn't regress.
+Deliberate skips (must be commented in the script with `# skip-rationale: …`):
+- `tg login` — would invalidate the existing session.
+- `tg import-telethon-session` — already verified in a prior session.
+- `tg accounts-add/use/remove` — would mutate the user's account directory layout. Read-only listing is enough.
+
+Any failed `run` invocation halts the script. If the failure is caused by a bug in a Phase-10–15 runner, fix the bug in source, port a unit test that locks the corrected behavior, then re-run the script. If it's a real-Telegram environmental issue (e.g. rate limit, server-side outage), retry once with a 30-second sleep and proceed; if it still fails, document under CHANGELOG.md "Known limitations" and continue.
+
+When the script completes successfully, commit the transcript and the script with message `test: live-verify acceptance run for v0.1.0`.
 
 ### 2. Version injection
 
