@@ -6,6 +6,13 @@ forum_chat: 3957621025
 + go build -buildvcs=false -o ./tg ./cmd/tg
 
 + ./tg version --json
-{"ok":true,"command":"version","request_id":"req-f44b3f3b","data":{"commit":"","version":"dev"},"warnings":[]}
+{"ok":true,"command":"version","request_id":"req-1e230ab6","data":{"commit":"","version":"dev"},"warnings":[]}
 
-+ ./tg backfill-entities --json
+skip: backfill-entities is omitted here; this targeted script uses the existing entity cache and inserts its temporary admin group directly
+
+=== topics ===
+skip: forum chat 3957621025 is unavailable or not owned by this account
+
+=== folders ===
++ ./tg folder-create av-admin-verify-20260509170450 --include-chats 1240314255 --allow-write --json
+{"ok":false,"error":{"code":"TIMEOUT","message":"command timed out after 45 seconds"}}

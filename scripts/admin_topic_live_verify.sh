@@ -22,7 +22,17 @@ known_ok='.ok == true or (.ok == false and (.error.code == "FLOOD_WAIT" or .erro
 with_timeout() {
   local seconds="$1"
   shift
-  perl -e 'my $t = shift @ARGV; alarm $t; exec @ARGV;' "$seconds" "$@"
+  python3 - "$seconds" "$@" <<'PY'
+import subprocess
+import sys
+
+seconds = int(sys.argv[1])
+cmd = sys.argv[2:]
+try:
+    raise SystemExit(subprocess.run(cmd, timeout=seconds).returncode)
+except subprocess.TimeoutExpired:
+    raise SystemExit(124)
+PY
 }
 
 run_json() {
@@ -33,7 +43,7 @@ run_json() {
   with_timeout 45 "$@" >"$dest" 2>&1
   local status=$?
   set -e
-  if [ "$status" -eq 142 ] || [ "$status" -eq 14 ]; then
+  if [ "$status" -eq 124 ]; then
     printf '{"ok":false,"error":{"code":"TIMEOUT","message":"command timed out after 45 seconds"}}\n' >"$dest"
   fi
   cat "$dest" | tee -a "$OUT"
@@ -66,7 +76,7 @@ run_json_allow_known() {
   with_timeout 45 "$@" >"$dest" 2>&1
   local status=$?
   set -e
-  if [ "$status" -eq 142 ] || [ "$status" -eq 14 ]; then
+  if [ "$status" -eq 124 ]; then
     printf '{"ok":false,"error":{"code":"TIMEOUT","message":"command timed out after 45 seconds"}}\n' >"$dest"
   fi
   cat "$dest" | tee -a "$OUT"
@@ -87,7 +97,7 @@ run_json_expect_error() {
   with_timeout 45 "$@" >"$dest" 2>&1
   local status=$?
   set -e
-  if [ "$status" -eq 142 ] || [ "$status" -eq 14 ]; then
+  if [ "$status" -eq 124 ]; then
     printf '{"ok":false,"error":{"code":"TIMEOUT","message":"command timed out after 45 seconds"}}\n' >"$dest"
   fi
   cat "$dest" | tee -a "$OUT"
@@ -104,7 +114,7 @@ folder_delete_if_set() {
   if [ -n "$id" ] && [ "$id" != "null" ]; then
     log "+ ./tg folder-delete $id --allow-write --confirm $id --json  # cleanup"
     set +e
-    ./tg folder-delete "$id" --allow-write --confirm "$id" --json 2>&1 | tee -a "$OUT"
+    with_timeout 45 ./tg folder-delete "$id" --allow-write --confirm "$id" --json 2>&1 | tee -a "$OUT"
     set -e
     log ""
   fi
@@ -115,7 +125,7 @@ cleanup_group_if_set() {
   if [ -n "$id" ] && [ "$id" != "null" ]; then
     log "+ ./tg leave-chat $id --allow-write --confirm $id --json  # cleanup"
     set +e
-    ./tg leave-chat "$id" --allow-write --confirm "$id" --json 2>&1 | tee -a "$OUT"
+    with_timeout 45 ./tg leave-chat "$id" --allow-write --confirm "$id" --json 2>&1 | tee -a "$OUT"
     set -e
     log ""
   fi
@@ -162,6 +172,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	var chatID int64
+	var accessHash int64
 	err = client.Run(ctx, func(ctx context.Context) error {
 		updatesClass, err := client.API().ChannelsCreateChannel(ctx, &tg.ChannelsCreateChannelRequest{
 			Megagroup: true,
@@ -175,6 +186,7 @@ func main() {
 			for _, c := range updates.Chats {
 				if ch, ok := c.(*tg.Channel); ok {
 					chatID = ch.ID
+					accessHash = ch.AccessHash
 					break
 				}
 			}
@@ -182,7 +194,7 @@ func main() {
 		if chatID == 0 {
 			return fmt.Errorf("created channel id not found in %T", updatesClass)
 		}
-		fmt.Println(chatID)
+		fmt.Printf("%d %d\n", chatID, accessHash)
 		return nil
 	})
 	if err != nil {
@@ -209,10 +221,11 @@ fi
 
 run_plain go build -buildvcs=false -o ./tg ./cmd/tg
 run_json "$TMP_DIR/version.json" ./tg version --json
-run_json "$TMP_DIR/backfill_entities.json" ./tg backfill-entities --json
+log "skip: backfill-entities is omitted here; this targeted script uses the existing entity cache and inserts its temporary admin group directly"
+log ""
 
 log "=== topics ==="
-if ./tg topics-list "$FORUM_CHAT" --limit 1 --json >"$TMP_DIR/topics_probe.json" 2>&1; then
+if with_timeout 45 ./tg topics-list "$FORUM_CHAT" --limit 1 --json >"$TMP_DIR/topics_probe.json" 2>&1; then
   cat "$TMP_DIR/topics_probe.json" | tee -a "$OUT"
   log ""
   run_json_allow_known "$TMP_DIR/topic_create.json" ./tg topic-create "$FORUM_CHAT" "av-${RUN_ID}" --allow-write --json
@@ -246,12 +259,15 @@ SECOND_ID=""
 
 log "=== admin ==="
 set +e
-TEMP_GROUP_ID="$(create_temp_group "av-${RUN_ID}" 2>"$TMP_DIR/create_group.err")"
+TEMP_GROUP_CREATED="$(create_temp_group "av-${RUN_ID}" 2>"$TMP_DIR/create_group.err")"
 create_status=$?
 set -e
-if [ "$create_status" -eq 0 ] && [ -n "$TEMP_GROUP_ID" ]; then
+if [ "$create_status" -eq 0 ] && [ -n "$TEMP_GROUP_CREATED" ]; then
+  TEMP_GROUP_ID="${TEMP_GROUP_CREATED%% *}"
+  TEMP_GROUP_HASH="${TEMP_GROUP_CREATED#* }"
   log "created_temp_group: $TEMP_GROUP_ID"
-  run_json "$TMP_DIR/backfill_after_group.json" ./tg backfill-entities --json
+  sqlite3 "$DB" \
+    "INSERT INTO tg_entities(id, kind, access_hash, updated_at) VALUES ($TEMP_GROUP_ID, 'channel', $TEMP_GROUP_HASH, datetime('now')) ON CONFLICT(id) DO UPDATE SET kind='channel', access_hash=$TEMP_GROUP_HASH, updated_at=datetime('now'); INSERT INTO tg_chats(chat_id, type, title, username) VALUES ($TEMP_GROUP_ID, 'supergroup', 'av-${RUN_ID}', NULL) ON CONFLICT(chat_id) DO UPDATE SET type='supergroup', title='av-${RUN_ID}', username=NULL;"
   run_json_allow_known "$TMP_DIR/chat_title.json" ./tg chat-title "$TEMP_GROUP_ID" "av-${RUN_ID}" --allow-write --json
   run_json_allow_known "$TMP_DIR/chat_description.json" ./tg chat-description "$TEMP_GROUP_ID" "verification run" --allow-write --json
   run_json_allow_known "$TMP_DIR/chat_invite_link.json" ./tg chat-invite-link "$TEMP_GROUP_ID" --allow-write --json
