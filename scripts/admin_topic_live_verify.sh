@@ -258,7 +258,9 @@ log "=== folders ==="
 # so we use short fixed names for folders (which get deleted on cleanup anyway).
 run_json_allow_known "$TMP_DIR/folder_create.json" "${TG[@]}" folder-create "av-fld-1" --include-chats "$CHAT" --allow-write --json
 FOLDER_ID="$(jq -r '.data.folder_id // empty' "$TMP_DIR/folder_create.json")"
-run_json_allow_known "$TMP_DIR/folder_add_chat.json" "${TG[@]}" folder-add-chat "$FOLDER_ID" "$CHAT" --allow-write --json
+# Add a second peer so we can later remove one without leaving the folder empty
+# (Telegram rejects DialogFilters with no include peers: FILTER_INCLUDE_EMPTY).
+run_json_allow_known "$TMP_DIR/folder_add_chat.json" "${TG[@]}" folder-add-chat "$FOLDER_ID" "$FORUM_CHAT" --allow-write --json
 run_json_allow_known "$TMP_DIR/folder_remove_chat.json" "${TG[@]}" folder-remove-chat "$FOLDER_ID" "$CHAT" --allow-write --json
 run_json_allow_known "$TMP_DIR/folder_edit.json" "${TG[@]}" folder-edit "$FOLDER_ID" --name "av-fld-1r" --allow-write --json
 run_json_allow_known "$TMP_DIR/second_folder_create.json" "${TG[@]}" folder-create "av-fld-2" --include-chats "$CHAT" --allow-write --json
@@ -280,7 +282,9 @@ if [ "$create_status" -eq 0 ] && [ -n "$TEMP_GROUP_CREATED" ]; then
   log "created_temp_group: $TEMP_GROUP_ID"
   sqlite3 "$DB" \
     "INSERT INTO tg_entities(id, kind, access_hash, updated_at) VALUES ($TEMP_GROUP_ID, 'channel', $TEMP_GROUP_HASH, datetime('now')) ON CONFLICT(id) DO UPDATE SET kind='channel', access_hash=$TEMP_GROUP_HASH, updated_at=datetime('now'); INSERT INTO tg_chats(chat_id, type, title, username) VALUES ($TEMP_GROUP_ID, 'supergroup', 'av-${RUN_ID}', NULL) ON CONFLICT(chat_id) DO UPDATE SET type='supergroup', title='av-${RUN_ID}', username=NULL;"
-  run_json_allow_known "$TMP_DIR/chat_title.json" "${TG[@]}" chat-title "$TEMP_GROUP_ID" "av-${RUN_ID}" --allow-write --json
+  # Use a different title than the one create_temp_group set; Telegram rejects
+  # no-op edits with CHAT_NOT_MODIFIED.
+  run_json_allow_known "$TMP_DIR/chat_title.json" "${TG[@]}" chat-title "$TEMP_GROUP_ID" "av-${RUN_ID}-r" --allow-write --json
   run_json_allow_known "$TMP_DIR/chat_description.json" "${TG[@]}" chat-description "$TEMP_GROUP_ID" "verification run" --allow-write --json
   run_json_allow_known "$TMP_DIR/chat_invite_link.json" "${TG[@]}" chat-invite-link "$TEMP_GROUP_ID" --allow-write --json
   run_json_allow_known "$TMP_DIR/chat_members.json" "${TG[@]}" chat-members "$TEMP_GROUP_ID" --limit 50 --json

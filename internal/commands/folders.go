@@ -160,6 +160,12 @@ func folderEditCommand(cfg CommandsConfig) *cobra.Command {
 			if title == "" && emoji == "" && add == "" && remove == "" {
 				return emitDispatchedFailure(cmd, "folder-edit", safety.NewBadArgs("nothing to edit"))
 			}
+			if title != "" && len([]rune(title)) > maxFolderTitleRunes {
+				return emitDispatchedFailure(cmd, "folder-edit", safety.NewBadArgs(
+					"folder title %q is %d chars; Telegram caps DialogFilter titles at %d",
+					title, len([]rune(title)), maxFolderTitleRunes,
+				))
+			}
 			addIDs, err := optionalIntCSV(add)
 			if err != nil {
 				return emitDispatchedFailure(cmd, "folder-edit", err)
