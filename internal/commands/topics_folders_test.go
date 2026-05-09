@@ -82,3 +82,14 @@ func TestFolderCreateReplaysIdempotency(t *testing.T) {
 		t.Fatalf("missing replay flag: %s", second)
 	}
 }
+
+func TestFolderCreateRejectsTitleOverTelegramLimit(t *testing.T) {
+	cfg, fc, _ := setupWriteEnv(t)
+	out, code := runRoot(t, cfg, "folder-create", "admin-verify-20260509170450", "--include-chats", "1", "--allow-write", "--json")
+	if code != 2 {
+		t.Fatalf("code=%d want BAD_ARGS=2\nout:%s", code, out)
+	}
+	if len(fc.FolderUpdates) != 0 {
+		t.Fatalf("client called: %#v", fc.FolderUpdates)
+	}
+}

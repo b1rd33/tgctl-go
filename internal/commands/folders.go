@@ -16,6 +16,8 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
+const maxFolderTitleRunes = 12
+
 func registerFolderCommands(root *cobra.Command, cfg CommandsConfig) {
 	root.AddCommand(foldersListCommand(cfg))
 	root.AddCommand(folderShowCommand(cfg))
@@ -100,6 +102,12 @@ func folderCreateCommand(cfg CommandsConfig) *cobra.Command {
 			title := strings.TrimSpace(args[0])
 			if title == "" {
 				return emitDispatchedFailure(cmd, "folder-create", safety.NewBadArgs("folder title cannot be empty"))
+			}
+			if len([]rune(title)) > maxFolderTitleRunes {
+				return emitDispatchedFailure(cmd, "folder-create", safety.NewBadArgs(
+					"folder title %q is %d chars; Telegram caps DialogFilter titles at %d",
+					title, len([]rune(title)), maxFolderTitleRunes,
+				))
 			}
 			inc, err := optionalIntCSV(include)
 			if err != nil {
