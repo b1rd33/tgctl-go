@@ -7,3 +7,6 @@
 /.env
 *.session
 *.session.lock
+
+# Internal planning docs — kept on disk, not in releases
+/docs/superpowers/
