@@ -32,6 +32,20 @@ archives:
       - goos: windows
         format: zip
 
+brews:
+  - name: tgctl-go
+    repository:
+      owner: b1rd33
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: "https://github.com/b1rd33/tgctl-go"
+    description: "Go port of Python tgctl: single static `tg` binary for Telegram"
+    license: MIT
+    install: |
+      bin.install "tg"
+    test: |
+      assert_match "v", shell_output("#{bin}/tg --version")
+
 checksum:
   name_template: "checksums.txt"
 
