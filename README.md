@@ -1,5 +1,7 @@
 # tgctl-go
 
+**Docs:** https://b1rd33.github.io/tgctl-go/
+
 A single static `tg` binary that drives your real Telegram account from the command line. Send messages, edit them, organize folders, run forum topics, manage admin actions, react, mark-read, backfill history into a local SQLite cache, listen for live updates — all scriptable, all auditable, all behind a JSON envelope.
 
 Go port of the Python [`tgctl`](https://github.com/b1rd33/tg-cli) with the same CLI contract, the same exit codes, the same safety gates. One binary, no runtime, no Python required.
