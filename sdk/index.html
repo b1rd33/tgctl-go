@@ -468,6 +468,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#agent-subprocess-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent subprocess pattern
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#exit-codes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -660,6 +671,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#agent-subprocess-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent subprocess pattern
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#exit-codes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -783,6 +805,20 @@ exit codes, and append-only audit logs.</p>
 </span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">returncode</span> <span class="o">!=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">envelope</span><span class="p">[</span><span class="s2">&quot;ok&quot;</span><span class="p">]:</span>
 </span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="n">envelope</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;error&quot;</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">stderr</span><span class="p">))</span>
 </span></code></pre></div>
+<h2 id="agent-subprocess-pattern">Agent subprocess pattern<a class="headerlink" href="#agent-subprocess-pattern" title="Permanent link">&para;</a></h2>
+<p>For an agent, make every call explicit: account, JSON output, write
+gate, and idempotency key.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>backfill-entities<span class="w"> </span>--json
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>backfill<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--max-messages<span class="w"> </span><span class="m">100</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>search<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="s2">&quot;order&quot;</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">20</span><span class="w"> </span>--json
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>send<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="s2">&quot;agent draft reply&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>--allow-write<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span>--idempotency-key<span class="w"> </span><span class="s2">&quot;agent-reply-001&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span>--json
+</span></code></pre></div>
+<p>Reads do not need <code>--allow-write</code>. Local DB writes (<code>discover</code>,
+<code>backfill</code>, <code>sync-contacts</code>, <code>listen</code>) and Telegram writes do. Treat
+<code>request_id</code> as the correlation key for logs and audit entries.</p>
 <h2 id="exit-codes">Exit codes<a class="headerlink" href="#exit-codes" title="Permanent link">&para;</a></h2>
 <p>The process exit code matches the envelope error code family:</p>
 <table>
@@ -840,18 +876,18 @@ for shells; the string is better for logs and metrics.</p>
 <h2 id="request-ids">Request IDs<a class="headerlink" href="#request-ids" title="Permanent link">&para;</a></h2>
 <p>Every envelope includes <code>request_id</code>. Write audit entries use the same
 ID before and after the Telegram call:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>tg<span class="w"> </span>send<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="s2">&quot;trace me&quot;</span><span class="w"> </span>--allow-write<span class="w"> </span>--json<span class="w"> </span><span class="p">|</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.request_id&#39;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>tg<span class="w"> </span>send<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="s2">&quot;trace me&quot;</span><span class="w"> </span>--allow-write<span class="w"> </span>--json<span class="w"> </span><span class="p">|</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.request_id&#39;</span>
 </span></code></pre></div>
 <p>Then correlate in <code>accounts/default/audit.log</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>rg<span class="w"> </span><span class="s1">&#39;req-abc12345&#39;</span><span class="w"> </span>accounts/default/audit.log
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>rg<span class="w"> </span><span class="s1">&#39;req-abc12345&#39;</span><span class="w"> </span>accounts/default/audit.log
 </span></code></pre></div>
 <h2 id="streaming">Streaming<a class="headerlink" href="#streaming" title="Permanent link">&para;</a></h2>
 <p><code>tg listen --json</code> emits one envelope per update:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>tg<span class="w"> </span>listen<span class="w"> </span>--json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;select(.ok == true) | .data&#39;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>tg<span class="w"> </span>listen<span class="w"> </span>--json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;select(.ok == true) | .data&#39;</span>
 </span></code></pre></div>
 <p>For tests, use one update and exit:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>tg<span class="w"> </span>listen<span class="w"> </span>--once<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>tg<span class="w"> </span>listen<span class="w"> </span>--once<span class="w"> </span>--json
 </span></code></pre></div>
 <h2 id="versioning">Versioning<a class="headerlink" href="#versioning" title="Permanent link">&para;</a></h2>
 <p>The CLI contract is the API. New commands and fields are additive.

@@ -783,16 +783,24 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_API_ID</span><span class="o">=</span><span class="m">12345678</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_API_HASH</span><span class="o">=</span>abcdef0123456789abcdef0123456789
 </span></code></pre></div>
+<p><code>tg</code> reads <code>.env</code> from the current working directory. If you keep the
+repo checkout at <code>/Users/christiannikolov/Projects/tgctl-go</code>, run
+login and setup commands from there:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nb">cd</span><span class="w"> </span>/Users/christiannikolov/Projects/tgctl-go
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>tg<span class="w"> </span>login
+</span></code></pre></div>
+<p>If you want <code>tg</code> to work from any directory, export the variables in
+your shell profile instead of relying on <code>.env</code>.</p>
 <h2 id="first-login">First login<a class="headerlink" href="#first-login" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>tg<span class="w"> </span>login
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>tg<span class="w"> </span>login
 </span></code></pre></div>
 <p>You'll be prompted for your phone number, then a code Telegram will
 send you in the Telegram app. After that,
 <code>accounts/default/tg.session</code> is created locally and you stay logged in.</p>
 <h2 id="verify">Verify<a class="headerlink" href="#verify" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>tg<span class="w"> </span>me
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>tg<span class="w"> </span>doctor
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>tg<span class="w"> </span>stats
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>tg<span class="w"> </span>me
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>tg<span class="w"> </span>doctor
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>tg<span class="w"> </span>stats
 </span></code></pre></div>
 <p><code>tg me</code> shows your authenticated account info. <code>tg doctor</code> checks
 credentials, session, DB, schema, and version. <code>tg stats</code> shows your
@@ -803,6 +811,17 @@ local cache state.</p>
 <p><strong>Auth errors</strong> — run <code>tg doctor --json</code> to see exactly which check
 fails. The <code>--live</code> flag also pings Telegram to confirm network
 connectivity.</p>
+<p><strong><code>TG_API_ID and TG_API_HASH must be set</code></strong> — you are probably running
+<code>tg</code> from a directory that does not contain <code>.env</code>. Either <code>cd</code> back to
+the directory with <code>.env</code>, or export both variables:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nb">cd</span><span class="w"> </span>/Users/christiannikolov/Projects/tgctl-go
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>login
+</span></code></pre></div>
+<p>or:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_API_ID</span><span class="o">=</span><span class="m">12345678</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_API_HASH</span><span class="o">=</span>abcdef0123456789abcdef0123456789
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>login
+</span></code></pre></div>
 <p><strong>Account flagged or limited</strong> — message <code>@SpamBot</code> from your Telegram
 client. New accounts and accounts running automation against many
 strangers are at higher risk; established personal accounts running
