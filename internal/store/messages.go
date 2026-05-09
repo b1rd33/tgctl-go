@@ -160,15 +160,15 @@ func GetOne(db *sql.DB, chatID, messageID int64, includeDeleted bool) (*Message,
 		deletedClause,
 	)
 	var (
-		m            Message
-		text         sql.NullString
-		mediaType    sql.NullString
-		mediaPath    sql.NullString
-		rawJSON      sql.NullString
-		senderID     sql.NullInt64
-		replyTo      sql.NullInt64
-		hasMediaInt  sql.NullInt64
-		isOutgoingI  sql.NullInt64
+		m           Message
+		text        sql.NullString
+		mediaType   sql.NullString
+		mediaPath   sql.NullString
+		rawJSON     sql.NullString
+		senderID    sql.NullInt64
+		replyTo     sql.NullInt64
+		hasMediaInt sql.NullInt64
+		isOutgoingI sql.NullInt64
 	)
 	err := db.QueryRow(q, chatID, messageID).Scan(
 		&m.ChatID, &m.MessageID, &senderID, &m.Date, &text, &isOutgoingI,

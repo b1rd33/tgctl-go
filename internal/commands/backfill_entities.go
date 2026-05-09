@@ -131,11 +131,11 @@ func runBackfillEntities(ctx context.Context, apiID int, apiHash, sessionPath, d
 		return nil, err
 	}
 	return map[string]any{
-		"users_cached":     users,
-		"channels_cached":  channels,
-		"basic_groups":     basic,
-		"entities_cached":  users + channels + basic,
-		"db_path":          dbPath,
+		"users_cached":    users,
+		"channels_cached": channels,
+		"basic_groups":    basic,
+		"entities_cached": users + channels + basic,
+		"db_path":         dbPath,
 	}, nil
 }
 

@@ -44,7 +44,11 @@ func TestUploadDocumentInvokesClientAndAuditsPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read audit: %v", err)
 	}
-	if !strings.Contains(string(auditBytes), filepath.Clean(path)) {
+	// Paths land in audit.log JSON-escaped, so on Windows backslashes are
+	// doubled. Marshal the expected path and strip the surrounding quotes
+	// to get the same byte form.
+	needle, _ := json.Marshal(filepath.Clean(path))
+	if !strings.Contains(string(auditBytes), string(needle[1:len(needle)-1])) {
 		t.Fatalf("audit missing source path:\n%s", auditBytes)
 	}
 }

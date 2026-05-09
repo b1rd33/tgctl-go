@@ -119,12 +119,12 @@ func convertTelethonSession(srcPath, dstPath string) (any, error) {
 	}
 
 	return map[string]any{
-		"source":            srcPath,
-		"destination":       dstPath,
-		"dc":                dcID,
-		"addr":              fmt.Sprintf("%s:%d", addr, port),
-		"auth_key_id_hex":   fmt.Sprintf("%x", keyID),
-		"auth_key_bytes":    len(authKey),
+		"source":          srcPath,
+		"destination":     dstPath,
+		"dc":              dcID,
+		"addr":            fmt.Sprintf("%s:%d", addr, port),
+		"auth_key_id_hex": fmt.Sprintf("%x", keyID),
+		"auth_key_bytes":  len(authKey),
 	}, nil
 }
 

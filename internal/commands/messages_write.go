@@ -318,11 +318,11 @@ func forwardCommand(cfg CommandsConfig) *cobra.Command {
 							return nil, err
 						}
 						return map[string]any{
-							"from_chat_id":     fromChatID,
-							"to_chat":          map[string]any{"chat_id": toChatID, "title": toTitle},
-							"forwarded_ids":    ids,
-							"new_message_ids":  resp.MessageIDs,
-							"topic_id":         topic,
+							"from_chat_id":    fromChatID,
+							"to_chat":         map[string]any{"chat_id": toChatID, "title": toTitle},
+							"forwarded_ids":   ids,
+							"new_message_ids": resp.MessageIDs,
+							"topic_id":        topic,
 						}, nil
 					},
 				})

@@ -89,13 +89,13 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 				}
 				warnings := capWarnings(current+inserted, maxMessages)
 				return map[string]any{
-					"chats_processed":    1,
-					"messages_inserted":  inserted,
-					"media_downloaded":    0,
-					"skipped":             0,
-					"cap_warnings":        warnings,
-					"download_media":      downloadMedia,
-					"per_chat":            []map[string]any{{"chat_id": chatID, "title": title, "messages_inserted": inserted}},
+					"chats_processed":   1,
+					"messages_inserted": inserted,
+					"media_downloaded":  0,
+					"skipped":           0,
+					"cap_warnings":      warnings,
+					"download_media":    downloadMedia,
+					"per_chat":          []map[string]any{{"chat_id": chatID, "title": title, "messages_inserted": inserted}},
 				}, nil
 			})
 			storeExitCode(cmd, code)

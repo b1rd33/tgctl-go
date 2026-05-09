@@ -36,18 +36,18 @@ type FakeClient struct {
 	NextTopicID  int64
 	Folders      []FolderInfo
 
-	TopicCreates  []CreateTopicReq
-	TopicEdits    []EditTopicReq
-	TopicPins     []PinTopicReq
-	FolderUpdates []FolderUpdateReq
-	FolderDeletes []int64
+	TopicCreates   []CreateTopicReq
+	TopicEdits     []EditTopicReq
+	TopicPins      []PinTopicReq
+	FolderUpdates  []FolderUpdateReq
+	FolderDeletes  []int64
 	FolderReorders [][]int64
-	PinnedLists   []int64
-	AdminActions  []AdminActionReq
-	Members       []MemberInfo
-	ChatInfos     []ChatInfo
-	ListenEvents  []ListenEvent
-	ListenCalls   []bool
+	PinnedLists    []int64
+	AdminActions   []AdminActionReq
+	Members        []MemberInfo
+	ChatInfos      []ChatInfo
+	ListenEvents   []ListenEvent
+	ListenCalls    []bool
 
 	// LastMessageID is the next id returned by SendMessage. Tests override this.
 	NextMessageID int64

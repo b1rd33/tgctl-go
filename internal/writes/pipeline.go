@@ -3,15 +3,15 @@
 // tgcli.commands.messages._run_write_command and the gates in tgcli.safety.
 //
 // The pipeline order is fixed (changing it changes the contract):
-//   1. Write gate         (--allow-write or TG_ALLOW_WRITE=1, --read-only blocks even with allow)
-//   2. Idempotency lookup (cached envelope replay short-circuits before resolve)
-//   3. Fuzzy gate         (--fuzzy required for non-int / non-@username selectors)
-//   4. Resolver           (DB-only int / @username / fuzzy title)
-//   5. Dry-run            (returns payload preview before any client call or rate limiter)
-//   6. Local rate limiter (sliding 20 / 60s)
-//   7. Audit pre          (NDJSON line, shared request_id)
-//   8. Telegram call
-//   9. Idempotency record (so a replay returns the same envelope data)
+//  1. Write gate         (--allow-write or TG_ALLOW_WRITE=1, --read-only blocks even with allow)
+//  2. Idempotency lookup (cached envelope replay short-circuits before resolve)
+//  3. Fuzzy gate         (--fuzzy required for non-int / non-@username selectors)
+//  4. Resolver           (DB-only int / @username / fuzzy title)
+//  5. Dry-run            (returns payload preview before any client call or rate limiter)
+//  6. Local rate limiter (sliding 20 / 60s)
+//  7. Audit pre          (NDJSON line, shared request_id)
+//  8. Telegram call
+//  9. Idempotency record (so a replay returns the same envelope data)
 package writes
 
 import (

@@ -154,20 +154,20 @@ type BackfillMessage struct {
 }
 
 type TopicInfo struct {
-	ID             int64
-	Title          string
-	IconEmojiID    int64
-	Closed         bool
-	Hidden         bool
-	TopMessageID   int64
-	UnreadCount    int
+	ID           int64
+	Title        string
+	IconEmojiID  int64
+	Closed       bool
+	Hidden       bool
+	TopMessageID int64
+	UnreadCount  int
 }
 
 type CreateTopicReq struct {
-	ChatID       int64
-	Title        string
-	IconColor    int
-	IconEmojiID  int64
+	ChatID      int64
+	Title       string
+	IconColor   int
+	IconEmojiID int64
 }
 
 type CreateTopicResp struct {
