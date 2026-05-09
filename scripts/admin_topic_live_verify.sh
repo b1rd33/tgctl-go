@@ -6,8 +6,13 @@ CHAT=1240314255
 FORUM_CHAT=3957621025
 OUT=scripts/admin_topic_live_verify.transcript.txt
 TMP_DIR="/tmp/tgctl-${RUN_ID}"
-SESSION="accounts/default/tg.session"
-DB="accounts/default/telegram.sqlite"
+ACCOUNT="adminverify-${RUN_ID}"
+ACCOUNT_DIR="accounts/${ACCOUNT}"
+DEFAULT_SESSION="accounts/default/tg.session"
+DEFAULT_DB="accounts/default/telegram.sqlite"
+SESSION="${ACCOUNT_DIR}/tg.session"
+DB="${ACCOUNT_DIR}/telegram.sqlite"
+TG=(./tg --account "$ACCOUNT")
 export GOCACHE="${GOCACHE:-/private/tmp/tgctl-go-gocache}"
 
 mkdir -p "$TMP_DIR"
@@ -112,9 +117,9 @@ run_json_expect_error() {
 folder_delete_if_set() {
   local id="$1"
   if [ -n "$id" ] && [ "$id" != "null" ]; then
-    log "+ ./tg folder-delete $id --allow-write --confirm $id --json  # cleanup"
+    log "+ ${TG[*]} folder-delete $id --allow-write --confirm $id --json  # cleanup"
     set +e
-    with_timeout 45 ./tg folder-delete "$id" --allow-write --confirm "$id" --json 2>&1 | tee -a "$OUT"
+    with_timeout 45 "${TG[@]}" folder-delete "$id" --allow-write --confirm "$id" --json 2>&1 | tee -a "$OUT"
     set -e
     log ""
   fi
@@ -123,9 +128,9 @@ folder_delete_if_set() {
 cleanup_group_if_set() {
   local id="$1"
   if [ -n "$id" ] && [ "$id" != "null" ]; then
-    log "+ ./tg leave-chat $id --allow-write --confirm $id --json  # cleanup"
+    log "+ ${TG[*]} leave-chat $id --allow-write --confirm $id --json  # cleanup"
     set +e
-    with_timeout 45 ./tg leave-chat "$id" --allow-write --confirm "$id" --json 2>&1 | tee -a "$OUT"
+    with_timeout 45 "${TG[@]}" leave-chat "$id" --allow-write --confirm "$id" --json 2>&1 | tee -a "$OUT"
     set -e
     log ""
   fi
@@ -135,6 +140,7 @@ cleanup() {
   folder_delete_if_set "${FOLDER_ID:-}"
   folder_delete_if_set "${SECOND_ID:-}"
   cleanup_group_if_set "${TEMP_GROUP_ID:-}"
+  rm -rf "$ACCOUNT_DIR"
 }
 trap cleanup EXIT
 
@@ -221,19 +227,23 @@ fi
 
 run_plain go build -buildvcs=false -o ./tg ./cmd/tg
 run_json "$TMP_DIR/version.json" ./tg version --json
-log "skip: backfill-entities is omitted here; this targeted script uses the existing entity cache and inserts its temporary admin group directly"
+mkdir -p "$ACCOUNT_DIR"
+cp "$DEFAULT_SESSION" "$SESSION"
+cp "$DEFAULT_DB" "$DB"
+log "local_account_copy: $ACCOUNT"
+log "skip: backfill-entities is omitted here; this targeted script uses a copied entity cache and inserts its temporary admin group directly"
 log ""
 
 log "=== topics ==="
-if with_timeout 45 ./tg topics-list "$FORUM_CHAT" --limit 1 --json >"$TMP_DIR/topics_probe.json" 2>&1; then
+if with_timeout 45 "${TG[@]}" topics-list "$FORUM_CHAT" --limit 1 --json >"$TMP_DIR/topics_probe.json" 2>&1; then
   cat "$TMP_DIR/topics_probe.json" | tee -a "$OUT"
   log ""
-  run_json_allow_known "$TMP_DIR/topic_create.json" ./tg topic-create "$FORUM_CHAT" "av-${RUN_ID}" --allow-write --json
+  run_json_allow_known "$TMP_DIR/topic_create.json" "${TG[@]}" topic-create "$FORUM_CHAT" "av-${RUN_ID}" --allow-write --json
   TOPIC_ID="$(jq -r '.data.topic_id // empty' "$TMP_DIR/topic_create.json")"
   if [ -n "$TOPIC_ID" ]; then
-    run_json_allow_known "$TMP_DIR/topic_edit.json" ./tg topic-edit "$FORUM_CHAT" "$TOPIC_ID" --title "edited-${RUN_ID}" --allow-write --json
-    run_json_allow_known "$TMP_DIR/topic_pin.json" ./tg topic-pin "$FORUM_CHAT" "$TOPIC_ID" --allow-write --json
-    run_json_allow_known "$TMP_DIR/topic_unpin.json" ./tg topic-unpin "$FORUM_CHAT" "$TOPIC_ID" --allow-write --json
+    run_json_allow_known "$TMP_DIR/topic_edit.json" "${TG[@]}" topic-edit "$FORUM_CHAT" "$TOPIC_ID" --title "edited-${RUN_ID}" --allow-write --json
+    run_json_allow_known "$TMP_DIR/topic_pin.json" "${TG[@]}" topic-pin "$FORUM_CHAT" "$TOPIC_ID" --allow-write --json
+    run_json_allow_known "$TMP_DIR/topic_unpin.json" "${TG[@]}" topic-unpin "$FORUM_CHAT" "$TOPIC_ID" --allow-write --json
   else
     log "topic-create returned no topic_id; skipping edit/pin/unpin"
   fi
@@ -244,17 +254,19 @@ else
 fi
 
 log "=== folders ==="
-run_json_allow_known "$TMP_DIR/folder_create.json" ./tg folder-create "av-${RUN_ID}" --include-chats "$CHAT" --allow-write --json
+# Telegram caps DialogFilter.title at 12 chars; RUN_ID is too long for that field,
+# so we use short fixed names for folders (which get deleted on cleanup anyway).
+run_json_allow_known "$TMP_DIR/folder_create.json" "${TG[@]}" folder-create "av-fld-1" --include-chats "$CHAT" --allow-write --json
 FOLDER_ID="$(jq -r '.data.folder_id // empty' "$TMP_DIR/folder_create.json")"
-run_json_allow_known "$TMP_DIR/folder_add_chat.json" ./tg folder-add-chat "$FOLDER_ID" "$CHAT" --allow-write --json
-run_json_allow_known "$TMP_DIR/folder_remove_chat.json" ./tg folder-remove-chat "$FOLDER_ID" "$CHAT" --allow-write --json
-run_json_allow_known "$TMP_DIR/folder_edit.json" ./tg folder-edit "$FOLDER_ID" --name "renamed-${RUN_ID}" --allow-write --json
-run_json_allow_known "$TMP_DIR/second_folder_create.json" ./tg folder-create "av2-${RUN_ID}" --include-chats "$CHAT" --allow-write --json
+run_json_allow_known "$TMP_DIR/folder_add_chat.json" "${TG[@]}" folder-add-chat "$FOLDER_ID" "$CHAT" --allow-write --json
+run_json_allow_known "$TMP_DIR/folder_remove_chat.json" "${TG[@]}" folder-remove-chat "$FOLDER_ID" "$CHAT" --allow-write --json
+run_json_allow_known "$TMP_DIR/folder_edit.json" "${TG[@]}" folder-edit "$FOLDER_ID" --name "av-fld-1r" --allow-write --json
+run_json_allow_known "$TMP_DIR/second_folder_create.json" "${TG[@]}" folder-create "av-fld-2" --include-chats "$CHAT" --allow-write --json
 SECOND_ID="$(jq -r '.data.folder_id // empty' "$TMP_DIR/second_folder_create.json")"
-run_json_allow_known "$TMP_DIR/folders_reorder.json" ./tg folders-reorder "$FOLDER_ID,$SECOND_ID" --allow-write --json
-run_json_allow_known "$TMP_DIR/folder_delete_first.json" ./tg folder-delete "$FOLDER_ID" --allow-write --confirm "$FOLDER_ID" --json
+run_json_allow_known "$TMP_DIR/folders_reorder.json" "${TG[@]}" folders-reorder "$FOLDER_ID,$SECOND_ID" --allow-write --json
+run_json_allow_known "$TMP_DIR/folder_delete_first.json" "${TG[@]}" folder-delete "$FOLDER_ID" --allow-write --confirm "$FOLDER_ID" --json
 FOLDER_ID=""
-run_json_allow_known "$TMP_DIR/folder_delete_second.json" ./tg folder-delete "$SECOND_ID" --allow-write --confirm "$SECOND_ID" --json
+run_json_allow_known "$TMP_DIR/folder_delete_second.json" "${TG[@]}" folder-delete "$SECOND_ID" --allow-write --confirm "$SECOND_ID" --json
 SECOND_ID=""
 
 log "=== admin ==="
@@ -268,19 +280,19 @@ if [ "$create_status" -eq 0 ] && [ -n "$TEMP_GROUP_CREATED" ]; then
   log "created_temp_group: $TEMP_GROUP_ID"
   sqlite3 "$DB" \
     "INSERT INTO tg_entities(id, kind, access_hash, updated_at) VALUES ($TEMP_GROUP_ID, 'channel', $TEMP_GROUP_HASH, datetime('now')) ON CONFLICT(id) DO UPDATE SET kind='channel', access_hash=$TEMP_GROUP_HASH, updated_at=datetime('now'); INSERT INTO tg_chats(chat_id, type, title, username) VALUES ($TEMP_GROUP_ID, 'supergroup', 'av-${RUN_ID}', NULL) ON CONFLICT(chat_id) DO UPDATE SET type='supergroup', title='av-${RUN_ID}', username=NULL;"
-  run_json_allow_known "$TMP_DIR/chat_title.json" ./tg chat-title "$TEMP_GROUP_ID" "av-${RUN_ID}" --allow-write --json
-  run_json_allow_known "$TMP_DIR/chat_description.json" ./tg chat-description "$TEMP_GROUP_ID" "verification run" --allow-write --json
-  run_json_allow_known "$TMP_DIR/chat_invite_link.json" ./tg chat-invite-link "$TEMP_GROUP_ID" --allow-write --json
-  run_json_allow_known "$TMP_DIR/chat_members.json" ./tg chat-members "$TEMP_GROUP_ID" --limit 50 --json
-  run_json_allow_known "$TMP_DIR/promote.json" ./tg promote "$TEMP_GROUP_ID" "$CHAT" --allow-write --confirm "$CHAT" --json
-  run_json_allow_known "$TMP_DIR/demote.json" ./tg demote "$TEMP_GROUP_ID" "$CHAT" --allow-write --confirm "$CHAT" --json
+  run_json_allow_known "$TMP_DIR/chat_title.json" "${TG[@]}" chat-title "$TEMP_GROUP_ID" "av-${RUN_ID}" --allow-write --json
+  run_json_allow_known "$TMP_DIR/chat_description.json" "${TG[@]}" chat-description "$TEMP_GROUP_ID" "verification run" --allow-write --json
+  run_json_allow_known "$TMP_DIR/chat_invite_link.json" "${TG[@]}" chat-invite-link "$TEMP_GROUP_ID" --allow-write --json
+  run_json_allow_known "$TMP_DIR/chat_members.json" "${TG[@]}" chat-members "$TEMP_GROUP_ID" --limit 50 --json
+  run_json_allow_known "$TMP_DIR/promote.json" "${TG[@]}" promote "$TEMP_GROUP_ID" "$CHAT" --allow-write --confirm "$CHAT" --json
+  run_json_allow_known "$TMP_DIR/demote.json" "${TG[@]}" demote "$TEMP_GROUP_ID" "$CHAT" --allow-write --confirm "$CHAT" --json
   log "skip: ban-from-chat/unban-from-chat/kick use --dry-run deliberately to avoid locking out the only test account"
-  run_json "$TMP_DIR/ban_dry_run.json" ./tg ban-from-chat "$TEMP_GROUP_ID" "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
-  run_json "$TMP_DIR/unban_dry_run.json" ./tg unban-from-chat "$TEMP_GROUP_ID" "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
-  run_json "$TMP_DIR/kick_dry_run.json" ./tg kick "$TEMP_GROUP_ID" "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
-  run_json_allow_known "$TMP_DIR/set_permissions.json" ./tg set-permissions "$TEMP_GROUP_ID" --send-messages --allow-write --json
+  run_json "$TMP_DIR/ban_dry_run.json" "${TG[@]}" ban-from-chat "$TEMP_GROUP_ID" "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
+  run_json "$TMP_DIR/unban_dry_run.json" "${TG[@]}" unban-from-chat "$TEMP_GROUP_ID" "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
+  run_json "$TMP_DIR/kick_dry_run.json" "${TG[@]}" kick "$TEMP_GROUP_ID" "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
+  run_json_allow_known "$TMP_DIR/set_permissions.json" "${TG[@]}" set-permissions "$TEMP_GROUP_ID" --send-messages --allow-write --json
   log "skip: chat-photo uses --dry-run because this script does not carry a PNG fixture"
-  run_json "$TMP_DIR/chat_photo_dry_run.json" ./tg chat-photo "$TEMP_GROUP_ID" /tmp/tgctl-live/pixel.png --allow-write --dry-run --json
+  run_json "$TMP_DIR/chat_photo_dry_run.json" "${TG[@]}" chat-photo "$TEMP_GROUP_ID" /tmp/tgctl-live/pixel.png --allow-write --dry-run --json
 else
   log "skip: could not create a temporary self-only admin group"
   sed 's/^/create-group: /' "$TMP_DIR/create_group.err" | tee -a "$OUT"
