@@ -398,6 +398,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#shell-completion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shell completion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#set-up-api-credentials" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -435,6 +446,17 @@
     <span class="md-ellipsis">
       
         Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
       
     </span>
   </a>
@@ -682,6 +704,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#shell-completion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shell completion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#set-up-api-credentials" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -719,6 +752,17 @@
     <span class="md-ellipsis">
       
         Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
       
     </span>
   </a>
@@ -765,6 +809,20 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>brew<span class="w"> </span>install<span class="w"> </span>b1rd33/tap/tgctl-go
 </span></code></pre></div>
 <p>Homebrew tap publishing is configured for tagged releases.</p>
+<h2 id="shell-completion">Shell completion<a class="headerlink" href="#shell-completion" title="Permanent link">&para;</a></h2>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># bash:</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>tg<span class="w"> </span>completion<span class="w"> </span>bash<span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>tee<span class="w"> </span>/etc/bash_completion.d/tg
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># zsh (e.g. with ohmyzsh, $fpath dir):</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>tg<span class="w"> </span>completion<span class="w"> </span>zsh<span class="w"> </span>&gt;<span class="w"> </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">fpath</span><span class="p">[1]</span><span class="si">}</span><span class="s2">/_tg&quot;</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># fish:</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>tg<span class="w"> </span>completion<span class="w"> </span>fish<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nb">source</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># PowerShell:</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>tg<span class="w"> </span>completion<span class="w"> </span>powershell<span class="w"> </span><span class="p">|</span><span class="w"> </span>Out-String<span class="w"> </span><span class="p">|</span><span class="w"> </span>Invoke-Expression
+</span></code></pre></div>
+<p>Run <code>tg completion --help</code> for the supported shells.</p>
 <h2 id="set-up-api-credentials">Set up API credentials<a class="headerlink" href="#set-up-api-credentials" title="Permanent link">&para;</a></h2>
 <p>Telegram requires you to register a personal app once. It's free and takes ~2 minutes:</p>
 <ol>
@@ -774,33 +832,36 @@
 <li>Copy the resulting <code>api_id</code> (an integer) and <code>api_hash</code> (32-char hex)</li>
 </ol>
 <p>Put them in a <code>.env</code> file in the directory where you'll run <code>tg</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>cp<span class="w"> </span>.env.example<span class="w"> </span>.env
+<p>The values labeled <code>api_id</code> and <code>api_hash</code> on
+<a href="https://my.telegram.org/apps">my.telegram.org/apps</a> become <code>TG_API_ID</code>
+and <code>TG_API_HASH</code> in <code>.env</code>.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>cp<span class="w"> </span>.env.example<span class="w"> </span>.env
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nv">TG_API_ID</span><span class="o">=</span><span class="m">12345678</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nv">TG_API_HASH</span><span class="o">=</span>abcdef0123456789abcdef0123456789
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nv">TG_API_ID</span><span class="o">=</span><span class="m">12345678</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nv">TG_API_HASH</span><span class="o">=</span>abcdef0123456789abcdef0123456789
 </span></code></pre></div>
 <p>Or set them as shell env vars:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_API_ID</span><span class="o">=</span><span class="m">12345678</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_API_HASH</span><span class="o">=</span>abcdef0123456789abcdef0123456789
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_API_ID</span><span class="o">=</span><span class="m">12345678</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_API_HASH</span><span class="o">=</span>abcdef0123456789abcdef0123456789
 </span></code></pre></div>
 <p><code>tg</code> reads <code>.env</code> from the current working directory. If you keep the
 repo checkout at <code>/Users/christiannikolov/Projects/tgctl-go</code>, run
 login and setup commands from there:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nb">cd</span><span class="w"> </span>/Users/christiannikolov/Projects/tgctl-go
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>tg<span class="w"> </span>login
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nb">cd</span><span class="w"> </span>/Users/christiannikolov/Projects/tgctl-go
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>tg<span class="w"> </span>login
 </span></code></pre></div>
 <p>If you want <code>tg</code> to work from any directory, export the variables in
 your shell profile instead of relying on <code>.env</code>.</p>
 <h2 id="first-login">First login<a class="headerlink" href="#first-login" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>tg<span class="w"> </span>login
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>tg<span class="w"> </span>login
 </span></code></pre></div>
 <p>You'll be prompted for your phone number, then a code Telegram will
 send you in the Telegram app. After that,
 <code>accounts/default/tg.session</code> is created locally and you stay logged in.</p>
 <h2 id="verify">Verify<a class="headerlink" href="#verify" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>tg<span class="w"> </span>me
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>tg<span class="w"> </span>doctor
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>tg<span class="w"> </span>stats
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>tg<span class="w"> </span>me
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>tg<span class="w"> </span>doctor
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>tg<span class="w"> </span>stats
 </span></code></pre></div>
 <p><code>tg me</code> shows your authenticated account info. <code>tg doctor</code> checks
 credentials, session, DB, schema, and version. <code>tg stats</code> shows your
@@ -814,18 +875,24 @@ connectivity.</p>
 <p><strong><code>TG_API_ID and TG_API_HASH must be set</code></strong> — you are probably running
 <code>tg</code> from a directory that does not contain <code>.env</code>. Either <code>cd</code> back to
 the directory with <code>.env</code>, or export both variables:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nb">cd</span><span class="w"> </span>/Users/christiannikolov/Projects/tgctl-go
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>login
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nb">cd</span><span class="w"> </span>/Users/christiannikolov/Projects/tgctl-go
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>login
 </span></code></pre></div>
 <p>or:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_API_ID</span><span class="o">=</span><span class="m">12345678</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_API_HASH</span><span class="o">=</span>abcdef0123456789abcdef0123456789
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>login
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_API_ID</span><span class="o">=</span><span class="m">12345678</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_API_HASH</span><span class="o">=</span>abcdef0123456789abcdef0123456789
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>login
 </span></code></pre></div>
 <p><strong>Account flagged or limited</strong> — message <code>@SpamBot</code> from your Telegram
 client. New accounts and accounts running automation against many
 strangers are at higher risk; established personal accounts running
 tgctl-go for personal use are at very low risk.</p>
+<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../quickstart/">Quickstart</a> — first commands after install</li>
+<li><a href="../safety/">Safety model</a> — what <code>--allow-write</code> and <code>--read-only</code> do</li>
+<li><a href="../multi-account/">Multi-account</a> — running multiple Telegram accounts</li>
+</ul>
 
 
 
