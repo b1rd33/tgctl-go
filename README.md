@@ -61,6 +61,24 @@ Coming from the Python `tgctl`? Skip steps 3–4 and reuse your existing session
 tg import-telethon-session ~/path/to/python/tgctl/accounts/default/tg.session
 ```
 
+## Agent quick setup
+
+Use an isolated account while testing agent flows:
+
+```bash
+tg accounts-add test
+tg --account test login
+tg --account test backfill-entities
+tg --account test discover --allow-write
+tg --account test send 1240314255 "hello from test account" --allow-write --json
+```
+
+Run login from the directory containing `.env`, or export
+`TG_API_ID` / `TG_API_HASH`. See the
+[Quickstart](https://b1rd33.github.io/tgctl-go/quickstart/) and
+[Library use](https://b1rd33.github.io/tgctl-go/sdk/) docs for the
+agent subprocess pattern.
+
 ## Examples
 
 ### Send a message to yourself (Saved Messages)

@@ -71,3 +71,25 @@ printf 'line one\nline two\n' | tg send 1240314255 - --allow-write
 - Pipe JSON envelopes from [Library use](sdk.md)
 - Read the [safety model](safety.md) before sending or deleting at scale
 - Set up [multi-account](multi-account.md) if you have a personal + business split
+
+## Agent-ready first run
+
+Use an isolated account name while testing agents. `accounts-add` is a
+command; `--account test` is the global flag that selects that account.
+
+```bash
+tg accounts-add test
+tg --account test login
+tg --account test me
+tg --account test backfill-entities
+tg --account test discover --allow-write
+tg --account test stats
+tg --account test send 1240314255 "hello from test account" --allow-write --json
+```
+
+If login fails with `TG_API_ID and TG_API_HASH must be set`, run the
+command from the directory containing `.env`, or export the variables.
+See [Install](install.md#troubleshooting).
+
+For agents, keep `--account test` explicit instead of switching the
+default account. That makes every subprocess call self-contained.

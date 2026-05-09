@@ -79,6 +79,25 @@ if result.returncode != 0 or not envelope["ok"]:
     raise RuntimeError(envelope.get("error", result.stderr))
 ```
 
+## Agent subprocess pattern
+
+For an agent, make every call explicit: account, JSON output, write
+gate, and idempotency key.
+
+```bash
+tg --account test backfill-entities --json
+tg --account test backfill 1240314255 --max-messages 100 --allow-write --json
+tg --account test search 1240314255 "order" --limit 20 --json
+tg --account test send 1240314255 "agent draft reply" \
+  --allow-write \
+  --idempotency-key "agent-reply-001" \
+  --json
+```
+
+Reads do not need `--allow-write`. Local DB writes (`discover`,
+`backfill`, `sync-contacts`, `listen`) and Telegram writes do. Treat
+`request_id` as the correlation key for logs and audit entries.
+
 ## Exit codes
 
 The process exit code matches the envelope error code family:

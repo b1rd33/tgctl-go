@@ -59,6 +59,18 @@ export TG_API_ID=12345678
 export TG_API_HASH=abcdef0123456789abcdef0123456789
 ```
 
+`tg` reads `.env` from the current working directory. If you keep the
+repo checkout at `/Users/christiannikolov/Projects/tgctl-go`, run
+login and setup commands from there:
+
+```bash
+cd /Users/christiannikolov/Projects/tgctl-go
+tg login
+```
+
+If you want `tg` to work from any directory, export the variables in
+your shell profile instead of relying on `.env`.
+
 ## First login
 
 ```bash
@@ -89,6 +101,23 @@ local cache state.
 **Auth errors** — run `tg doctor --json` to see exactly which check
 fails. The `--live` flag also pings Telegram to confirm network
 connectivity.
+
+**`TG_API_ID and TG_API_HASH must be set`** — you are probably running
+`tg` from a directory that does not contain `.env`. Either `cd` back to
+the directory with `.env`, or export both variables:
+
+```bash
+cd /Users/christiannikolov/Projects/tgctl-go
+tg --account test login
+```
+
+or:
+
+```bash
+export TG_API_ID=12345678
+export TG_API_HASH=abcdef0123456789abcdef0123456789
+tg --account test login
+```
 
 **Account flagged or limited** — message `@SpamBot` from your Telegram
 client. New accounts and accounts running automation against many

@@ -57,6 +57,18 @@ Then log in as that account:
 tg --account work login
 ```
 
+`accounts-add` is a command, not a flag. This is valid:
+
+```bash
+tg accounts-add test
+```
+
+This is not:
+
+```bash
+tg --accounts-add test
+```
+
 ### `tg accounts-list`
 
 Lists all configured accounts, showing which is current.
@@ -119,6 +131,45 @@ tg --account work send 1240314255 "..." --allow-write
 TG_ACCOUNT=work tg me
 tg accounts-use work && tg me
 ```
+
+## Test account walkthrough
+
+For agent development, create a separate account directory and keep the
+account selector explicit:
+
+```bash
+cd /Users/christiannikolov/Projects/tgctl-go
+tg accounts-add test
+tg --account test login
+tg --account test me
+tg --account test backfill-entities
+tg --account test discover --allow-write
+tg --account test stats
+```
+
+The files are isolated under:
+
+```text
+accounts/test/tg.session
+accounts/test/telegram.sqlite
+accounts/test/audit.log
+accounts/test/media/
+```
+
+Then test self-chat read/write:
+
+```bash
+tg --account test send 1240314255 "hello from test account" --allow-write --json
+tg --account test show 1240314255 --limit 5 --json
+```
+
+If you rely on `.env`, run these from the directory containing `.env`.
+If you run from `~/accounts/test` or another directory, export
+`TG_API_ID` and `TG_API_HASH` first.
+
+Agents should usually use `--account test` on every call. Use
+`accounts-use test` only for interactive shell work where changing the
+default account is intentional.
 
 ## Recommended use cases
 
