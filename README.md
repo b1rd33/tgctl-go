@@ -21,14 +21,14 @@ It is *not* meant to spam, scrape contacts, or evade rate limits — there's a s
 ## Install
 
 ```bash
+# Homebrew (Mac / Linux):
+brew install b1rd33/tap/tgctl-go
+
 # Anyone with Go:
 go install github.com/b1rd33/tgctl-go/cmd/tg@latest
 
 # Pre-built binaries (Linux / macOS / Windows × amd64 / arm64):
 # https://github.com/b1rd33/tgctl-go/releases/latest
-
-# Homebrew (coming soon):
-# brew install b1rd33/tap/tgctl-go
 ```
 
 ## Setup (one time)
