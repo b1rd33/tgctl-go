@@ -92,4 +92,4 @@ tg import-telethon-session <path>
 
 ## Contributing
 
-See the plan files in [docs/superpowers/plans/](docs/superpowers/plans/).
+See `CHANGELOG.md` and the conventional-commits git history for the implementation arc.

@@ -28,4 +28,4 @@ Initial Go port of Python tgctl 1.0.1.
 - Reactions that require Premium return PREMIUM_REQUIRED (exit 9).
 - Forum topic reads require a forum-enabled supergroup.
 - Chat member reads require a channel or supergroup.
-- See `docs/superpowers/plans/` for the full implementation history.
+- See the conventional-commits git log for the full implementation history.
