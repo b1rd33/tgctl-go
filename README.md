@@ -69,27 +69,6 @@ Existing Python `tgctl` users can keep the same Telegram authorization by adopti
 tg import-telethon-session <path>
 ```
 
-## Status
-
-| Phase | Status |
-| --- | --- |
-| 1 | ✅ |
-| 2 | ✅ |
-| 3 | ✅ |
-| 4 | ✅ |
-| 5 | ✅ |
-| 6 | ✅ |
-| 7 | ✅ |
-| 8 | ✅ |
-| 9 | ✅ |
-| 10 | ✅ |
-| 11 | ✅ |
-| 12 | ✅ |
-| 13 | ✅ |
-| 14 | ✅ |
-| 15 | ✅ |
-| 16 | ✅ |
-
 ## Contributing
 
 See `CHANGELOG.md` and the conventional-commits git history for the implementation arc.
