@@ -705,6 +705,25 @@ func (g *GotdClient) SyncContacts(ctx context.Context) ([]ContactInfo, error) {
 	return out, nil
 }
 
+// messagesFromHistoryResp normalizes the three concrete return types of
+// messages.GetHistory into a flat []tg.MessageClass.
+//
+// Channels and supergroups return *tg.MessagesChannelMessages — without
+// that case, backfill silently inserted 0 messages for those chats.
+// MessagesMessagesNotModified is the "history hasn't changed since last
+// fetch" hint and is intentionally treated as empty.
+func messagesFromHistoryResp(resp tg.MessagesMessagesClass) []tg.MessageClass {
+	switch m := resp.(type) {
+	case *tg.MessagesMessages:
+		return m.Messages
+	case *tg.MessagesMessagesSlice:
+		return m.Messages
+	case *tg.MessagesChannelMessages:
+		return m.Messages
+	}
+	return nil
+}
+
 func (g *GotdClient) BackfillMessages(ctx context.Context, req BackfillReq) ([]BackfillMessage, error) {
 	peer, err := g.peerFromChatID(ctx, req.ChatID)
 	if err != nil {
@@ -718,13 +737,7 @@ func (g *GotdClient) BackfillMessages(ctx context.Context, req BackfillReq) ([]B
 	if err != nil {
 		return nil, mapRPCErr(err)
 	}
-	var msgs []tg.MessageClass
-	switch m := resp.(type) {
-	case *tg.MessagesMessages:
-		msgs = m.Messages
-	case *tg.MessagesMessagesSlice:
-		msgs = m.Messages
-	}
+	msgs := messagesFromHistoryResp(resp)
 	out := make([]BackfillMessage, 0, len(msgs))
 	for _, mc := range msgs {
 		m, ok := mc.(*tg.Message)

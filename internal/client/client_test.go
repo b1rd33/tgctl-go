@@ -162,3 +162,42 @@ func TestMergeFolderUpdatePreservesExistingMetadataAndMembership(t *testing.T) {
 		t.Fatalf("ExcludeChatIDs = %#v, want [777000]", merged.ExcludeChatIDs)
 	}
 }
+
+func TestMessagesFromHistoryRespCoversAllThreeShapes(t *testing.T) {
+	cases := []struct {
+		name string
+		resp tg.MessagesMessagesClass
+		want int
+	}{
+		{
+			name: "MessagesMessages (regular DM)",
+			resp: &tg.MessagesMessages{Messages: []tg.MessageClass{
+				&tg.Message{ID: 1}, &tg.Message{ID: 2},
+			}},
+			want: 2,
+		},
+		{
+			name: "MessagesMessagesSlice (paged DM)",
+			resp: &tg.MessagesMessagesSlice{Messages: []tg.MessageClass{&tg.Message{ID: 3}}},
+			want: 1,
+		},
+		{
+			name: "MessagesChannelMessages (channel/supergroup)",
+			resp: &tg.MessagesChannelMessages{Messages: []tg.MessageClass{
+				&tg.Message{ID: 4}, &tg.Message{ID: 5}, &tg.Message{ID: 6},
+			}},
+			want: 3,
+		},
+		{
+			name: "MessagesMessagesNotModified treated as empty",
+			resp: &tg.MessagesMessagesNotModified{},
+			want: 0,
+		},
+	}
+	for _, tc := range cases {
+		got := messagesFromHistoryResp(tc.resp)
+		if len(got) != tc.want {
+			t.Errorf("%s: len = %d, want %d", tc.name, len(got), tc.want)
+		}
+	}
+}
