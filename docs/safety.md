@@ -196,3 +196,9 @@ fi
 
 Pair this with `--idempotency-key` so the retry is safe even if the
 original request actually landed before the FloodWait fired.
+
+## See also
+
+- [Multi-account](multi-account.md) — audit log paths per account
+- [Library use](sdk.md) — agent subprocess pattern with idempotency
+- [Quickstart](quickstart.md) — first safe send

@@ -181,3 +181,9 @@ default account is intentional.
 - **Temporary backup account** — register a second SIM as `accounts/backup/`
   in case your main account hits a SpamBot restriction. Won't help recover the
   main, but lets you keep operating while you appeal.
+
+## See also
+
+- [Install](install.md) — initial `.env` and login
+- [Safety model](safety.md) — per-account audit logs
+- [Library use](sdk.md) — `--account` from agent subprocesses

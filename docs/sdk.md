@@ -153,3 +153,9 @@ tg listen --once --json
 The CLI contract is the API. New commands and fields are additive.
 Existing exit codes, JSON envelope keys, and safety gates are stable
 across the Go and Python ports.
+
+## See also
+
+- [Safety model](safety.md) — exit codes and audit log
+- [Multi-account](multi-account.md) — isolating agents from your real DMs
+- [Quickstart](quickstart.md) — agent-ready first run

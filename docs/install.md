@@ -145,3 +145,9 @@ tg --account test login
 client. New accounts and accounts running automation against many
 strangers are at higher risk; established personal accounts running
 tgctl-go for personal use are at very low risk.
+
+## See also
+
+- [Quickstart](quickstart.md) — first commands after install
+- [Safety model](safety.md) — what `--allow-write` and `--read-only` do
+- [Multi-account](multi-account.md) — running multiple Telegram accounts
