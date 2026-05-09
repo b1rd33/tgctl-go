@@ -855,13 +855,18 @@ func (g *GotdClient) ListFolders(ctx context.Context) ([]FolderInfo, error) {
 			continue
 		}
 		if df, ok := f.(*tg.DialogFilter); ok {
-			out = append(out, FolderInfo{ID: int64(df.ID), Title: df.Title.Text, Emoji: df.Emoticon})
+			out = append(out, folderInfoFromDialogFilter(df))
 		}
 	}
 	return out, nil
 }
 
 func (g *GotdClient) UpdateFolder(ctx context.Context, req FolderUpdateReq) error {
+	if existing, ok, err := g.folderInfoByID(ctx, req.ID); err != nil {
+		return err
+	} else if ok {
+		req = mergeFolderUpdate(existing, req)
+	}
 	includePeers, err := g.inputPeersFromChatIDs(ctx, req.IncludeChatIDs)
 	if err != nil {
 		return err
@@ -873,6 +878,19 @@ func (g *GotdClient) UpdateFolder(ctx context.Context, req FolderUpdateReq) erro
 	filter := folderFilterFromReq(req, includePeers, excludePeers)
 	_, err = g.api.MessagesUpdateDialogFilter(ctx, &tg.MessagesUpdateDialogFilterRequest{ID: int(req.ID), Filter: filter})
 	return mapRPCErr(err)
+}
+
+func (g *GotdClient) folderInfoByID(ctx context.Context, id int64) (FolderInfo, bool, error) {
+	filters, err := g.api.MessagesGetDialogFilters(ctx)
+	if err != nil {
+		return FolderInfo{}, false, mapRPCErr(err)
+	}
+	for _, f := range filters.Filters {
+		if df, ok := f.(*tg.DialogFilter); ok && int64(df.ID) == id {
+			return folderInfoFromDialogFilter(df), true, nil
+		}
+	}
+	return FolderInfo{}, false, nil
 }
 
 func (g *GotdClient) inputPeersFromChatIDs(ctx context.Context, ids []int64) ([]tg.InputPeerClass, error) {
@@ -888,6 +906,78 @@ func (g *GotdClient) inputPeersFromChatIDs(ctx context.Context, ids []int64) ([]
 		peers = append(peers, peer)
 	}
 	return peers, nil
+}
+
+func folderInfoFromDialogFilter(filter *tg.DialogFilter) FolderInfo {
+	return FolderInfo{
+		ID:             int64(filter.ID),
+		Title:          filter.Title.Text,
+		Emoji:          filter.Emoticon,
+		IncludeChatIDs: inputPeerIDs(filter.IncludePeers),
+		ExcludeChatIDs: inputPeerIDs(filter.ExcludePeers),
+	}
+}
+
+func inputPeerIDs(peers []tg.InputPeerClass) []int64 {
+	if len(peers) == 0 {
+		return nil
+	}
+	ids := make([]int64, 0, len(peers))
+	for _, peer := range peers {
+		switch p := peer.(type) {
+		case *tg.InputPeerUser:
+			ids = append(ids, p.UserID)
+		case *tg.InputPeerChannel:
+			ids = append(ids, p.ChannelID)
+		case *tg.InputPeerChat:
+			ids = append(ids, p.ChatID)
+		}
+	}
+	return ids
+}
+
+func mergeFolderUpdate(existing FolderInfo, req FolderUpdateReq) FolderUpdateReq {
+	merged := FolderUpdateReq{
+		ID:             req.ID,
+		Title:          existing.Title,
+		Emoji:          existing.Emoji,
+		IncludeChatIDs: append([]int64(nil), existing.IncludeChatIDs...),
+		ExcludeChatIDs: append([]int64(nil), existing.ExcludeChatIDs...),
+	}
+	if req.Title != "" {
+		merged.Title = req.Title
+	}
+	if req.Emoji != "" {
+		merged.Emoji = req.Emoji
+	}
+	for _, id := range req.IncludeChatIDs {
+		merged.ExcludeChatIDs = removeInt64(merged.ExcludeChatIDs, id)
+		merged.IncludeChatIDs = appendUniqueInt64(merged.IncludeChatIDs, id)
+	}
+	for _, id := range req.ExcludeChatIDs {
+		merged.IncludeChatIDs = removeInt64(merged.IncludeChatIDs, id)
+		merged.ExcludeChatIDs = appendUniqueInt64(merged.ExcludeChatIDs, id)
+	}
+	return merged
+}
+
+func appendUniqueInt64(ids []int64, id int64) []int64 {
+	for _, existing := range ids {
+		if existing == id {
+			return ids
+		}
+	}
+	return append(ids, id)
+}
+
+func removeInt64(ids []int64, id int64) []int64 {
+	out := ids[:0]
+	for _, existing := range ids {
+		if existing != id {
+			out = append(out, existing)
+		}
+	}
+	return out
 }
 
 func folderFilterFromReq(req FolderUpdateReq, includePeers, excludePeers []tg.InputPeerClass) *tg.DialogFilter {

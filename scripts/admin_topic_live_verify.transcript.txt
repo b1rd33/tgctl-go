@@ -1,0 +1,11 @@
+=== admin/topic live verification start ===
+run_id: admin-verify-20260509170450
+self_chat: 1240314255
+forum_chat: 3957621025
+
++ go build -buildvcs=false -o ./tg ./cmd/tg
+
++ ./tg version --json
+{"ok":true,"command":"version","request_id":"req-f44b3f3b","data":{"commit":"","version":"dev"},"warnings":[]}
+
++ ./tg backfill-entities --json

@@ -100,3 +100,65 @@ func TestFolderFilterFromReqIncludesRequestedPeers(t *testing.T) {
 		t.Fatalf("ExcludePeers = %#v, want requested exclude peer", filter.ExcludePeers)
 	}
 }
+
+func TestFolderInfoFromDialogFilterIncludesPeerIDs(t *testing.T) {
+	filter := &tg.DialogFilter{
+		ID:       6,
+		Title:    tg.TextWithEntities{Text: "Ops"},
+		Emoticon: "box",
+		IncludePeers: []tg.InputPeerClass{
+			&tg.InputPeerUser{UserID: 1240314255, AccessHash: 10},
+			&tg.InputPeerChannel{ChannelID: 3957621025, AccessHash: 20},
+			&tg.InputPeerChat{ChatID: 5122015159},
+		},
+		ExcludePeers: []tg.InputPeerClass{
+			&tg.InputPeerUser{UserID: 777000, AccessHash: 30},
+		},
+	}
+
+	info := folderInfoFromDialogFilter(filter)
+
+	if info.ID != 6 || info.Title != "Ops" || info.Emoji != "box" {
+		t.Fatalf("info metadata = %#v", info)
+	}
+	wantInclude := []int64{1240314255, 3957621025, 5122015159}
+	if len(info.IncludeChatIDs) != len(wantInclude) {
+		t.Fatalf("IncludeChatIDs = %#v, want %#v", info.IncludeChatIDs, wantInclude)
+	}
+	for i, want := range wantInclude {
+		if info.IncludeChatIDs[i] != want {
+			t.Fatalf("IncludeChatIDs[%d] = %d, want %d", i, info.IncludeChatIDs[i], want)
+		}
+	}
+	if len(info.ExcludeChatIDs) != 1 || info.ExcludeChatIDs[0] != 777000 {
+		t.Fatalf("ExcludeChatIDs = %#v, want [777000]", info.ExcludeChatIDs)
+	}
+}
+
+func TestMergeFolderUpdatePreservesExistingMetadataAndMembership(t *testing.T) {
+	existing := FolderInfo{
+		ID:             6,
+		Title:          "Ops",
+		Emoji:          "box",
+		IncludeChatIDs: []int64{1240314255},
+		ExcludeChatIDs: []int64{777000},
+	}
+
+	merged := mergeFolderUpdate(existing, FolderUpdateReq{ID: 6, IncludeChatIDs: []int64{3957621025}})
+
+	if merged.Title != "Ops" || merged.Emoji != "box" {
+		t.Fatalf("merged metadata = title:%q emoji:%q", merged.Title, merged.Emoji)
+	}
+	wantInclude := []int64{1240314255, 3957621025}
+	if len(merged.IncludeChatIDs) != len(wantInclude) {
+		t.Fatalf("IncludeChatIDs = %#v, want %#v", merged.IncludeChatIDs, wantInclude)
+	}
+	for i, want := range wantInclude {
+		if merged.IncludeChatIDs[i] != want {
+			t.Fatalf("IncludeChatIDs[%d] = %d, want %d", i, merged.IncludeChatIDs[i], want)
+		}
+	}
+	if len(merged.ExcludeChatIDs) != 1 || merged.ExcludeChatIDs[0] != 777000 {
+		t.Fatalf("ExcludeChatIDs = %#v, want [777000]", merged.ExcludeChatIDs)
+	}
+}
