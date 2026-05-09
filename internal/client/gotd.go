@@ -724,6 +724,11 @@ func messagesFromHistoryResp(resp tg.MessagesMessagesClass) []tg.MessageClass {
 	return nil
 }
 
+// pageSize is messages.getHistory's per-call ceiling. Telegram caps the
+// returned set at 100 even when you ask for more, so larger requests must
+// paginate by OffsetID.
+const backfillPageSize = 100
+
 func (g *GotdClient) BackfillMessages(ctx context.Context, req BackfillReq) ([]BackfillMessage, error) {
 	peer, err := g.peerFromChatID(ctx, req.ChatID)
 	if err != nil {
@@ -731,28 +736,68 @@ func (g *GotdClient) BackfillMessages(ctx context.Context, req BackfillReq) ([]B
 	}
 	limit := req.Limit
 	if limit <= 0 {
-		limit = 100
+		limit = backfillPageSize
 	}
-	resp, err := g.api.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{Peer: peer, Limit: limit})
-	if err != nil {
-		return nil, mapRPCErr(err)
-	}
-	msgs := messagesFromHistoryResp(resp)
-	out := make([]BackfillMessage, 0, len(msgs))
-	for _, mc := range msgs {
-		m, ok := mc.(*tg.Message)
-		if !ok {
-			continue
+
+	out := make([]BackfillMessage, 0, limit)
+	offsetID := 0
+	for len(out) < limit {
+		want := limit - len(out)
+		if want > backfillPageSize {
+			want = backfillPageSize
 		}
-		row := BackfillMessage{
-			ChatID: req.ChatID, MessageID: int64(m.ID), Date: timeFromUnix(m.Date),
-			Text: m.Message, IsOutgoing: m.Out, HasMedia: m.Media != nil,
+		resp, err := g.api.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
+			Peer:     peer,
+			Limit:    want,
+			OffsetID: offsetID,
+		})
+		if err != nil {
+			return out, mapRPCErr(err)
 		}
-		row.SenderID = peerID(m.FromID)
-		if m.Media != nil {
-			row.MediaType = fmt.Sprintf("%T", m.Media)
+		msgs := messagesFromHistoryResp(resp)
+		if len(msgs) == 0 {
+			break
 		}
-		out = append(out, row)
+		minID := 0
+		for _, mc := range msgs {
+			m, ok := mc.(*tg.Message)
+			if !ok {
+				// Other concrete types: MessageEmpty, MessageService.
+				// Skip but still update minID so we don't re-fetch.
+				if me, ok := mc.(*tg.MessageEmpty); ok {
+					if minID == 0 || me.ID < minID {
+						minID = me.ID
+					}
+				}
+				if ms, ok := mc.(*tg.MessageService); ok {
+					if minID == 0 || ms.ID < minID {
+						minID = ms.ID
+					}
+				}
+				continue
+			}
+			row := BackfillMessage{
+				ChatID: req.ChatID, MessageID: int64(m.ID), Date: timeFromUnix(m.Date),
+				Text: m.Message, IsOutgoing: m.Out, HasMedia: m.Media != nil,
+			}
+			row.SenderID = peerID(m.FromID)
+			if m.Media != nil {
+				row.MediaType = fmt.Sprintf("%T", m.Media)
+			}
+			out = append(out, row)
+			if minID == 0 || m.ID < minID {
+				minID = m.ID
+			}
+			if len(out) >= limit {
+				break
+			}
+		}
+		if minID == 0 || minID == offsetID {
+			// Telegram returned only non-Message items or didn't move the
+			// cursor; bail to avoid an infinite loop.
+			break
+		}
+		offsetID = minID
 	}
 	return out, nil
 }
