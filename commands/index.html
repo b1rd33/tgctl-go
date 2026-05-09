@@ -1,0 +1,5532 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Telegram CLI for Go — same contract as Python tgctl, single static binary">
+      
+      
+      
+        <link rel="canonical" href="https://b1rd33.github.io/tgctl-go/commands/">
+      
+      
+        <link rel="prev" href="../quickstart/">
+      
+      
+        <link rel="next" href="../sdk/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Commands - tgctl-go</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#commands" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="tgctl-go" class="md-header__button md-logo" aria-label="tgctl-go" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            tgctl-go
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Commands
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/b1rd33/tgctl-go" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    b1rd33/tgctl-go
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="tgctl-go" class="md-nav__button md-logo" aria-label="tgctl-go" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    tgctl-go
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/b1rd33/tgctl-go" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    b1rd33/tgctl-go
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#index" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Index
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-account-sessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg account-sessions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-accounts-add" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg accounts-add
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-accounts-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg accounts-list
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-accounts-remove" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg accounts-remove
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-accounts-show" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg accounts-show
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-accounts-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg accounts-use
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-backfill" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg backfill
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-backfill-entities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg backfill-entities
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-ban-from-chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg ban-from-chat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-block-user" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg block-user
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-chat-description" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg chat-description
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-chat-invite-link" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg chat-invite-link
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-chat-members" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg chat-members
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-chat-photo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg chat-photo
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-chat-pinned-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg chat-pinned-list
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-chat-title" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg chat-title
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-chats-info" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg chats-info
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-completion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg completion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-contacts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg contacts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-delete-msg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg delete-msg
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-demote" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg demote
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-discover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg discover
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-doctor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg doctor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-edit-msg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg edit-msg
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-folder-add-chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg folder-add-chat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-folder-create" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg folder-create
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-folder-delete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg folder-delete
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-folder-edit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg folder-edit
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-folder-remove-chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg folder-remove-chat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-folder-show" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg folder-show
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-folders-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg folders-list
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-folders-reorder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg folders-reorder
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg forward
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-get-msg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg get-msg
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-help" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg help
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-kick" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg kick
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-leave-chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg leave-chat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-list-msgs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg list-msgs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-listen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg listen
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-login" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg login
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-mark-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg mark-read
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-me" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg me
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-pin-msg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg pin-msg
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-promote" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg promote
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-react" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg react
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg search
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-send" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg send
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-send-by-username" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg send-by-username
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-set-permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg set-permissions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-show" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg show
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg stats
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-sync-contacts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg sync-contacts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-terminate-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg terminate-session
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-topic-create" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg topic-create
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-topic-edit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg topic-edit
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-topic-pin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg topic-pin
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-topic-unpin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg topic-unpin
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-topics-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg topics-list
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-unban-from-chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg unban-from-chat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-unblock-user" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg unblock-user
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-unpin-msg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg unpin-msg
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-unread" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg unread
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-upload-document" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg upload-document
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-upload-photo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg upload-photo
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-upload-video" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg upload-video
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-upload-voice" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg upload-voice
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg version
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Library use
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../safety/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Safety model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multi-account/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-account
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#index" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Index
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-account-sessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg account-sessions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-accounts-add" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg accounts-add
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-accounts-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg accounts-list
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-accounts-remove" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg accounts-remove
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-accounts-show" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg accounts-show
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-accounts-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg accounts-use
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-backfill" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg backfill
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-backfill-entities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg backfill-entities
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-ban-from-chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg ban-from-chat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-block-user" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg block-user
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-chat-description" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg chat-description
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-chat-invite-link" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg chat-invite-link
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-chat-members" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg chat-members
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-chat-photo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg chat-photo
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-chat-pinned-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg chat-pinned-list
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-chat-title" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg chat-title
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-chats-info" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg chats-info
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-completion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg completion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-contacts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg contacts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-delete-msg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg delete-msg
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-demote" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg demote
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-discover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg discover
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-doctor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg doctor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-edit-msg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg edit-msg
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-folder-add-chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg folder-add-chat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-folder-create" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg folder-create
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-folder-delete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg folder-delete
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-folder-edit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg folder-edit
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-folder-remove-chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg folder-remove-chat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-folder-show" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg folder-show
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-folders-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg folders-list
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-folders-reorder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg folders-reorder
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg forward
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-get-msg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg get-msg
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-help" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg help
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-kick" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg kick
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-leave-chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg leave-chat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-list-msgs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg list-msgs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-listen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg listen
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-login" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg login
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-mark-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg mark-read
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-me" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg me
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-pin-msg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg pin-msg
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-promote" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg promote
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-react" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg react
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg search
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-send" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg send
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-send-by-username" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg send-by-username
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-set-permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg set-permissions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-show" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg show
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg stats
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-sync-contacts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg sync-contacts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-terminate-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg terminate-session
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-topic-create" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg topic-create
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-topic-edit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg topic-edit
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-topic-pin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg topic-pin
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-topic-unpin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg topic-unpin
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-topics-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg topics-list
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-unban-from-chat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg unban-from-chat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-unblock-user" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg unblock-user
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-unpin-msg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg unpin-msg
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-unread" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg unread
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-upload-document" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg upload-document
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-upload-photo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg upload-photo
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-upload-video" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg upload-video
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-upload-voice" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg upload-voice
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg version
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="commands">Commands<a class="headerlink" href="#commands" title="Permanent link">&para;</a></h1>
+<p><code>tg --help</code> shows all 70 commands. This page is generated from the local Cobra help output, then kept as plain Markdown for the docs site.</p>
+<p>Every command supports the global flags shown by <code>tg --help</code>: <code>--account</code>, <code>--full</code>, <code>--json</code>, <code>--human</code>, <code>--lock-wait</code>, <code>--read-only</code>, and <code>--version</code> where applicable.</p>
+<h2 id="index">Index<a class="headerlink" href="#index" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="#tg-account-sessions"><code>tg account-sessions</code></a></td>
+<td>List authorized Telegram sessions</td>
+</tr>
+<tr>
+<td><a href="#tg-accounts-add"><code>tg accounts-add</code></a></td>
+<td>Create a new account directory</td>
+</tr>
+<tr>
+<td><a href="#tg-accounts-list"><code>tg accounts-list</code></a></td>
+<td>List known accounts</td>
+</tr>
+<tr>
+<td><a href="#tg-accounts-remove"><code>tg accounts-remove</code></a></td>
+<td>Delete an account directory</td>
+</tr>
+<tr>
+<td><a href="#tg-accounts-show"><code>tg accounts-show</code></a></td>
+<td>Show the currently selected account and its paths</td>
+</tr>
+<tr>
+<td><a href="#tg-accounts-use"><code>tg accounts-use</code></a></td>
+<td>Select an existing account</td>
+</tr>
+<tr>
+<td><a href="#tg-backfill"><code>tg backfill</code></a></td>
+<td>Backfill cached messages for a chat</td>
+</tr>
+<tr>
+<td><a href="#tg-backfill-entities"><code>tg backfill-entities</code></a></td>
+<td>Populate the local entity cache so chat_id-keyed sends work</td>
+</tr>
+<tr>
+<td><a href="#tg-ban-from-chat"><code>tg ban-from-chat</code></a></td>
+<td>ban-from-chat user in chat</td>
+</tr>
+<tr>
+<td><a href="#tg-block-user"><code>tg block-user</code></a></td>
+<td>Block a user</td>
+</tr>
+<tr>
+<td><a href="#tg-chat-description"><code>tg chat-description</code></a></td>
+<td>Edit chat description</td>
+</tr>
+<tr>
+<td><a href="#tg-chat-invite-link"><code>tg chat-invite-link</code></a></td>
+<td>Export an invite link</td>
+</tr>
+<tr>
+<td><a href="#tg-chat-members"><code>tg chat-members</code></a></td>
+<td>List chat members</td>
+</tr>
+<tr>
+<td><a href="#tg-chat-photo"><code>tg chat-photo</code></a></td>
+<td>Edit chat photo</td>
+</tr>
+<tr>
+<td><a href="#tg-chat-pinned-list"><code>tg chat-pinned-list</code></a></td>
+<td>List pinned dialogs for a chat</td>
+</tr>
+<tr>
+<td><a href="#tg-chat-title"><code>tg chat-title</code></a></td>
+<td>Edit chat title</td>
+</tr>
+<tr>
+<td><a href="#tg-chats-info"><code>tg chats-info</code></a></td>
+<td>Show chat info for comma-separated chat ids</td>
+</tr>
+<tr>
+<td><a href="#tg-completion"><code>tg completion</code></a></td>
+<td>Generate the autocompletion script for tg for the specified shell.</td>
+</tr>
+<tr>
+<td><a href="#tg-contacts"><code>tg contacts</code></a></td>
+<td>List cached contacts</td>
+</tr>
+<tr>
+<td><a href="#tg-delete-msg"><code>tg delete-msg</code></a></td>
+<td>Delete one or more messages (revoke for everyone by default)</td>
+</tr>
+<tr>
+<td><a href="#tg-demote"><code>tg demote</code></a></td>
+<td>demote user in chat</td>
+</tr>
+<tr>
+<td><a href="#tg-discover"><code>tg discover</code></a></td>
+<td>Discover dialogs and cache chat metadata</td>
+</tr>
+<tr>
+<td><a href="#tg-doctor"><code>tg doctor</code></a></td>
+<td>Diagnose tgctl-go setup</td>
+</tr>
+<tr>
+<td><a href="#tg-edit-msg"><code>tg edit-msg</code></a></td>
+<td>Edit a previously sent message</td>
+</tr>
+<tr>
+<td><a href="#tg-folder-add-chat"><code>tg folder-add-chat</code></a></td>
+<td>Mutate folder chat membership</td>
+</tr>
+<tr>
+<td><a href="#tg-folder-create"><code>tg folder-create</code></a></td>
+<td>Create a dialog folder</td>
+</tr>
+<tr>
+<td><a href="#tg-folder-delete"><code>tg folder-delete</code></a></td>
+<td>Delete a dialog folder</td>
+</tr>
+<tr>
+<td><a href="#tg-folder-edit"><code>tg folder-edit</code></a></td>
+<td>Edit a dialog folder</td>
+</tr>
+<tr>
+<td><a href="#tg-folder-remove-chat"><code>tg folder-remove-chat</code></a></td>
+<td>Mutate folder chat membership</td>
+</tr>
+<tr>
+<td><a href="#tg-folder-show"><code>tg folder-show</code></a></td>
+<td>Show one dialog folder</td>
+</tr>
+<tr>
+<td><a href="#tg-folders-list"><code>tg folders-list</code></a></td>
+<td>List dialog folders</td>
+</tr>
+<tr>
+<td><a href="#tg-folders-reorder"><code>tg folders-reorder</code></a></td>
+<td>Reorder dialog folders</td>
+</tr>
+<tr>
+<td><a href="#tg-forward"><code>tg forward</code></a></td>
+<td>Forward one or more messages between chats</td>
+</tr>
+<tr>
+<td><a href="#tg-get-msg"><code>tg get-msg</code></a></td>
+<td>Print one cached message in full</td>
+</tr>
+<tr>
+<td><a href="#tg-help"><code>tg help</code></a></td>
+<td>Help provides help for any command in the application.</td>
+</tr>
+<tr>
+<td><a href="#tg-kick"><code>tg kick</code></a></td>
+<td>kick user in chat</td>
+</tr>
+<tr>
+<td><a href="#tg-leave-chat"><code>tg leave-chat</code></a></td>
+<td>Leave a group or channel (typed confirm required)</td>
+</tr>
+<tr>
+<td><a href="#tg-list-msgs"><code>tg list-msgs</code></a></td>
+<td>List cached messages in a chat with optional date filters</td>
+</tr>
+<tr>
+<td><a href="#tg-listen"><code>tg listen</code></a></td>
+<td>Listen for live Telegram updates</td>
+</tr>
+<tr>
+<td><a href="#tg-login"><code>tg login</code></a></td>
+<td>Interactively authorize this account against Telegram</td>
+</tr>
+<tr>
+<td><a href="#tg-mark-read"><code>tg mark-read</code></a></td>
+<td>Mark history read up to and including --up-to</td>
+</tr>
+<tr>
+<td><a href="#tg-me"><code>tg me</code></a></td>
+<td>Print authenticated user info</td>
+</tr>
+<tr>
+<td><a href="#tg-pin-msg"><code>tg pin-msg</code></a></td>
+<td>Pin a message in a chat</td>
+</tr>
+<tr>
+<td><a href="#tg-promote"><code>tg promote</code></a></td>
+<td>promote user in chat</td>
+</tr>
+<tr>
+<td><a href="#tg-react"><code>tg react</code></a></td>
+<td>Send a reaction to a message</td>
+</tr>
+<tr>
+<td><a href="#tg-search"><code>tg search</code></a></td>
+<td>Search cached messages in a chat</td>
+</tr>
+<tr>
+<td><a href="#tg-send"><code>tg send</code></a></td>
+<td>Send a text message</td>
+</tr>
+<tr>
+<td><a href="#tg-send-by-username"><code>tg send-by-username</code></a></td>
+<td>Send a text message by resolving an @username (no entity cache required)</td>
+</tr>
+<tr>
+<td><a href="#tg-set-permissions"><code>tg set-permissions</code></a></td>
+<td>Set default chat permissions</td>
+</tr>
+<tr>
+<td><a href="#tg-show"><code>tg show</code></a></td>
+<td>Show recent cached messages in a chat</td>
+</tr>
+<tr>
+<td><a href="#tg-stats"><code>tg stats</code></a></td>
+<td>Show local cache statistics</td>
+</tr>
+<tr>
+<td><a href="#tg-sync-contacts"><code>tg sync-contacts</code></a></td>
+<td>Sync Telegram contacts into the local DB</td>
+</tr>
+<tr>
+<td><a href="#tg-terminate-session"><code>tg terminate-session</code></a></td>
+<td>Terminate one of your authorized Telegram sessions</td>
+</tr>
+<tr>
+<td><a href="#tg-topic-create"><code>tg topic-create</code></a></td>
+<td>Create a forum topic</td>
+</tr>
+<tr>
+<td><a href="#tg-topic-edit"><code>tg topic-edit</code></a></td>
+<td>Edit a forum topic</td>
+</tr>
+<tr>
+<td><a href="#tg-topic-pin"><code>tg topic-pin</code></a></td>
+<td>Pin a forum topic</td>
+</tr>
+<tr>
+<td><a href="#tg-topic-unpin"><code>tg topic-unpin</code></a></td>
+<td>Unpin a forum topic</td>
+</tr>
+<tr>
+<td><a href="#tg-topics-list"><code>tg topics-list</code></a></td>
+<td>List forum topics</td>
+</tr>
+<tr>
+<td><a href="#tg-unban-from-chat"><code>tg unban-from-chat</code></a></td>
+<td>unban-from-chat user in chat</td>
+</tr>
+<tr>
+<td><a href="#tg-unblock-user"><code>tg unblock-user</code></a></td>
+<td>Unblock a previously blocked user</td>
+</tr>
+<tr>
+<td><a href="#tg-unpin-msg"><code>tg unpin-msg</code></a></td>
+<td>Unpin a previously pinned message</td>
+</tr>
+<tr>
+<td><a href="#tg-unread"><code>tg unread</code></a></td>
+<td>List recently cached incoming messages</td>
+</tr>
+<tr>
+<td><a href="#tg-upload-document"><code>tg upload-document</code></a></td>
+<td>Upload a document</td>
+</tr>
+<tr>
+<td><a href="#tg-upload-photo"><code>tg upload-photo</code></a></td>
+<td>Upload a photo</td>
+</tr>
+<tr>
+<td><a href="#tg-upload-video"><code>tg upload-video</code></a></td>
+<td>Upload a video</td>
+</tr>
+<tr>
+<td><a href="#tg-upload-voice"><code>tg upload-voice</code></a></td>
+<td>Upload an OGG/Opus voice message</td>
+</tr>
+<tr>
+<td><a href="#tg-version"><code>tg version</code></a></td>
+<td>Print build version</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-account-sessions"><code>tg account-sessions</code><a class="headerlink" href="#tg-account-sessions" title="Permanent link">&para;</a></h2>
+<p>List authorized Telegram sessions</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>tg account-sessions [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>tg<span class="w"> </span>account-sessions<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for account-sessions</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-accounts-add"><code>tg accounts-add</code><a class="headerlink" href="#tg-accounts-add" title="Permanent link">&para;</a></h2>
+<p>Create a new account directory</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>tg accounts-add &lt;name&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>tg<span class="w"> </span>accounts-add<span class="w"> </span>work<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for accounts-add</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-accounts-list"><code>tg accounts-list</code><a class="headerlink" href="#tg-accounts-list" title="Permanent link">&para;</a></h2>
+<p>List known accounts</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>tg accounts-list [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>tg<span class="w"> </span>accounts-list<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for accounts-list</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-accounts-remove"><code>tg accounts-remove</code><a class="headerlink" href="#tg-accounts-remove" title="Permanent link">&para;</a></h2>
+<p>Delete an account directory</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>tg accounts-remove &lt;name&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>tg<span class="w"> </span>accounts-remove<span class="w"> </span>work<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed account name to confirm removal</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for accounts-remove</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-accounts-show"><code>tg accounts-show</code><a class="headerlink" href="#tg-accounts-show" title="Permanent link">&para;</a></h2>
+<p>Show the currently selected account and its paths</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>tg accounts-show [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>tg<span class="w"> </span>accounts-show<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for accounts-show</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-accounts-use"><code>tg accounts-use</code><a class="headerlink" href="#tg-accounts-use" title="Permanent link">&para;</a></h2>
+<p>Select an existing account</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>tg accounts-use &lt;name&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>tg<span class="w"> </span>accounts-use<span class="w"> </span>work<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for accounts-use</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-backfill"><code>tg backfill</code><a class="headerlink" href="#tg-backfill" title="Permanent link">&para;</a></h2>
+<p>Backfill cached messages for a chat</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>tg backfill &lt;chat&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>tg<span class="w"> </span>backfill<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--max-messages<span class="w"> </span><span class="m">100</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for local DB writes</td>
+</tr>
+<tr>
+<td><code>--download-media</code></td>
+<td>Download media during backfill</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for backfill</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--max-db-size-mb int</code></td>
+<td>Maximum database size in MiB</td>
+</tr>
+<tr>
+<td><code>--max-messages int</code></td>
+<td>Maximum cached messages per chat (default 100)</td>
+</tr>
+<tr>
+<td><code>--throttle-seconds float</code></td>
+<td>Seconds to sleep between chats</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-backfill-entities"><code>tg backfill-entities</code><a class="headerlink" href="#tg-backfill-entities" title="Permanent link">&para;</a></h2>
+<p>Populate the local entity cache so chat_id-keyed sends work</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>tg backfill-entities [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>tg<span class="w"> </span>backfill-entities<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for backfill-entities</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--limit int</code></td>
+<td>Max dialogs to fetch in one pass (Telegram caps at ~200) (default 200)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-ban-from-chat"><code>tg ban-from-chat</code><a class="headerlink" href="#tg-ban-from-chat" title="Permanent link">&para;</a></h2>
+<p>ban-from-chat user in chat</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>tg ban-from-chat &lt;chat&gt; &lt;user-id&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>tg<span class="w"> </span>ban-from-chat<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for ban-from-chat</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-block-user"><code>tg block-user</code><a class="headerlink" href="#tg-block-user" title="Permanent link">&para;</a></h2>
+<p>Block a user</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>tg block-user &lt;user&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>tg<span class="w"> </span>block-user<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for block-user</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-chat-description"><code>tg chat-description</code><a class="headerlink" href="#tg-chat-description" title="Permanent link">&para;</a></h2>
+<p>Edit chat description</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>tg chat-description &lt;chat&gt; &lt;value&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>tg<span class="w"> </span>chat-description<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span><span class="s2">&quot;Description&quot;</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for chat-description</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-chat-invite-link"><code>tg chat-invite-link</code><a class="headerlink" href="#tg-chat-invite-link" title="Permanent link">&para;</a></h2>
+<p>Export an invite link</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>tg chat-invite-link &lt;chat&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>tg<span class="w"> </span>chat-invite-link<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for chat-invite-link</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-chat-members"><code>tg chat-members</code><a class="headerlink" href="#tg-chat-members" title="Permanent link">&para;</a></h2>
+<p>List chat members</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>tg chat-members &lt;chat&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>tg<span class="w"> </span>chat-members<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span>--limit<span class="w"> </span><span class="m">50</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for chat-members</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--limit int</code></td>
+<td>Maximum members (default 50)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-chat-photo"><code>tg chat-photo</code><a class="headerlink" href="#tg-chat-photo" title="Permanent link">&para;</a></h2>
+<p>Edit chat photo</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>tg chat-photo &lt;chat&gt; &lt;value&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>tg<span class="w"> </span>chat-photo<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span>./photo.png<span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for chat-photo</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-chat-pinned-list"><code>tg chat-pinned-list</code><a class="headerlink" href="#tg-chat-pinned-list" title="Permanent link">&para;</a></h2>
+<p>List pinned dialogs for a chat</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>tg chat-pinned-list &lt;chat&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>tg<span class="w"> </span>chat-pinned-list<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for chat-pinned-list</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-chat-title"><code>tg chat-title</code><a class="headerlink" href="#tg-chat-title" title="Permanent link">&para;</a></h2>
+<p>Edit chat title</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>tg chat-title &lt;chat&gt; &lt;value&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>tg<span class="w"> </span>chat-title<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span><span class="s2">&quot;New title&quot;</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for chat-title</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-chats-info"><code>tg chats-info</code><a class="headerlink" href="#tg-chats-info" title="Permanent link">&para;</a></h2>
+<p>Show chat info for comma-separated chat ids</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>tg chats-info &lt;chat-ids&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>tg<span class="w"> </span>chats-info<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for chats-info</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-completion"><code>tg completion</code><a class="headerlink" href="#tg-completion" title="Permanent link">&para;</a></h2>
+<p>Generate the autocompletion script for tg for the specified shell.</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>tg completion [command]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>tg<span class="w"> </span>completion<span class="w"> </span>zsh<span class="w"> </span>&gt;<span class="w"> </span>~/.zsh/completions/_tg
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for completion</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-contacts"><code>tg contacts</code><a class="headerlink" href="#tg-contacts" title="Permanent link">&para;</a></h2>
+<p>List cached contacts</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>tg contacts [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>tg<span class="w"> </span>contacts<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for contacts</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--limit int</code></td>
+<td>Maximum contacts (default 100)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-delete-msg"><code>tg delete-msg</code><a class="headerlink" href="#tg-delete-msg" title="Permanent link">&para;</a></h2>
+<p>Delete one or more messages (revoke for everyone by default)</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>tg delete-msg &lt;chat&gt; &lt;message-ids&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>tg<span class="w"> </span>delete-msg<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--for-everyone</code></td>
+<td>Force revoke for everyone</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for delete-msg</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--no-for-everyone</code></td>
+<td>Force delete only for self</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-demote"><code>tg demote</code><a class="headerlink" href="#tg-demote" title="Permanent link">&para;</a></h2>
+<p>demote user in chat</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>tg demote &lt;chat&gt; &lt;user-id&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>tg<span class="w"> </span>demote<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for demote</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-discover"><code>tg discover</code><a class="headerlink" href="#tg-discover" title="Permanent link">&para;</a></h2>
+<p>Discover dialogs and cache chat metadata</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>tg discover [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>tg<span class="w"> </span>discover<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for local DB writes</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for discover</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--limit int</code></td>
+<td>Maximum dialogs to fetch (default 200)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-doctor"><code>tg doctor</code><a class="headerlink" href="#tg-doctor" title="Permanent link">&para;</a></h2>
+<p>Diagnose tgctl-go setup</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>tg doctor [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a>tg<span class="w"> </span>doctor<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for doctor</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-edit-msg"><code>tg edit-msg</code><a class="headerlink" href="#tg-edit-msg" title="Permanent link">&para;</a></h2>
+<p>Edit a previously sent message</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>tg edit-msg &lt;chat&gt; &lt;message-id&gt; &lt;new-text&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>tg<span class="w"> </span>edit-msg<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="s2">&quot;updated&quot;</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for edit-msg</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-folder-add-chat"><code>tg folder-add-chat</code><a class="headerlink" href="#tg-folder-add-chat" title="Permanent link">&para;</a></h2>
+<p>Mutate folder chat membership</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-48-1"><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a>tg folder-add-chat &lt;id&gt; &lt;chat&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>tg<span class="w"> </span>folder-add-chat<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for folder-add-chat</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-folder-create"><code>tg folder-create</code><a class="headerlink" href="#tg-folder-create" title="Permanent link">&para;</a></h2>
+<p>Create a dialog folder</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-50-1"><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>tg folder-create &lt;name&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-51-1"><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a>tg<span class="w"> </span>folder-create<span class="w"> </span><span class="s2">&quot;support&quot;</span><span class="w"> </span>--include-chats<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--emoji string</code></td>
+<td>Folder emoji</td>
+</tr>
+<tr>
+<td><code>--exclude-chats string</code></td>
+<td>Comma-separated chat ids to exclude</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for folder-create</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--include-chats string</code></td>
+<td>Comma-separated chat ids to include</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-folder-delete"><code>tg folder-delete</code><a class="headerlink" href="#tg-folder-delete" title="Permanent link">&para;</a></h2>
+<p>Delete a dialog folder</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-52-1"><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a>tg folder-delete &lt;id&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-53-1"><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a>tg<span class="w"> </span>folder-delete<span class="w"> </span><span class="m">2</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">2</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for folder-delete</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-folder-edit"><code>tg folder-edit</code><a class="headerlink" href="#tg-folder-edit" title="Permanent link">&para;</a></h2>
+<p>Edit a dialog folder</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-54-1"><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a>tg folder-edit &lt;id&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-55-1"><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a>tg<span class="w"> </span>folder-edit<span class="w"> </span><span class="m">2</span><span class="w"> </span>--name<span class="w"> </span><span class="s2">&quot;support&quot;</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--add string</code></td>
+<td>Comma-separated chat ids to add</td>
+</tr>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--emoji string</code></td>
+<td>Folder emoji</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for folder-edit</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--name string</code></td>
+<td>New folder name</td>
+</tr>
+<tr>
+<td><code>--remove string</code></td>
+<td>Comma-separated chat ids to remove</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-folder-remove-chat"><code>tg folder-remove-chat</code><a class="headerlink" href="#tg-folder-remove-chat" title="Permanent link">&para;</a></h2>
+<p>Mutate folder chat membership</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-56-1"><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a>tg folder-remove-chat &lt;id&gt; &lt;chat&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-57-1"><a id="__codelineno-57-1" name="__codelineno-57-1" href="#__codelineno-57-1"></a>tg<span class="w"> </span>folder-remove-chat<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for folder-remove-chat</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-folder-show"><code>tg folder-show</code><a class="headerlink" href="#tg-folder-show" title="Permanent link">&para;</a></h2>
+<p>Show one dialog folder</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-58-1"><a id="__codelineno-58-1" name="__codelineno-58-1" href="#__codelineno-58-1"></a>tg folder-show &lt;id&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-59-1"><a id="__codelineno-59-1" name="__codelineno-59-1" href="#__codelineno-59-1"></a>tg<span class="w"> </span>folder-show<span class="w"> </span><span class="m">2</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for folder-show</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-folders-list"><code>tg folders-list</code><a class="headerlink" href="#tg-folders-list" title="Permanent link">&para;</a></h2>
+<p>List dialog folders</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-60-1"><a id="__codelineno-60-1" name="__codelineno-60-1" href="#__codelineno-60-1"></a>tg folders-list [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-61-1"><a id="__codelineno-61-1" name="__codelineno-61-1" href="#__codelineno-61-1"></a>tg<span class="w"> </span>folders-list<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for folders-list</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--query string</code></td>
+<td>Filter by title</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-folders-reorder"><code>tg folders-reorder</code><a class="headerlink" href="#tg-folders-reorder" title="Permanent link">&para;</a></h2>
+<p>Reorder dialog folders</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-62-1"><a id="__codelineno-62-1" name="__codelineno-62-1" href="#__codelineno-62-1"></a>tg folders-reorder &lt;id-csv&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-63-1"><a id="__codelineno-63-1" name="__codelineno-63-1" href="#__codelineno-63-1"></a>tg<span class="w"> </span>folders-reorder<span class="w"> </span><span class="m">2</span>,3,4<span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for folders-reorder</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-forward"><code>tg forward</code><a class="headerlink" href="#tg-forward" title="Permanent link">&para;</a></h2>
+<p>Forward one or more messages between chats</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-64-1"><a id="__codelineno-64-1" name="__codelineno-64-1" href="#__codelineno-64-1"></a>tg forward &lt;from-chat&gt; &lt;to-chat&gt; &lt;message-ids&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-65-1"><a id="__codelineno-65-1" name="__codelineno-65-1" href="#__codelineno-65-1"></a>tg<span class="w"> </span>forward<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for forward</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--topic int</code></td>
+<td>Forum topic id on destination</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-get-msg"><code>tg get-msg</code><a class="headerlink" href="#tg-get-msg" title="Permanent link">&para;</a></h2>
+<p>Print one cached message in full</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-66-1"><a id="__codelineno-66-1" name="__codelineno-66-1" href="#__codelineno-66-1"></a>tg get-msg &lt;chat&gt; &lt;message-id&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-67-1"><a id="__codelineno-67-1" name="__codelineno-67-1" href="#__codelineno-67-1"></a>tg<span class="w"> </span>get-msg<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for get-msg</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--include-deleted</code></td>
+<td>Look up tombstoned messages too</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-help"><code>tg help</code><a class="headerlink" href="#tg-help" title="Permanent link">&para;</a></h2>
+<p>Help provides help for any command in the application.</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-68-1"><a id="__codelineno-68-1" name="__codelineno-68-1" href="#__codelineno-68-1"></a>tg help [command] [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-69-1"><a id="__codelineno-69-1" name="__codelineno-69-1" href="#__codelineno-69-1"></a>tg<span class="w"> </span><span class="nb">help</span><span class="w"> </span>send
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for help</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-kick"><code>tg kick</code><a class="headerlink" href="#tg-kick" title="Permanent link">&para;</a></h2>
+<p>kick user in chat</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-70-1"><a id="__codelineno-70-1" name="__codelineno-70-1" href="#__codelineno-70-1"></a>tg kick &lt;chat&gt; &lt;user-id&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-71-1"><a id="__codelineno-71-1" name="__codelineno-71-1" href="#__codelineno-71-1"></a>tg<span class="w"> </span>kick<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for kick</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-leave-chat"><code>tg leave-chat</code><a class="headerlink" href="#tg-leave-chat" title="Permanent link">&para;</a></h2>
+<p>Leave a group or channel (typed confirm required)</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-72-1"><a id="__codelineno-72-1" name="__codelineno-72-1" href="#__codelineno-72-1"></a>tg leave-chat &lt;chat&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-73-1"><a id="__codelineno-73-1" name="__codelineno-73-1" href="#__codelineno-73-1"></a>tg<span class="w"> </span>leave-chat<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for leave-chat</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-list-msgs"><code>tg list-msgs</code><a class="headerlink" href="#tg-list-msgs" title="Permanent link">&para;</a></h2>
+<p>List cached messages in a chat with optional date filters</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-74-1"><a id="__codelineno-74-1" name="__codelineno-74-1" href="#__codelineno-74-1"></a>tg list-msgs &lt;chat&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-75-1"><a id="__codelineno-75-1" name="__codelineno-75-1" href="#__codelineno-75-1"></a>tg<span class="w"> </span>list-msgs<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for list-msgs</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--include-deleted</code></td>
+<td>Include tombstoned messages</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--limit int</code></td>
+<td>Max messages to return (default 50)</td>
+</tr>
+<tr>
+<td><code>--reverse</code></td>
+<td>Oldest first</td>
+</tr>
+<tr>
+<td><code>--since string</code></td>
+<td>YYYY-MM-DD inclusive lower bound</td>
+</tr>
+<tr>
+<td><code>--until string</code></td>
+<td>YYYY-MM-DD inclusive upper bound</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-listen"><code>tg listen</code><a class="headerlink" href="#tg-listen" title="Permanent link">&para;</a></h2>
+<p>Listen for live Telegram updates</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-76-1"><a id="__codelineno-76-1" name="__codelineno-76-1" href="#__codelineno-76-1"></a>tg listen [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-77-1"><a id="__codelineno-77-1" name="__codelineno-77-1" href="#__codelineno-77-1"></a>tg<span class="w"> </span>listen<span class="w"> </span>--once<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for local DB writes</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for listen</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--once</code></td>
+<td>Exit after one update</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-login"><code>tg login</code><a class="headerlink" href="#tg-login" title="Permanent link">&para;</a></h2>
+<p>Interactively authorize this account against Telegram</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-78-1"><a id="__codelineno-78-1" name="__codelineno-78-1" href="#__codelineno-78-1"></a>tg login [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-79-1"><a id="__codelineno-79-1" name="__codelineno-79-1" href="#__codelineno-79-1"></a>tg<span class="w"> </span>login
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for login</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-mark-read"><code>tg mark-read</code><a class="headerlink" href="#tg-mark-read" title="Permanent link">&para;</a></h2>
+<p>Mark history read up to and including --up-to</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-80-1"><a id="__codelineno-80-1" name="__codelineno-80-1" href="#__codelineno-80-1"></a>tg mark-read &lt;chat&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-81-1"><a id="__codelineno-81-1" name="__codelineno-81-1" href="#__codelineno-81-1"></a>tg<span class="w"> </span>mark-read<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--up-to<span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for mark-read</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--up-to int</code></td>
+<td>Mark read up to and including this message id; 0 means latest</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-me"><code>tg me</code><a class="headerlink" href="#tg-me" title="Permanent link">&para;</a></h2>
+<p>Print authenticated user info</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-82-1"><a id="__codelineno-82-1" name="__codelineno-82-1" href="#__codelineno-82-1"></a>tg me [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-83-1"><a id="__codelineno-83-1" name="__codelineno-83-1" href="#__codelineno-83-1"></a>tg<span class="w"> </span>me<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for me</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--offline</code></td>
+<td>Read cached self user info without connecting to Telegram</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-pin-msg"><code>tg pin-msg</code><a class="headerlink" href="#tg-pin-msg" title="Permanent link">&para;</a></h2>
+<p>Pin a message in a chat</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-84-1"><a id="__codelineno-84-1" name="__codelineno-84-1" href="#__codelineno-84-1"></a>tg pin-msg &lt;chat&gt; &lt;message-id&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-85-1"><a id="__codelineno-85-1" name="__codelineno-85-1" href="#__codelineno-85-1"></a>tg<span class="w"> </span>pin-msg<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for pin-msg</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--silent</code></td>
+<td>Pin silently (no notification)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-promote"><code>tg promote</code><a class="headerlink" href="#tg-promote" title="Permanent link">&para;</a></h2>
+<p>promote user in chat</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-86-1"><a id="__codelineno-86-1" name="__codelineno-86-1" href="#__codelineno-86-1"></a>tg promote &lt;chat&gt; &lt;user-id&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-87-1"><a id="__codelineno-87-1" name="__codelineno-87-1" href="#__codelineno-87-1"></a>tg<span class="w"> </span>promote<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for promote</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-react"><code>tg react</code><a class="headerlink" href="#tg-react" title="Permanent link">&para;</a></h2>
+<p>Send a reaction to a message</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-88-1"><a id="__codelineno-88-1" name="__codelineno-88-1" href="#__codelineno-88-1"></a>tg react &lt;chat&gt; &lt;message-id&gt; &lt;emoji&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-89-1"><a id="__codelineno-89-1" name="__codelineno-89-1" href="#__codelineno-89-1"></a>tg<span class="w"> </span>react<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="s2">&quot;👍&quot;</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--big</code></td>
+<td>Send a big reaction (Premium)</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for react</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-search"><code>tg search</code><a class="headerlink" href="#tg-search" title="Permanent link">&para;</a></h2>
+<p>Search cached messages in a chat</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-90-1"><a id="__codelineno-90-1" name="__codelineno-90-1" href="#__codelineno-90-1"></a>tg search &lt;chat&gt; &lt;query&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-91-1"><a id="__codelineno-91-1" name="__codelineno-91-1" href="#__codelineno-91-1"></a>tg<span class="w"> </span>search<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="s2">&quot;shipping&quot;</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">20</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--case-sensitive</code></td>
+<td>Case-sensitive matching</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for search</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--include-deleted</code></td>
+<td>Include tombstoned messages</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--limit int</code></td>
+<td>Max messages to return (default 50)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-send"><code>tg send</code><a class="headerlink" href="#tg-send" title="Permanent link">&para;</a></h2>
+<p>Send a text message</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-92-1"><a id="__codelineno-92-1" name="__codelineno-92-1" href="#__codelineno-92-1"></a>tg send &lt;chat&gt; &lt;text&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-93-1"><a id="__codelineno-93-1" name="__codelineno-93-1" href="#__codelineno-93-1"></a>tg<span class="w"> </span>send<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="s2">&quot;hello&quot;</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for send</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--no-webpage</code></td>
+<td>Disable link preview</td>
+</tr>
+<tr>
+<td><code>--reply-to int</code></td>
+<td>Reply-to message id</td>
+</tr>
+<tr>
+<td><code>--silent</code></td>
+<td>Send silently (no notification)</td>
+</tr>
+<tr>
+<td><code>--topic int</code></td>
+<td>Forum topic id</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-send-by-username"><code>tg send-by-username</code><a class="headerlink" href="#tg-send-by-username" title="Permanent link">&para;</a></h2>
+<p>Send a text message by resolving an @username (no entity cache required)</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-94-1"><a id="__codelineno-94-1" name="__codelineno-94-1" href="#__codelineno-94-1"></a>tg send-by-username &lt;@user|@channel&gt; &lt;text&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-95-1"><a id="__codelineno-95-1" name="__codelineno-95-1" href="#__codelineno-95-1"></a>tg<span class="w"> </span>send-by-username<span class="w"> </span>@username<span class="w"> </span><span class="s2">&quot;hello&quot;</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for send-by-username</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--no-webpage</code></td>
+<td>Disable link preview</td>
+</tr>
+<tr>
+<td><code>--reply-to int</code></td>
+<td>Reply-to message id</td>
+</tr>
+<tr>
+<td><code>--silent</code></td>
+<td>Send silently</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-set-permissions"><code>tg set-permissions</code><a class="headerlink" href="#tg-set-permissions" title="Permanent link">&para;</a></h2>
+<p>Set default chat permissions</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-96-1"><a id="__codelineno-96-1" name="__codelineno-96-1" href="#__codelineno-96-1"></a>tg set-permissions &lt;chat&gt; [permissions] [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-97-1"><a id="__codelineno-97-1" name="__codelineno-97-1" href="#__codelineno-97-1"></a>tg<span class="w"> </span>set-permissions<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span>--send-messages<span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for set-permissions</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--send-messages</code></td>
+<td>Allow sending messages</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-show"><code>tg show</code><a class="headerlink" href="#tg-show" title="Permanent link">&para;</a></h2>
+<p>Show recent cached messages in a chat</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-98-1"><a id="__codelineno-98-1" name="__codelineno-98-1" href="#__codelineno-98-1"></a>tg show &lt;chat&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-99-1"><a id="__codelineno-99-1" name="__codelineno-99-1" href="#__codelineno-99-1"></a>tg<span class="w"> </span>show<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">5</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for show</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--include-deleted</code></td>
+<td>Include tombstoned messages</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--limit int</code></td>
+<td>Max messages to return (default 20)</td>
+</tr>
+<tr>
+<td><code>--reverse</code></td>
+<td>Show oldest first</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-stats"><code>tg stats</code><a class="headerlink" href="#tg-stats" title="Permanent link">&para;</a></h2>
+<p>Show local cache statistics</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-100-1"><a id="__codelineno-100-1" name="__codelineno-100-1" href="#__codelineno-100-1"></a>tg stats [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-101-1"><a id="__codelineno-101-1" name="__codelineno-101-1" href="#__codelineno-101-1"></a>tg<span class="w"> </span>stats<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for stats</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-sync-contacts"><code>tg sync-contacts</code><a class="headerlink" href="#tg-sync-contacts" title="Permanent link">&para;</a></h2>
+<p>Sync Telegram contacts into the local DB</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-102-1"><a id="__codelineno-102-1" name="__codelineno-102-1" href="#__codelineno-102-1"></a>tg sync-contacts [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-103-1"><a id="__codelineno-103-1" name="__codelineno-103-1" href="#__codelineno-103-1"></a>tg<span class="w"> </span>sync-contacts<span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for local DB writes</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for sync-contacts</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-terminate-session"><code>tg terminate-session</code><a class="headerlink" href="#tg-terminate-session" title="Permanent link">&para;</a></h2>
+<p>Terminate one of your authorized Telegram sessions</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-104-1"><a id="__codelineno-104-1" name="__codelineno-104-1" href="#__codelineno-104-1"></a>tg terminate-session &lt;session-hash&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-105-1"><a id="__codelineno-105-1" name="__codelineno-105-1" href="#__codelineno-105-1"></a>tg<span class="w"> </span>terminate-session<span class="w"> </span>&lt;session-hash&gt;<span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span>&lt;session-hash&gt;<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for terminate-session</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-topic-create"><code>tg topic-create</code><a class="headerlink" href="#tg-topic-create" title="Permanent link">&para;</a></h2>
+<p>Create a forum topic</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-106-1"><a id="__codelineno-106-1" name="__codelineno-106-1" href="#__codelineno-106-1"></a>tg topic-create &lt;chat&gt; &lt;title&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-107-1"><a id="__codelineno-107-1" name="__codelineno-107-1" href="#__codelineno-107-1"></a>tg<span class="w"> </span>topic-create<span class="w"> </span>&lt;forum-chat-id&gt;<span class="w"> </span><span class="s2">&quot;Support&quot;</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for topic-create</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--icon-color int</code></td>
+<td>Topic icon color</td>
+</tr>
+<tr>
+<td><code>--icon-emoji-id int</code></td>
+<td>Topic icon custom emoji id</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-topic-edit"><code>tg topic-edit</code><a class="headerlink" href="#tg-topic-edit" title="Permanent link">&para;</a></h2>
+<p>Edit a forum topic</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-108-1"><a id="__codelineno-108-1" name="__codelineno-108-1" href="#__codelineno-108-1"></a>tg topic-edit &lt;chat&gt; &lt;topic-id&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-109-1"><a id="__codelineno-109-1" name="__codelineno-109-1" href="#__codelineno-109-1"></a>tg<span class="w"> </span>topic-edit<span class="w"> </span>&lt;forum-chat-id&gt;<span class="w"> </span><span class="m">1</span><span class="w"> </span>--title<span class="w"> </span><span class="s2">&quot;Renamed&quot;</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for topic-edit</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--icon-emoji-id int</code></td>
+<td>New icon custom emoji id</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--title string</code></td>
+<td>New topic title</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-topic-pin"><code>tg topic-pin</code><a class="headerlink" href="#tg-topic-pin" title="Permanent link">&para;</a></h2>
+<p>Pin a forum topic</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-110-1"><a id="__codelineno-110-1" name="__codelineno-110-1" href="#__codelineno-110-1"></a>tg topic-pin &lt;chat&gt; &lt;topic-id&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-111-1"><a id="__codelineno-111-1" name="__codelineno-111-1" href="#__codelineno-111-1"></a>tg<span class="w"> </span>topic-pin<span class="w"> </span>&lt;forum-chat-id&gt;<span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for topic-pin</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-topic-unpin"><code>tg topic-unpin</code><a class="headerlink" href="#tg-topic-unpin" title="Permanent link">&para;</a></h2>
+<p>Unpin a forum topic</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-112-1"><a id="__codelineno-112-1" name="__codelineno-112-1" href="#__codelineno-112-1"></a>tg topic-unpin &lt;chat&gt; &lt;topic-id&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-113-1"><a id="__codelineno-113-1" name="__codelineno-113-1" href="#__codelineno-113-1"></a>tg<span class="w"> </span>topic-unpin<span class="w"> </span>&lt;forum-chat-id&gt;<span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for topic-unpin</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-topics-list"><code>tg topics-list</code><a class="headerlink" href="#tg-topics-list" title="Permanent link">&para;</a></h2>
+<p>List forum topics</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-114-1"><a id="__codelineno-114-1" name="__codelineno-114-1" href="#__codelineno-114-1"></a>tg topics-list &lt;chat&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-115-1"><a id="__codelineno-115-1" name="__codelineno-115-1" href="#__codelineno-115-1"></a>tg<span class="w"> </span>topics-list<span class="w"> </span>&lt;forum-chat-id&gt;<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for topics-list</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--limit int</code></td>
+<td>Maximum topics (default 50)</td>
+</tr>
+<tr>
+<td><code>--query string</code></td>
+<td>Filter query</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-unban-from-chat"><code>tg unban-from-chat</code><a class="headerlink" href="#tg-unban-from-chat" title="Permanent link">&para;</a></h2>
+<p>unban-from-chat user in chat</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-116-1"><a id="__codelineno-116-1" name="__codelineno-116-1" href="#__codelineno-116-1"></a>tg unban-from-chat &lt;chat&gt; &lt;user-id&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-117-1"><a id="__codelineno-117-1" name="__codelineno-117-1" href="#__codelineno-117-1"></a>tg<span class="w"> </span>unban-from-chat<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for unban-from-chat</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-unblock-user"><code>tg unblock-user</code><a class="headerlink" href="#tg-unblock-user" title="Permanent link">&para;</a></h2>
+<p>Unblock a previously blocked user</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-118-1"><a id="__codelineno-118-1" name="__codelineno-118-1" href="#__codelineno-118-1"></a>tg unblock-user &lt;user&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-119-1"><a id="__codelineno-119-1" name="__codelineno-119-1" href="#__codelineno-119-1"></a>tg<span class="w"> </span>unblock-user<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for unblock-user</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-unpin-msg"><code>tg unpin-msg</code><a class="headerlink" href="#tg-unpin-msg" title="Permanent link">&para;</a></h2>
+<p>Unpin a previously pinned message</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-120-1"><a id="__codelineno-120-1" name="__codelineno-120-1" href="#__codelineno-120-1"></a>tg unpin-msg &lt;chat&gt; &lt;message-id&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-121-1"><a id="__codelineno-121-1" name="__codelineno-121-1" href="#__codelineno-121-1"></a>tg<span class="w"> </span>unpin-msg<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for unpin-msg</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--silent</code></td>
+<td>Pin silently (no notification)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-unread"><code>tg unread</code><a class="headerlink" href="#tg-unread" title="Permanent link">&para;</a></h2>
+<p>List recently cached incoming messages</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-122-1"><a id="__codelineno-122-1" name="__codelineno-122-1" href="#__codelineno-122-1"></a>tg unread [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-123-1"><a id="__codelineno-123-1" name="__codelineno-123-1" href="#__codelineno-123-1"></a>tg<span class="w"> </span>unread<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for unread</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--limit int</code></td>
+<td>Maximum messages (default 50)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-upload-document"><code>tg upload-document</code><a class="headerlink" href="#tg-upload-document" title="Permanent link">&para;</a></h2>
+<p>Upload a document</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-124-1"><a id="__codelineno-124-1" name="__codelineno-124-1" href="#__codelineno-124-1"></a>tg upload-document &lt;chat&gt; &lt;file&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-125-1"><a id="__codelineno-125-1" name="__codelineno-125-1" href="#__codelineno-125-1"></a>tg<span class="w"> </span>upload-document<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>./file.txt<span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--caption string</code></td>
+<td>Media caption</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--filename string</code></td>
+<td>Override uploaded filename</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for upload-document</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--max-size-mb int</code></td>
+<td>Maximum upload size in MiB (default 100)</td>
+</tr>
+<tr>
+<td><code>--reply-to int</code></td>
+<td>Reply-to message id</td>
+</tr>
+<tr>
+<td><code>--silent</code></td>
+<td>Send silently</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-upload-photo"><code>tg upload-photo</code><a class="headerlink" href="#tg-upload-photo" title="Permanent link">&para;</a></h2>
+<p>Upload a photo</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-126-1"><a id="__codelineno-126-1" name="__codelineno-126-1" href="#__codelineno-126-1"></a>tg upload-photo &lt;chat&gt; &lt;file&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-127-1"><a id="__codelineno-127-1" name="__codelineno-127-1" href="#__codelineno-127-1"></a>tg<span class="w"> </span>upload-photo<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>./photo.png<span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--caption string</code></td>
+<td>Media caption</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for upload-photo</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--max-size-mb int</code></td>
+<td>Maximum upload size in MiB (default 100)</td>
+</tr>
+<tr>
+<td><code>--reply-to int</code></td>
+<td>Reply-to message id</td>
+</tr>
+<tr>
+<td><code>--silent</code></td>
+<td>Send silently</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-upload-video"><code>tg upload-video</code><a class="headerlink" href="#tg-upload-video" title="Permanent link">&para;</a></h2>
+<p>Upload a video</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-128-1"><a id="__codelineno-128-1" name="__codelineno-128-1" href="#__codelineno-128-1"></a>tg upload-video &lt;chat&gt; &lt;file&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-129-1"><a id="__codelineno-129-1" name="__codelineno-129-1" href="#__codelineno-129-1"></a>tg<span class="w"> </span>upload-video<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>./video.mp4<span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--caption string</code></td>
+<td>Media caption</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for upload-video</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--max-size-mb int</code></td>
+<td>Maximum upload size in MiB (default 100)</td>
+</tr>
+<tr>
+<td><code>--reply-to int</code></td>
+<td>Reply-to message id</td>
+</tr>
+<tr>
+<td><code>--silent</code></td>
+<td>Send silently</td>
+</tr>
+<tr>
+<td><code>--supports-streaming</code></td>
+<td>Mark video as streamable</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-upload-voice"><code>tg upload-voice</code><a class="headerlink" href="#tg-upload-voice" title="Permanent link">&para;</a></h2>
+<p>Upload an OGG/Opus voice message</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-130-1"><a id="__codelineno-130-1" name="__codelineno-130-1" href="#__codelineno-130-1"></a>tg upload-voice &lt;chat&gt; &lt;file&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-131-1"><a id="__codelineno-131-1" name="__codelineno-131-1" href="#__codelineno-131-1"></a>tg<span class="w"> </span>upload-voice<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>./voice.ogg<span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--caption string</code></td>
+<td>Media caption</td>
+</tr>
+<tr>
+<td><code>--confirm string</code></td>
+<td>Typed confirm against the resolved id</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for upload-voice</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+<tr>
+<td><code>--max-size-mb int</code></td>
+<td>Maximum upload size in MiB (default 100)</td>
+</tr>
+<tr>
+<td><code>--reply-to int</code></td>
+<td>Reply-to message id</td>
+</tr>
+<tr>
+<td><code>--silent</code></td>
+<td>Send silently</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tg-version"><code>tg version</code><a class="headerlink" href="#tg-version" title="Permanent link">&para;</a></h2>
+<p>Print build version</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-132-1"><a id="__codelineno-132-1" name="__codelineno-132-1" href="#__codelineno-132-1"></a>tg version [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-133-1"><a id="__codelineno-133-1" name="__codelineno-133-1" href="#__codelineno-133-1"></a>tg<span class="w"> </span>version<span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for version</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      MIT licensed. Built on gotd/td.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/b1rd33/tgctl-go" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://pkg.go.dev/github.com/b1rd33/tgctl-go" target="_blank" rel="noopener" title="pkg.go.dev" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M400.1 194.8c-10.9 2.8-19.9 4.3-29.1 7.6-7.3 1.9-14.7 3.9-23.2 6.1l-.6.1c-4.2 1.2-4.6 1.3-8.5-3.2-4.7-5.3-8.1-8.7-14.6-11.9-19.7-9.6-38.7-6.8-56.4 4.7-21.2 13.7-32.1 34-31.8 59.2.3 25 17.4 45.5 41.2 48.9 22 2.8 39.8-4.6 53.8-20.5 2.1-2.6 4-5.3 6.1-8.3.8-1 1.5-2.1 2.3-3.3h-60.1c-6.5 0-8.1-4-5.9-9.3 4-9.7 11.5-25.9 15.9-34 .9-1.8 3.1-5.8 6.9-5.8h101.1c4.5-13.4 11.8-26.9 21.6-39.7 22.7-29.9 49.3-45.5 87.2-52 31.8-5.6 61.7-2.5 88.9 15.9 24.6 16.8 39.8 39.6 43.9 69.5 5.3 42.1-6.9 76.3-36.7 105.6-19.7 20.9-44.9 34-73.9 39.9-5.6 1-11.1 1.5-16.5 2-2.9.2-5.7.5-8.5.8-28.3-.6-54.2-8.7-76-27.4-15.3-13.3-25.9-29.6-31.1-48.5-3.7 7.3-8 14.4-14 21.1-21.6 29.6-50.9 48-87.9 52.9-30.6 4.1-58.9-1.8-83.9-20.5-23-17.5-36.1-40.5-39.5-69.2-4.1-34 5.9-65.4 26.4-91.3 22.2-29 51.5-47.4 87.3-53.9 29.3-6.2 57.3-1.9 82.6 15.3 16.5 10.9 28.3 25.8 36.1 43.9 1.9 2.8.6 4.4-3.1 5.3m-351.8 5.6c-1.3 0-1.6-.6-.9-1.6l6.6-8.4c.6-.9 2.2-1.5 3.4-1.5h111.3c1.2 0 1.5.9.9 1.8l-5.3 8.1c-.6 1-2.2 1.9-3.1 1.9l-112.8-.3zM1.2 229.1c-1.2 0-1.6-.7-.9-1.6l6.5-8.4c.6-.9 2.2-1.6 3.4-1.6h142.1c1.2 0 1.8 1 1.5 1.9l-2.5 7.5c-.3 1.2-1.5 1.9-2.8 1.9zm74.5 26.8c-.6.9-.3 1.8.9 1.8l68 .3c.9 0 2.2-.9 2.2-2.1l.6-7.5c0-1.3-.6-2.2-1.9-2.2H83.2c-1.2 0-2.5.9-3.1 1.9zm501.5-18c-.2-2.6-.3-4.8-.7-7-5.6-30.8-34-48.3-63.6-41.4-29 6.5-47.7 24.9-54.5 54.2-5.6 24.3 6.2 48.9 28.6 58.9 17.2 7.5 34.3 6.6 50.8-1.9 24.6-13.6 38-32.7 39.6-59.5-.1-1.2-.1-2.3-.2-3.3"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "search.highlight", "search.share", "search.suggest", "content.code.copy", "content.code.annotate", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
