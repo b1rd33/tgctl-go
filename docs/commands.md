@@ -43,6 +43,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg forward`](#tg-forward) | Forward one or more messages between chats |
 | [`tg get-msg`](#tg-get-msg) | Print one cached message in full |
 | [`tg help`](#tg-help) | Help provides help for any command in the application. |
+| [`tg import-telethon-session`](#tg-import-telethon-session) | Adopt a Python tgctl/Telethon session as the current Go account's session |
 | [`tg kick`](#tg-kick) | kick user in chat |
 | [`tg leave-chat`](#tg-leave-chat) | Leave a group or channel (typed confirm required) |
 | [`tg list-msgs`](#tg-list-msgs) | List cached messages in a chat with optional date filters |
@@ -1015,6 +1016,30 @@ tg help send
 |---|---|
 | `-h, --help` | help for help |
 
+## `tg import-telethon-session`
+
+Adopt a Python tgctl/Telethon session as the current Go account's session.
+
+**Use**
+
+```text
+tg import-telethon-session <path>
+```
+
+**Flags**
+
+Standard global flags only. No write gate (this is a local-file copy,
+not a Telegram-side write).
+
+**Example**
+
+```bash
+tg import-telethon-session ~/path/to/python/tgctl/accounts/default/tg.session
+```
+
+The auth_key is reused, so no SMS round-trip is needed. The
+destination is the current `--account`'s `tg.session` file.
+
 ## `tg kick`
 
 kick user in chat
@@ -1936,4 +1961,3 @@ tg version --json
 | `-h, --help` | help for version |
 | `--human` | Force human-readable output (default on a TTY) |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
-

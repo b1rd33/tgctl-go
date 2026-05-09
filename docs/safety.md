@@ -165,3 +165,34 @@ This is best-effort and never blocks the operation if it fails.
 | 7 | NEEDS_CONFIRM | Destructive op without `--confirm <id>` |
 | 8 | LOCAL_RATE_LIMIT | In-process rate limiter tripped |
 | 9 | PREMIUM_REQUIRED | Telegram requires Premium for this action |
+
+## Handling FloodWait
+
+Telegram limits how fast a user account can send messages. When you
+exceed the server-side budget, the API returns `FLOOD_WAIT_<seconds>`,
+which tgctl-go classifies as exit code 5 with a `retry_after_seconds`
+field in the error envelope:
+
+```json
+{"ok": false, "command": "send", "request_id": "req-abc",
+ "error": {"code": "FLOOD_WAIT", "message": "Telegram FloodWait: wait 30s",
+           "retry_after_seconds": 30}}
+```
+
+The local sliding-window rate limiter (20 writes per 60 seconds per
+process) is meant to keep you well below the server budget, but burst
+patterns, account age, and chat type all affect what Telegram
+considers acceptable.
+
+A safe agent loop:
+
+```bash
+out={"ok":false,"command":"send","request_id":"req-45fec014","error":{"code":"NOT_FOUND","message":"chat_id 1240314255 not in DB"}}
+if [ "" = "FLOOD_WAIT" ]; then
+  sleep ""
+  # retry with the same --idempotency-key
+fi
+```
+
+Pair this with `--idempotency-key` so the retry is safe even if the
+original request actually landed before the FloodWait fired.

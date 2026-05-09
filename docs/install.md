@@ -32,6 +32,24 @@ brew install b1rd33/tap/tgctl-go
 
 Homebrew tap publishing is configured for tagged releases.
 
+## Shell completion
+
+```bash
+# bash:
+tg completion bash | sudo tee /etc/bash_completion.d/tg
+
+# zsh (e.g. with ohmyzsh, $fpath dir):
+tg completion zsh > "${fpath[1]}/_tg"
+
+# fish:
+tg completion fish | source
+
+# PowerShell:
+tg completion powershell | Out-String | Invoke-Expression
+```
+
+Run `tg completion --help` for the supported shells.
+
 ## Set up API credentials
 
 Telegram requires you to register a personal app once. It's free and takes ~2 minutes:
@@ -42,6 +60,10 @@ Telegram requires you to register a personal app once. It's free and takes ~2 mi
 4. Copy the resulting `api_id` (an integer) and `api_hash` (32-char hex)
 
 Put them in a `.env` file in the directory where you'll run `tg`:
+
+The values labeled `api_id` and `api_hash` on
+[my.telegram.org/apps](https://my.telegram.org/apps) become `TG_API_ID`
+and `TG_API_HASH` in `.env`.
 
 ```bash
 cp .env.example .env
