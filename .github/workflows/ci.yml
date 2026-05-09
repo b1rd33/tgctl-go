@@ -43,3 +43,15 @@ jobs:
             echo "$out"
             exit 1
           fi
+
+  docs-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: install mkdocs
+        run: pip install mkdocs-material
+      - name: mkdocs build
+        run: mkdocs build --strict
