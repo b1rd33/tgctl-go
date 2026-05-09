@@ -66,10 +66,10 @@ func must(f func() (string, error)) string {
 
 // LoginOptions configures the login flow.
 type LoginOptions struct {
-	APIID    int
-	APIHash  string
-	Session  string
-	Prompt   AuthPrompt
+	APIID   int
+	APIHash string
+	Session string
+	Prompt  AuthPrompt
 }
 
 // Login runs an interactive auth flow that persists a session at
@@ -308,8 +308,8 @@ func (g *GotdClient) SendMessage(ctx context.Context, req SendMessageReq) (SendM
 		return SendMessageResp{}, err
 	}
 	r := &tg.MessagesSendMessageRequest{
-		Peer:    peer,
-		Message: req.Text,
+		Peer:     peer,
+		Message:  req.Text,
 		RandomID: randomID(),
 	}
 	if req.ReplyTo != 0 {
@@ -862,9 +862,42 @@ func (g *GotdClient) ListFolders(ctx context.Context) ([]FolderInfo, error) {
 }
 
 func (g *GotdClient) UpdateFolder(ctx context.Context, req FolderUpdateReq) error {
-	filter := &tg.DialogFilter{ID: int(req.ID), Title: tg.TextWithEntities{Text: req.Title}, Emoticon: req.Emoji}
-	_, err := g.api.MessagesUpdateDialogFilter(ctx, &tg.MessagesUpdateDialogFilterRequest{ID: int(req.ID), Filter: filter})
+	includePeers, err := g.inputPeersFromChatIDs(ctx, req.IncludeChatIDs)
+	if err != nil {
+		return err
+	}
+	excludePeers, err := g.inputPeersFromChatIDs(ctx, req.ExcludeChatIDs)
+	if err != nil {
+		return err
+	}
+	filter := folderFilterFromReq(req, includePeers, excludePeers)
+	_, err = g.api.MessagesUpdateDialogFilter(ctx, &tg.MessagesUpdateDialogFilterRequest{ID: int(req.ID), Filter: filter})
 	return mapRPCErr(err)
+}
+
+func (g *GotdClient) inputPeersFromChatIDs(ctx context.Context, ids []int64) ([]tg.InputPeerClass, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	peers := make([]tg.InputPeerClass, 0, len(ids))
+	for _, id := range ids {
+		peer, err := g.peerFromChatID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		peers = append(peers, peer)
+	}
+	return peers, nil
+}
+
+func folderFilterFromReq(req FolderUpdateReq, includePeers, excludePeers []tg.InputPeerClass) *tg.DialogFilter {
+	return &tg.DialogFilter{
+		ID:           int(req.ID),
+		Title:        tg.TextWithEntities{Text: req.Title},
+		Emoticon:     req.Emoji,
+		IncludePeers: includePeers,
+		ExcludePeers: excludePeers,
+	}
 }
 
 func (g *GotdClient) DeleteFolder(ctx context.Context, id int64) error {
@@ -1151,8 +1184,19 @@ func inviteLink(inv tg.ExportedChatInviteClass) string {
 func firstTopicID(updates tg.UpdatesClass) int64 {
 	if v, ok := updates.(*tg.Updates); ok {
 		for _, up := range v.Updates {
-			if t, ok := up.(*tg.UpdateChannel); ok {
-				return t.ChannelID
+			switch t := up.(type) {
+			case *tg.UpdateNewChannelMessage:
+				if svc, ok := t.Message.(*tg.MessageService); ok {
+					if _, ok := svc.Action.(*tg.MessageActionTopicCreate); ok {
+						return int64(svc.ID)
+					}
+				}
+			case *tg.UpdateNewMessage:
+				if svc, ok := t.Message.(*tg.MessageService); ok {
+					if _, ok := svc.Action.(*tg.MessageActionTopicCreate); ok {
+						return int64(svc.ID)
+					}
+				}
 			}
 		}
 	}

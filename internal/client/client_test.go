@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/b1rd33/tgctl-go/internal/safety"
+	"github.com/gotd/td/tg"
 )
 
 func TestEnsureCredentialsMissing(t *testing.T) {
@@ -66,5 +67,36 @@ func TestDisplayNameOrdering(t *testing.T) {
 			t.Errorf("DisplayName(%q,%q,%q,%d) = %q, want %q",
 				c.first, c.last, c.username, c.id, got, c.want)
 		}
+	}
+}
+
+func TestFirstTopicIDUsesTopicCreateServiceMessageID(t *testing.T) {
+	updates := &tg.Updates{Updates: []tg.UpdateClass{
+		&tg.UpdateChannel{ChannelID: 3957621025},
+		&tg.UpdateNewChannelMessage{Message: &tg.MessageService{
+			ID:     42,
+			Action: &tg.MessageActionTopicCreate{Title: "IE Germany - Status"},
+		}},
+	}}
+
+	if got := firstTopicID(updates); got != 42 {
+		t.Fatalf("firstTopicID = %d, want topic top message id 42", got)
+	}
+}
+
+func TestFolderFilterFromReqIncludesRequestedPeers(t *testing.T) {
+	include := []tg.InputPeerClass{&tg.InputPeerChannel{ChannelID: 10, AccessHash: 20}}
+	exclude := []tg.InputPeerClass{&tg.InputPeerUser{UserID: 30, AccessHash: 40}}
+
+	filter := folderFilterFromReq(FolderUpdateReq{ID: 7, Title: "IE DE", Emoji: "📦"}, include, exclude)
+
+	if filter.ID != 7 || filter.Title.Text != "IE DE" || filter.Emoticon != "📦" {
+		t.Fatalf("filter metadata = id:%d title:%q emoji:%q", filter.ID, filter.Title.Text, filter.Emoticon)
+	}
+	if len(filter.IncludePeers) != 1 || filter.IncludePeers[0] != include[0] {
+		t.Fatalf("IncludePeers = %#v, want requested include peer", filter.IncludePeers)
+	}
+	if len(filter.ExcludePeers) != 1 || filter.ExcludePeers[0] != exclude[0] {
+		t.Fatalf("ExcludePeers = %#v, want requested exclude peer", filter.ExcludePeers)
 	}
 }

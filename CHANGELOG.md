@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.1.1 — 2026-05-09
+
+### Fixed
+
+- `topic-create` now returns the created topic's id instead of the channel
+  id. Without this, `tg send <chat> --topic <id>` could not target the topic
+  produced by `topic-create`.
+- `folder-create` / `folder-edit` now persist `--include-chats` and
+  `--exclude-chats` into the Telegram-side `DialogFilter`. Folders were
+  being created empty.
+
+Both fixes verified live via `scripts/import_export_simulation.sh`.
+
 ## v0.1.0 — 2026-05-09
 
 Initial Go port of Python tgctl 1.0.1.
