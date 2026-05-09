@@ -10,3 +10,9 @@
 
 # Internal planning docs — kept on disk, not in releases
 /docs/superpowers/
+
+# Assistant tooling config — local only
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.cursor/
