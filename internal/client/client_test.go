@@ -6,6 +6,7 @@ import (
 
 	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/gotd/td/tg"
+	"github.com/gotd/td/tgerr"
 )
 
 func TestEnsureCredentialsMissing(t *testing.T) {
@@ -199,5 +200,29 @@ func TestMessagesFromHistoryRespCoversAllThreeShapes(t *testing.T) {
 		if len(got) != tc.want {
 			t.Errorf("%s: len = %d, want %d", tc.name, len(got), tc.want)
 		}
+	}
+}
+
+func TestMapRPCErrClassifiesFloodWait(t *testing.T) {
+	// gotd surfaces FloodWait as an *tgerr.Error with Type=FLOOD_WAIT and
+	// Argument=<seconds>. Construct one and verify mapRPCErr lands on
+	// *safety.FloodWait with the right seconds.
+	syntheticErr := tgerr.New(420, "FLOOD_WAIT_42")
+	out := mapRPCErr(syntheticErr)
+	var fw *safety.FloodWait
+	if !errors.As(out, &fw) {
+		t.Fatalf("got %T (%v), want *safety.FloodWait", out, out)
+	}
+	if fw.Seconds != 42 {
+		t.Fatalf("FloodWait.Seconds = %d, want 42", fw.Seconds)
+	}
+}
+
+func TestMapRPCErrClassifiesPremiumRequired(t *testing.T) {
+	syntheticErr := tgerr.New(403, "PREMIUM_ACCOUNT_REQUIRED")
+	out := mapRPCErr(syntheticErr)
+	var pr *safety.PremiumRequired
+	if !errors.As(out, &pr) {
+		t.Fatalf("got %T (%v), want *safety.PremiumRequired", out, out)
 	}
 }

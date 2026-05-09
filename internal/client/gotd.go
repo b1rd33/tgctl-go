@@ -13,6 +13,7 @@ import (
 	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/telegram/uploader"
 	"github.com/gotd/td/tg"
+	"github.com/gotd/td/tgerr"
 
 	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
@@ -1394,17 +1395,27 @@ func extractAllNewMessageIDs(u tg.UpdatesClass) []int64 {
 }
 
 // mapRPCErr classifies a gotd RPC error into the dispatch error taxonomy.
+//
+// gotd's error string format changed: FLOOD_WAIT now surfaces as
+// "rpc error code 420: FLOOD_WAIT (5)" — note the "(5)" arg form, not the
+// "FLOOD_WAIT_5" underscore form previous string-matching assumed. Use
+// gotd's typed accessors so we don't have to track that format.
 func mapRPCErr(err error) error {
 	if err == nil {
 		return nil
 	}
-	msg := err.Error()
-	switch {
-	case strings.Contains(msg, "FLOOD_WAIT_"):
-		// gotd surfaces FloodWait as *tgerr.Error with code 420.
-		return &safety.FloodWait{Seconds: extractFloodSeconds(msg)}
-	case strings.Contains(msg, "PREMIUM_ACCOUNT_REQUIRED"):
-		return &safety.PremiumRequired{}
+	if d, ok := tgerr.AsFloodWait(err); ok {
+		secs := int(d / time.Second)
+		if secs == 0 && d > 0 {
+			secs = 1
+		}
+		return &safety.FloodWait{Seconds: secs}
+	}
+	if rpcErr, ok := tgerr.As(err); ok {
+		switch rpcErr.Type {
+		case "PREMIUM_ACCOUNT_REQUIRED":
+			return &safety.PremiumRequired{}
+		}
 	}
 	return err
 }
@@ -1413,25 +1424,11 @@ func mapAuthErr(err error) error {
 	if err == nil {
 		return nil
 	}
-	if strings.Contains(err.Error(), "PHONE_") || strings.Contains(err.Error(), "AUTH_") {
-		return safety.NewMissingCredentials(err.Error())
+	if rpcErr, ok := tgerr.As(err); ok {
+		// PHONE_* and AUTH_* are user-input failures during the login flow.
+		if strings.HasPrefix(rpcErr.Type, "PHONE_") || strings.HasPrefix(rpcErr.Type, "AUTH_") {
+			return safety.NewMissingCredentials(err.Error())
+		}
 	}
 	return err
-}
-
-func extractFloodSeconds(msg string) int {
-	idx := strings.LastIndex(msg, "FLOOD_WAIT_")
-	if idx < 0 {
-		return 0
-	}
-	rest := msg[idx+len("FLOOD_WAIT_"):]
-	end := 0
-	for end < len(rest) && rest[end] >= '0' && rest[end] <= '9' {
-		end++
-	}
-	n := 0
-	for i := 0; i < end; i++ {
-		n = n*10 + int(rest[i]-'0')
-	}
-	return n
 }
