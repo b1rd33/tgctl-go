@@ -321,10 +321,18 @@ func (f *FakeClient) ListenOnce(_ context.Context) (ListenEvent, error) {
 		return ListenEvent{}, err
 	}
 	f.ListenCalls = append(f.ListenCalls, true)
+	// Pop one event per call so tests that simulate a stream of distinct
+	// events (mixed DMs and group messages, sequencing, filters) work.
+	// When the pre-loaded queue is exhausted, return the last event so
+	// looping tests don't deadlock.
 	if len(f.ListenEvents) == 0 {
 		return ListenEvent{UpdateKind: "idle"}, nil
 	}
-	return f.ListenEvents[0], nil
+	event := f.ListenEvents[0]
+	if len(f.ListenEvents) > 1 {
+		f.ListenEvents = f.ListenEvents[1:]
+	}
+	return event, nil
 }
 
 func (f *FakeClient) Close() error {

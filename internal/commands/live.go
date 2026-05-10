@@ -20,6 +20,8 @@ func registerLiveCommands(root *cobra.Command, cfg CommandsConfig) {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			once, _ := cmd.Flags().GetBool("once")
+			onlyDMs, _ := cmd.Flags().GetBool("only-dms")
+			onlyGroups, _ := cmd.Flags().GetBool("only-groups")
 			dbPath, sessionPath, auditPath := resolveWritePaths(cmd, cfg.Paths)
 			code := dispatch.Run("listen", dispatch.Options{
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: auditPath,
@@ -32,24 +34,33 @@ func registerLiveCommands(root *cobra.Command, cfg CommandsConfig) {
 					return nil, err
 				}
 				defer c.Close()
-				if once {
-					event, err := c.ListenOnce(ctx)
-					if err != nil {
-						return nil, err
-					}
+				emit := func(event client.ListenEvent) {
 					_ = cacheListenEvent(dbPath, event)
 					env := output.Success("listen.event", event, output.NewRequestID(), nil)
 					output.Emit(env, output.EmitOptions{JSON: true, Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr()})
-					return map[string]any{"events": 1}, nil
+				}
+				if once {
+					for {
+						event, err := c.ListenOnce(ctx)
+						if err != nil {
+							return nil, err
+						}
+						if !shouldEmitListenEvent(event, onlyDMs, onlyGroups) {
+							continue
+						}
+						emit(event)
+						return map[string]any{"events": 1}, nil
+					}
 				}
 				for {
 					event, err := c.ListenOnce(ctx)
 					if err != nil {
 						return nil, err
 					}
-					_ = cacheListenEvent(dbPath, event)
-					env := output.Success("listen.event", event, output.NewRequestID(), nil)
-					output.Emit(env, output.EmitOptions{JSON: true, Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr()})
+					if !shouldEmitListenEvent(event, onlyDMs, onlyGroups) {
+						continue
+					}
+					emit(event)
 					time.Sleep(100 * time.Millisecond)
 				}
 			})
@@ -57,9 +68,41 @@ func registerLiveCommands(root *cobra.Command, cfg CommandsConfig) {
 			return nil
 		},
 	}
-	cmd.Flags().Bool("once", false, "Exit after one update")
+	cmd.Flags().Bool("once", false, "Exit after one filter-matching update")
+	cmd.Flags().Bool("only-dms", false, "Emit only 1-on-1 user messages; skip groups/channels")
+	cmd.Flags().Bool("only-groups", false, "Emit only group/channel messages; skip 1-on-1 DMs")
+	cmd.MarkFlagsMutuallyExclusive("only-dms", "only-groups")
 	addLocalWriteFlags(cmd)
 	root.AddCommand(cmd)
+}
+
+// shouldEmitListenEvent decides whether a listen event passes the user's
+// --only-dms / --only-groups filters.
+//
+// Telegram routes incoming chat events through two update_kinds:
+//   - "new_message"     : DMs (chat_id == positive user_id) AND basic
+//                         groups (chat_id < 0). Basic groups are rare in
+//                         modern Telegram; almost every group is a supergroup.
+//   - "channel_message" : channels and supergroups (chat_id always positive,
+//                         the channel's id space).
+//
+// A 1-on-1 DM is uniquely identified by update_kind == "new_message" AND
+// chat_id > 0. Anything else with a chat target is a group/channel/supergroup.
+//
+// Events without a chat target (status changes, etc.) have ChatID == 0; they
+// always pass through regardless of filter so callers can still observe them.
+func shouldEmitListenEvent(event client.ListenEvent, onlyDMs, onlyGroups bool) bool {
+	if !onlyDMs && !onlyGroups {
+		return true
+	}
+	if event.ChatID == 0 {
+		return true
+	}
+	isDM := event.UpdateKind == "new_message" && event.ChatID > 0
+	if onlyDMs {
+		return isDM
+	}
+	return !isDM
 }
 
 func cacheListenEvent(dbPath string, event client.ListenEvent) error {
