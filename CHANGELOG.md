@@ -1,6 +1,23 @@
 # Changelog
 
-## v0.1.1 — 2026-05-09
+## v0.1.3 — 2026-05-10
+
+### Fixed
+
+- `backfill` now paginates correctly. Previously it called
+  `messages.GetHistory` exactly once with the user's `--max-messages` as
+  the per-call limit, but Telegram caps that endpoint at 100 per call —
+  so `--max-messages 1000` only returned 100 in practice.
+  `BackfillMessages` now loops via `OffsetID` until the requested cap is
+  reached or history runs out.
+- FloodWait errors are now classified as exit code 5 (`FLOOD_WAIT`) with
+  a `retry_after_seconds` field. Previously they fell through as exit 1
+  (`GENERIC`) because the string-matcher looked for `FLOOD_WAIT_<n>`
+  while gotd surfaces the typed error as `FLOOD_WAIT (n)`. Switched to
+  `tgerr.AsFloodWait` for proper extraction. Same for
+  `PREMIUM_ACCOUNT_REQUIRED` and `PHONE_*` / `AUTH_*` in `mapAuthErr`.
+
+## v0.1.2 — 2026-05-09
 
 ### Fixed
 
