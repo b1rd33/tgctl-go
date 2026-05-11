@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.4 — 2026-05-11
+
+### Added
+
+- `tg listen --only-dms` emits only 1-on-1 user messages, skipping
+  group and channel chatter. Useful for noise-free DM monitoring on
+  accounts that are members of many busy groups.
+- `tg listen --only-groups` is the inverse — group and channel events
+  only. Mutually exclusive with `--only-dms`. Status / edit / delete
+  updates without a chat target always pass through regardless of
+  filter.
+
 ## v0.1.3 — 2026-05-10
 
 ### Fixed
