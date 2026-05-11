@@ -81,10 +81,10 @@ func registerLiveCommands(root *cobra.Command, cfg CommandsConfig) {
 //
 // Telegram routes incoming chat events through two update_kinds:
 //   - "new_message"     : DMs (chat_id == positive user_id) AND basic
-//                         groups (chat_id < 0). Basic groups are rare in
-//                         modern Telegram; almost every group is a supergroup.
+//     groups (chat_id < 0). Basic groups are rare in
+//     modern Telegram; almost every group is a supergroup.
 //   - "channel_message" : channels and supergroups (chat_id always positive,
-//                         the channel's id space).
+//     the channel's id space).
 //
 // A 1-on-1 DM is uniquely identified by update_kind == "new_message" AND
 // chat_id > 0. Anything else with a chat target is a group/channel/supergroup.
