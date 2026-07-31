@@ -26,10 +26,7 @@ func registerSendByUsername(root *cobra.Command, mgr *accounts.Manager) {
 			selector := args[0]
 			text := args[1]
 			rootCfg := RootConfigFrom(cmd.Root())
-			account := rootCfg.Account
-			if account == "" {
-				account = mgr.Current()
-			}
+			account := selectedAccount(cmd, mgr)
 			paths, err := mgr.ResolvePaths(account)
 			if err != nil {
 				return emitDispatchedFailure(cmd, "send-by-username", err)

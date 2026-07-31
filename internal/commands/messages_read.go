@@ -257,7 +257,7 @@ type readPaths struct {
 	db, audit string
 }
 
-func registerReadCommands(root *cobra.Command, paths AuthPathProvider) {
+func registerReadCommands(root *cobra.Command, paths AccountPathProvider) {
 	root.AddCommand(showCommand(paths))
 	root.AddCommand(searchCommand(paths))
 	root.AddCommand(listMsgsCommand(paths))
@@ -265,17 +265,13 @@ func registerReadCommands(root *cobra.Command, paths AuthPathProvider) {
 	registerExtraReadCommands(root, paths)
 }
 
-func resolvePaths(cmd *cobra.Command, paths AuthPathProvider) readPaths {
-	cfg := RootConfigFrom(cmd.Root())
-	account := cfg.Account
-	if account == "" {
-		account = "default"
-	}
+func resolvePaths(cmd *cobra.Command, paths AccountPathProvider) readPaths {
+	account := selectedAccount(cmd, paths)
 	db, _, audit := paths.AccountPaths(account)
 	return readPaths{db: db, audit: audit}
 }
 
-func runDispatchedRead(cmd *cobra.Command, name string, args map[string]any, paths AuthPathProvider, runner func(ctx context.Context, p readPaths) (any, error)) error {
+func runDispatchedRead(cmd *cobra.Command, name string, args map[string]any, paths AccountPathProvider, runner func(ctx context.Context, p readPaths) (any, error)) error {
 	p := resolvePaths(cmd, paths)
 	code := dispatch.Run(name, dispatch.Options{
 		JSON:      jsonMode(cmd),
@@ -290,7 +286,7 @@ func runDispatchedRead(cmd *cobra.Command, name string, args map[string]any, pat
 	return nil
 }
 
-func showCommand(paths AuthPathProvider) *cobra.Command {
+func showCommand(paths AccountPathProvider) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "show <chat>",
 		Short:        "Show recent cached messages in a chat",
@@ -315,7 +311,7 @@ func showCommand(paths AuthPathProvider) *cobra.Command {
 	return cmd
 }
 
-func searchCommand(paths AuthPathProvider) *cobra.Command {
+func searchCommand(paths AccountPathProvider) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "search <chat> <query>",
 		Short:        "Search cached messages in a chat",
@@ -340,7 +336,7 @@ func searchCommand(paths AuthPathProvider) *cobra.Command {
 	return cmd
 }
 
-func listMsgsCommand(paths AuthPathProvider) *cobra.Command {
+func listMsgsCommand(paths AccountPathProvider) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "list-msgs <chat>",
 		Short:        "List cached messages in a chat with optional date filters",
@@ -369,7 +365,7 @@ func listMsgsCommand(paths AuthPathProvider) *cobra.Command {
 	return cmd
 }
 
-func getMsgCommand(paths AuthPathProvider) *cobra.Command {
+func getMsgCommand(paths AccountPathProvider) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "get-msg <chat> <message-id>",
 		Short:        "Print one cached message in full",

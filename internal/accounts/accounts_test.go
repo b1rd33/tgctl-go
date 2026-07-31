@@ -121,6 +121,22 @@ func TestResolvePathsCreatesAccountDir(t *testing.T) {
 	}
 }
 
+func TestPathsDoesNotCreateAccountDir(t *testing.T) {
+	dir := t.TempDir()
+	m := New(dir)
+	p, err := m.Paths("alice")
+	if err != nil {
+		t.Fatalf("Paths: %v", err)
+	}
+	wantDir := filepath.Join(dir, "accounts", "alice")
+	if p.AccountDir != wantDir {
+		t.Fatalf("AccountDir = %q, want %q", p.AccountDir, wantDir)
+	}
+	if _, err := os.Stat(wantDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Paths created account directory; Stat err = %v", err)
+	}
+}
+
 func TestMigrationMovesRootLevelFiles(t *testing.T) {
 	dir := t.TempDir()
 	// Seed root-level files.

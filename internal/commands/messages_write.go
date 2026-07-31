@@ -25,7 +25,7 @@ type ClientFactory func(ctx context.Context, sessionPath, dbPath string) (client
 
 // CommandsConfig bundles dependencies the command tree needs.
 type CommandsConfig struct {
-	Paths         AuthPathProvider
+	Paths         AccountPathProvider
 	ClientFactory ClientFactory
 }
 
@@ -99,12 +99,8 @@ func registerWriteCommands(root *cobra.Command, cfg CommandsConfig) {
 	root.AddCommand(markReadCommand(cfg))
 }
 
-func resolveWritePaths(cmd *cobra.Command, paths AuthPathProvider) (string, string, string) {
-	rootCfg := RootConfigFrom(cmd.Root())
-	account := rootCfg.Account
-	if account == "" {
-		account = "default"
-	}
+func resolveWritePaths(cmd *cobra.Command, paths AccountPathProvider) (string, string, string) {
+	account := selectedAccount(cmd, paths)
 	return paths.AccountPaths(account)
 }
 

@@ -9,13 +9,13 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
-func registerExtraReadCommands(root *cobra.Command, paths AuthPathProvider) {
+func registerExtraReadCommands(root *cobra.Command, paths AccountPathProvider) {
 	root.AddCommand(statsCommand(paths))
 	root.AddCommand(contactsCommand(paths))
 	root.AddCommand(unreadCommand(paths))
 }
 
-func statsCommand(paths AuthPathProvider) *cobra.Command {
+func statsCommand(paths AccountPathProvider) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "stats",
 		Short:        "Show local cache statistics",
@@ -39,7 +39,7 @@ func statsCommand(paths AuthPathProvider) *cobra.Command {
 	return cmd
 }
 
-func contactsCommand(paths AuthPathProvider) *cobra.Command {
+func contactsCommand(paths AccountPathProvider) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "contacts",
 		Short:        "List cached contacts",
@@ -78,7 +78,7 @@ func contactsCommand(paths AuthPathProvider) *cobra.Command {
 	return cmd
 }
 
-func unreadCommand(paths AuthPathProvider) *cobra.Command {
+func unreadCommand(paths AccountPathProvider) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "unread",
 		Short:        "List recently cached incoming messages",

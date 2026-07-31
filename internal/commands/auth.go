@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -117,18 +118,14 @@ func meHumanFormatter(stdout interface{ Write([]byte) (int, error) }) func(any) 
 	}
 }
 
-func registerAuth(root *cobra.Command, paths AuthPathProvider) {
+func registerAuth(root *cobra.Command, paths AccountPathProvider) {
 	me := &cobra.Command{
 		Use:          "me",
 		Short:        "Print authenticated user info",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			offline, _ := cmd.Flags().GetBool("offline")
-			cfg := RootConfigFrom(cmd.Root())
-			account := cfg.Account
-			if account == "" {
-				account = "default"
-			}
+			account := selectedAccount(cmd, paths)
 			dbPath, sessionPath, auditPath := paths.AccountPaths(account)
 			code := dispatch.Run("me", dispatch.Options{
 				JSON:           jsonMode(cmd),
@@ -152,8 +149,24 @@ func registerAuth(root *cobra.Command, paths AuthPathProvider) {
 	root.AddCommand(me)
 }
 
-// AuthPathProvider lets tests inject account paths without depending on the
-// real filesystem layout. Phase 15 will provide the production implementation.
-type AuthPathProvider interface {
+// AccountPathProvider lets tests inject account paths and account selection
+// without depending on the real filesystem layout.
+type AccountPathProvider interface {
 	AccountPaths(account string) (db, session, audit string)
+	Current() string
+}
+
+// selectedAccount is the single command-layer precedence policy for account
+// selection: explicit flag, environment, persisted current account, default.
+func selectedAccount(cmd *cobra.Command, paths AccountPathProvider) string {
+	if account := RootConfigFrom(cmd.Root()).Account; account != "" {
+		return account
+	}
+	if account := os.Getenv("TG_ACCOUNT"); account != "" {
+		return account
+	}
+	if account := paths.Current(); account != "" {
+		return account
+	}
+	return "default"
 }

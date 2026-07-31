@@ -22,12 +22,13 @@ func registerDoctor(root *cobra.Command, m *accounts.Manager) {
 		Short:        "Diagnose tgctl-go setup",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			account := selectedAccount(cmd, m)
 			code := dispatch.Run("doctor", dispatch.Options{
 				JSON:   jsonMode(cmd),
 				Stdout: cmd.OutOrStdout(),
 				Stderr: cmd.ErrOrStderr(),
 			}, func(_ context.Context) (any, error) {
-				return doctorReport(m), nil
+				return doctorReport(m, account), nil
 			})
 			storeExitCode(cmd, code)
 			return nil
@@ -37,13 +38,12 @@ func registerDoctor(root *cobra.Command, m *accounts.Manager) {
 	root.AddCommand(cmd)
 }
 
-func doctorReport(m *accounts.Manager) map[string]any {
+func doctorReport(m *accounts.Manager, currentName string) map[string]any {
 	credsErr := ""
 	if _, _, err := client.EnsureCredentials(); err != nil {
 		credsErr = err.Error()
 	}
-	currentName := m.Current()
-	paths, _ := m.ResolvePaths(currentName)
+	paths, _ := m.Paths(currentName)
 
 	dbExists := false
 	dbSchemaOK := false

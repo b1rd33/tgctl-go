@@ -26,11 +26,7 @@ func registerBackfillEntities(root *cobra.Command, mgr *accounts.Manager) {
 		Short:        "Populate the local entity cache so chat_id-keyed sends work",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			rootCfg := RootConfigFrom(cmd.Root())
-			account := rootCfg.Account
-			if account == "" {
-				account = mgr.Current()
-			}
+			account := selectedAccount(cmd, mgr)
 			paths, err := mgr.ResolvePaths(account)
 			if err != nil {
 				return emitDispatchedFailure(cmd, "backfill-entities", err)

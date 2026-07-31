@@ -14,10 +14,18 @@ import (
 
 type stubPaths struct {
 	db, session, audit string
+	current            string
 }
 
 func (s stubPaths) AccountPaths(string) (string, string, string) {
 	return s.db, s.session, s.audit
+}
+
+func (s stubPaths) Current() string {
+	if s.current == "" {
+		return "default"
+	}
+	return s.current
 }
 
 func setupCacheDB(t *testing.T) (string, string) {

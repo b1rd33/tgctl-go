@@ -158,10 +158,9 @@ type Paths struct {
 	MediaDir    string
 }
 
-// ResolvePaths returns the per-account paths, creating the directory tree
-// when necessary.
-func (m *Manager) ResolvePaths(name string) (Paths, error) {
-	d, err := m.AccountDir(name, true)
+// Paths returns the per-account paths without creating the account directory.
+func (m *Manager) Paths(name string) (Paths, error) {
+	d, err := m.AccountDir(name, false)
 	if err != nil {
 		return Paths{}, err
 	}
@@ -174,7 +173,16 @@ func (m *Manager) ResolvePaths(name string) (Paths, error) {
 	}, nil
 }
 
-// AccountPaths satisfies the AuthPathProvider contract used by the commands
+// ResolvePaths returns the per-account paths, creating the directory tree
+// when necessary.
+func (m *Manager) ResolvePaths(name string) (Paths, error) {
+	if _, err := m.AccountDir(name, true); err != nil {
+		return Paths{}, err
+	}
+	return m.Paths(name)
+}
+
+// AccountPaths satisfies the AccountPathProvider contract used by the commands
 // package: returns (db, session, audit) tuple.
 func (m *Manager) AccountPaths(name string) (string, string, string) {
 	p, _ := m.ResolvePaths(name)
