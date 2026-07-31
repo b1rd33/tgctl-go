@@ -143,6 +143,11 @@ type BackfillReq struct {
 	Throttle time.Duration
 }
 
+// MaxBackfillMessages bounds one command's in-memory history result. Telegram
+// pages are still fetched in batches of 100, but the aggregate is retained
+// until the command writes it to SQLite.
+const MaxBackfillMessages = 10_000
+
 type BackfillMessage struct {
 	ChatID       int64
 	MessageID    int64

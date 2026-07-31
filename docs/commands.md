@@ -247,9 +247,9 @@ tg backfill 1240314255 --max-messages 100 --allow-write --json
 | `-h, --help` | help for backfill |
 | `--human` | Force human-readable output (default on a TTY) |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
-| `--max-db-size-mb int` | Maximum database size in MiB |
-| `--max-messages int` | Maximum cached messages per chat (default 100) |
-| `--throttle-seconds float` | Seconds to sleep between chats |
+| `--max-db-size-mb int` | Maximum main database plus WAL allocation in MiB (0 disables the cap) |
+| `--max-messages int` | Maximum cached messages per chat (maximum 10000) (default 100) |
+| `--throttle-seconds float` | Seconds to sleep between Telegram history pages |
 
 ## `tg backfill-entities`
 

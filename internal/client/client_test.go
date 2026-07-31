@@ -306,19 +306,25 @@ func historyMessages(highID, count int) []tg.MessageClass {
 }
 
 func TestBackfillThrottleSleepsOnceBetweenTwoFullPages(t *testing.T) {
-	pages := [][]tg.MessageClass{historyMessages(200, 100), historyMessages(100, 100)}
+	pages := []historyPage{
+		{Messages: historyMessages(200, 100), Total: 200, TotalKnown: true},
+		{Messages: historyMessages(100, 100), Total: 200, TotalKnown: true},
+	}
 	type request struct{ offsetID, limit int }
 	var requests []request
 	var sleeps []time.Duration
 
 	rows, err := paginateHistory(context.Background(), 42, 200, 250*time.Millisecond,
-		func(_ context.Context, offsetID, limit int) ([]tg.MessageClass, error) {
+		func(_ context.Context, offsetID, limit int) (historyPage, error) {
 			requests = append(requests, request{offsetID, limit})
 			page := pages[0]
 			pages = pages[1:]
 			return page, nil
 		},
-		func(d time.Duration) { sleeps = append(sleeps, d) },
+		func(_ context.Context, d time.Duration) error {
+			sleeps = append(sleeps, d)
+			return nil
+		},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -335,27 +341,48 @@ func TestBackfillThrottleSleepsOnceBetweenTwoFullPages(t *testing.T) {
 	}
 }
 
-func TestBackfillThrottleDoesNotSleepForOnePageOrDisabledThrottle(t *testing.T) {
+func TestBackfillThrottleDoesNotSleepAfterExactFullFinalPage(t *testing.T) {
+	calls := 0
+	sleeps := 0
+	rows, err := paginateHistory(context.Background(), 42, 200, time.Second,
+		func(_ context.Context, _, limit int) (historyPage, error) {
+			calls++
+			if limit != 100 {
+				t.Fatalf("limit=%d, want 100", limit)
+			}
+			return historyPage{Messages: historyMessages(100, 100), Total: 100, TotalKnown: true}, nil
+		},
+		func(context.Context, time.Duration) error { sleeps++; return nil },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 100 || calls != 1 || sleeps != 0 {
+		t.Fatalf("rows=%d calls=%d sleeps=%d, want 100/1/0", len(rows), calls, sleeps)
+	}
+}
+
+func TestBackfillThrottleDoesNotWaitForOnePageOrDisabledThrottle(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		limit    int
 		throttle time.Duration
-		pages    [][]tg.MessageClass
+		pages    []historyPage
 	}{
-		{name: "one page", limit: 50, throttle: time.Second, pages: [][]tg.MessageClass{historyMessages(50, 50)}},
-		{name: "zero", limit: 200, pages: [][]tg.MessageClass{historyMessages(200, 100), historyMessages(100, 100)}},
-		{name: "negative", limit: 200, throttle: -time.Second, pages: [][]tg.MessageClass{historyMessages(200, 100), historyMessages(100, 100)}},
+		{name: "one page", limit: 50, throttle: time.Second, pages: []historyPage{{Messages: historyMessages(50, 50), Total: 50, TotalKnown: true}}},
+		{name: "zero", limit: 200, pages: []historyPage{{Messages: historyMessages(200, 100), Total: 200, TotalKnown: true}, {Messages: historyMessages(100, 100), Total: 200, TotalKnown: true}}},
+		{name: "negative", limit: 200, throttle: -time.Second, pages: []historyPage{{Messages: historyMessages(200, 100), Total: 200, TotalKnown: true}, {Messages: historyMessages(100, 100), Total: 200, TotalKnown: true}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			calls := 0
 			sleeps := 0
 			_, err := paginateHistory(context.Background(), 42, tc.limit, tc.throttle,
-				func(_ context.Context, _, _ int) ([]tg.MessageClass, error) {
+				func(_ context.Context, _, _ int) (historyPage, error) {
 					page := tc.pages[calls]
 					calls++
 					return page, nil
 				},
-				func(time.Duration) { sleeps++ },
+				func(context.Context, time.Duration) error { sleeps++; return nil },
 			)
 			if err != nil {
 				t.Fatal(err)
@@ -371,17 +398,21 @@ func TestBackfillThrottleDoesNotSleepForOnePageOrDisabledThrottle(t *testing.T) 
 }
 
 func TestBackfillPaginationFinalPartialPage(t *testing.T) {
-	pages := [][]tg.MessageClass{historyMessages(225, 100), historyMessages(125, 100), historyMessages(25, 25)}
+	pages := []historyPage{
+		{Messages: historyMessages(225, 100), Total: 225, TotalKnown: true},
+		{Messages: historyMessages(125, 100), Total: 225, TotalKnown: true},
+		{Messages: historyMessages(25, 25), Total: 225, TotalKnown: true},
+	}
 	var limits []int
 	var sleeps []time.Duration
 	rows, err := paginateHistory(context.Background(), 42, 250, time.Second,
-		func(_ context.Context, _ int, limit int) ([]tg.MessageClass, error) {
+		func(_ context.Context, _ int, limit int) (historyPage, error) {
 			limits = append(limits, limit)
 			page := pages[0]
 			pages = pages[1:]
 			return page, nil
 		},
-		func(d time.Duration) { sleeps = append(sleeps, d) },
+		func(_ context.Context, d time.Duration) error { sleeps = append(sleeps, d); return nil },
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -398,16 +429,16 @@ func TestBackfillPaginationFinalPartialPage(t *testing.T) {
 }
 
 func TestBackfillPaginationStopsOnEmptyPage(t *testing.T) {
-	pages := [][]tg.MessageClass{historyMessages(100, 100), {}}
+	pages := []historyPage{{Messages: historyMessages(100, 100)}, {}}
 	var limits []int
 	rows, err := paginateHistory(context.Background(), 42, 250, 0,
-		func(_ context.Context, _ int, limit int) ([]tg.MessageClass, error) {
+		func(_ context.Context, _ int, limit int) (historyPage, error) {
 			limits = append(limits, limit)
 			page := pages[0]
 			pages = pages[1:]
 			return page, nil
 		},
-		func(time.Duration) { t.Fatal("unexpected sleep") },
+		func(context.Context, time.Duration) error { t.Fatal("unexpected wait"); return nil },
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -417,6 +448,79 @@ func TestBackfillPaginationStopsOnEmptyPage(t *testing.T) {
 	}
 	if !reflect.DeepEqual(limits, []int{100, 100}) {
 		t.Fatalf("limits=%v, want [100 100]", limits)
+	}
+}
+
+func TestBackfillThrottleCancellationReturnsPromptly(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	calls := 0
+	started := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		_, err := paginateHistory(ctx, 42, 200, time.Hour,
+			func(_ context.Context, _, _ int) (historyPage, error) {
+				calls++
+				return historyPage{Messages: historyMessages(200, 100), Total: 200, TotalKnown: true}, nil
+			},
+			func(ctx context.Context, d time.Duration) error {
+				close(started)
+				return waitForThrottle(ctx, d)
+			},
+		)
+		done <- err
+	}()
+	<-started
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("err=%v, want context.Canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("pagination did not return promptly after cancellation")
+	}
+	if calls != 1 {
+		t.Fatalf("fetch calls=%d, want 1", calls)
+	}
+}
+
+func TestBackfillPaginationRejectsUnboundedLimitBeforeFetch(t *testing.T) {
+	fetches := 0
+	rows, err := paginateHistory(context.Background(), 42, MaxBackfillMessages+1, 0,
+		func(context.Context, int, int) (historyPage, error) {
+			fetches++
+			return historyPage{}, nil
+		},
+		waitForThrottle,
+	)
+	var badArgs *safety.BadArgs
+	if !errors.As(err, &badArgs) {
+		t.Fatalf("err=%v, want *safety.BadArgs", err)
+	}
+	if len(rows) != 0 || fetches != 0 {
+		t.Fatalf("rows=%d fetches=%d, want 0/0", len(rows), fetches)
+	}
+}
+
+func TestHistoryPageFromRespCarriesKnownTotals(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		resp       tg.MessagesMessagesClass
+		wantTotal  int
+		wantKnown  bool
+		wantLength int
+	}{
+		{name: "full", resp: &tg.MessagesMessages{Messages: historyMessages(2, 2)}, wantTotal: 2, wantKnown: true, wantLength: 2},
+		{name: "slice", resp: &tg.MessagesMessagesSlice{Count: 123, Messages: historyMessages(2, 2)}, wantTotal: 123, wantKnown: true, wantLength: 2},
+		{name: "channel", resp: &tg.MessagesChannelMessages{Count: 456, Messages: historyMessages(2, 2)}, wantTotal: 456, wantKnown: true, wantLength: 2},
+		{name: "not modified", resp: &tg.MessagesMessagesNotModified{}, wantLength: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			page := historyPageFromResp(tc.resp)
+			if page.Total != tc.wantTotal || page.TotalKnown != tc.wantKnown || len(page.Messages) != tc.wantLength {
+				t.Fatalf("page=%#v", page)
+			}
+		})
 	}
 }
 

@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
+	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -57,9 +60,8 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 			dbCapBytes := int64(maxDBSizeMB) * 1024 * 1024
 			throttle := time.Duration(throttleSeconds * float64(time.Second))
 
-			// Cap, selector, and count preflight use a read-only handle. An
-			// already-capped DB is rejected without opening a writable handle,
-			// constructing a Telegram client, or creating an audit/session file.
+			// The cap preflight is deliberately schema-agnostic and read-only. It
+			// runs before migrations, client construction, audit, or session I/O.
 			preflightDB, err := store.ConnectReadonly(paths.dbPath)
 			if err != nil {
 				return emitDispatchedFailure(cmd, "backfill", err)
@@ -74,15 +76,18 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 				return emitDispatchedFailure(cmd, "backfill", safety.NewBadArgs(
 					"backfill database cap reached: current size %d bytes >= --max-db-size-mb %d", dbSize, maxDBSizeMB))
 			}
-			chatID, title, err := resolve.ResolveChatDB(preflightDB, args[0])
+			preflightDB.Close()
+
+			// A permitted backfill uses the normal writable connection here so
+			// supported legacy schemas are migrated before any column-dependent
+			// selector/count query. No Telegram request has happened yet.
+			chatID, title, current, dbSize, err := prepareBackfillDB(paths.dbPath, args[0])
 			if err != nil {
-				preflightDB.Close()
 				return emitDispatchedFailure(cmd, "backfill", err)
 			}
-			current, err := countCachedMessages(preflightDB, chatID)
-			preflightDB.Close()
-			if err != nil {
-				return emitDispatchedFailure(cmd, "backfill", err)
+			if dbCapBytes > 0 && dbSize >= dbCapBytes {
+				return emitDispatchedFailure(cmd, "backfill", safety.NewBadArgs(
+					"backfill database cap reached after migration: current size %d bytes >= --max-db-size-mb %d", dbSize, maxDBSizeMB))
 			}
 			if current >= maxMessages {
 				return emitDispatchedFailure(cmd, "backfill", safety.NewBadArgs(
@@ -90,7 +95,10 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 			}
 			code := dispatch.Run("backfill", dispatch.Options{
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
-				AuditPath: paths.auditPath, Args: map[string]any{"chat": args[0], "max_messages": maxMessages},
+				AuditPath: paths.auditPath, Args: map[string]any{
+					"chat": args[0], "max_messages": maxMessages, "max_db_size_mb": maxDBSizeMB,
+					"throttle_seconds": throttleSeconds, "download_media": downloadMedia,
+				},
 			}, func(ctx context.Context) (any, error) {
 				c, err := cfg.ClientFactory(ctx, paths.sessionPath, paths.dbPath)
 				if err != nil {
@@ -103,44 +111,18 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 				if err != nil {
 					return nil, err
 				}
+				backfillDBMu.Lock()
+				defer backfillDBMu.Unlock()
 				db, err := store.Connect(paths.dbPath)
 				if err != nil {
 					return nil, err
 				}
 				defer db.Close()
-				inserted := 0
-				dbCapReached := false
-				for _, row := range rows {
-					if current+inserted >= maxMessages {
-						break
-					}
-					if dbCapBytes > 0 {
-						dbSize, err = databaseSizeBytes(db)
-						if err != nil {
-							return nil, err
-						}
-						// Boundary semantics: an insert starts only while allocated
-						// bytes are strictly below the cap. SQLite may allocate enough
-						// pages for that insert to cross it; the next insert then stops.
-						if dbSize >= dbCapBytes {
-							dbCapReached = true
-							break
-						}
-					}
-					if row.ChatID == 0 {
-						row.ChatID = chatID
-					}
-					if err := insertBackfillMessage(db, row); err != nil {
-						return nil, err
-					}
-					inserted++
-				}
-				dbSize, err = databaseSizeBytes(db)
+				inserted, dbCapReached, dbSize, err := insertBackfillRowsAtomic(
+					ctx, db, chatID, maxMessages, dbCapBytes, rows,
+				)
 				if err != nil {
 					return nil, err
-				}
-				if dbCapBytes > 0 && dbSize >= dbCapBytes {
-					dbCapReached = true
 				}
 				skipped := len(rows) - inserted
 				warnings := capWarnings(current+inserted, maxMessages)
@@ -164,8 +146,8 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().Int("max-messages", 100, "Maximum cached messages per chat")
-	cmd.Flags().Int("max-db-size-mb", 0, "Maximum allocated database size in MiB (0 disables the cap)")
+	cmd.Flags().Int("max-messages", 100, "Maximum cached messages per chat (maximum 10000)")
+	cmd.Flags().Int("max-db-size-mb", 0, "Maximum main database plus WAL allocation in MiB (0 disables the cap)")
 	cmd.Flags().Bool("download-media", false, "Download media during backfill")
 	cmd.Flags().Float64("throttle-seconds", 0, "Seconds to sleep between Telegram history pages")
 	addLocalWriteFlags(cmd)
@@ -175,6 +157,9 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 func validateBackfillLimits(maxMessages, maxDBSizeMB int, throttleSeconds float64) error {
 	if maxMessages <= 0 {
 		return safety.NewBadArgs("--max-messages must be greater than zero")
+	}
+	if maxMessages > client.MaxBackfillMessages {
+		return safety.NewBadArgs("--max-messages must not exceed %d", client.MaxBackfillMessages)
 	}
 	if maxDBSizeMB < 0 {
 		return safety.NewBadArgs("--max-db-size-mb must be zero or greater")
@@ -189,21 +174,201 @@ func validateBackfillLimits(maxMessages, maxDBSizeMB int, throttleSeconds float6
 	return nil
 }
 
-// databaseSizeBytes reports SQLite's currently allocated main-database size.
-// The accounting intentionally follows SQLite's page_count * page_size rather
-// than filesystem length, which can vary with journaling/checkpoint state.
+// databaseSizeBytes reports the storage governed by --max-db-size-mb: SQLite's
+// logical main allocation (page_count * page_size) plus the WAL file bytes.
+// The -shm file is excluded because it is transient coordination metadata, not
+// database or recovery-log data allocation.
 func databaseSizeBytes(db *sql.DB) (int64, error) {
+	return databaseSizeBytesContext(context.Background(), db)
+}
+
+type sqliteQueryRower interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func databaseSizeBytesContext(ctx context.Context, db sqliteQueryRower) (int64, error) {
 	var pageCount, pageSize int64
-	if err := db.QueryRow("PRAGMA page_count").Scan(&pageCount); err != nil {
+	if err := db.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pageCount); err != nil {
 		return 0, fmt.Errorf("read SQLite page_count: %w", err)
 	}
-	if err := db.QueryRow("PRAGMA page_size").Scan(&pageSize); err != nil {
+	if err := db.QueryRowContext(ctx, "PRAGMA page_size").Scan(&pageSize); err != nil {
 		return 0, fmt.Errorf("read SQLite page_size: %w", err)
 	}
 	if pageCount < 0 || pageSize < 0 || (pageSize > 0 && pageCount > math.MaxInt64/pageSize) {
 		return 0, fmt.Errorf("invalid SQLite page accounting: page_count=%d page_size=%d", pageCount, pageSize)
 	}
-	return pageCount * pageSize, nil
+	mainBytes := pageCount * pageSize
+	var seq int
+	var name, path string
+	if err := db.QueryRowContext(ctx, "PRAGMA database_list").Scan(&seq, &name, &path); err != nil {
+		return 0, fmt.Errorf("read SQLite database path: %w", err)
+	}
+	walBytes := int64(0)
+	if info, err := os.Stat(path + "-wal"); err == nil {
+		walBytes = info.Size()
+	} else if !os.IsNotExist(err) {
+		return 0, fmt.Errorf("stat SQLite WAL: %w", err)
+	}
+	if walBytes < 0 || mainBytes > math.MaxInt64-walBytes {
+		return 0, fmt.Errorf("invalid SQLite WAL accounting: main=%d wal=%d", mainBytes, walBytes)
+	}
+	return mainBytes + walBytes, nil
+}
+
+var backfillDBMu sync.Mutex
+
+func prepareBackfillDB(dbPath, selector string) (chatID int64, title string, count int, size int64, retErr error) {
+	backfillDBMu.Lock()
+	defer backfillDBMu.Unlock()
+	db, err := store.Connect(dbPath)
+	if err != nil {
+		return 0, "", 0, 0, err
+	}
+	defer db.Close()
+	chatID, title, err = resolve.ResolveChatDB(db, selector)
+	if err != nil {
+		return 0, "", 0, 0, err
+	}
+	count, err = countCachedMessages(db, chatID)
+	if err != nil {
+		return 0, "", 0, 0, err
+	}
+	size, err = databaseSizeBytes(db)
+	if err != nil {
+		return 0, "", 0, 0, err
+	}
+	return chatID, title, count, size, nil
+}
+
+type sqliteContextExecer interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+// insertBackfillRowsAtomic performs no network work. BEGIN IMMEDIATE makes the
+// count check and inserts one SQLite writer critical section. For a byte cap,
+// WAL is first checkpointed and the short transaction uses DELETE journaling:
+// page_count then describes the exact candidate main allocation, and rolling
+// back a savepoint truncates an oversized candidate instead of ratifying an
+// arbitrary one-row overshoot. WAL mode is restored before returning.
+func insertBackfillRowsAtomic(
+	ctx context.Context,
+	db *sql.DB,
+	chatID int64,
+	maxMessages int,
+	dbCapBytes int64,
+	rows []client.BackfillMessage,
+) (inserted int, capReached bool, finalSize int64, retErr error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return 0, false, 0, err
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, "PRAGMA busy_timeout=10000"); err != nil {
+		return 0, false, 0, err
+	}
+
+	restoreWAL := false
+	if dbCapBytes > 0 {
+		var busy, logFrames, checkpointed int
+		if err := conn.QueryRowContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE)").Scan(&busy, &logFrames, &checkpointed); err != nil {
+			return 0, false, 0, fmt.Errorf("checkpoint SQLite WAL: %w", err)
+		}
+		if busy != 0 {
+			return 0, false, 0, fmt.Errorf("checkpoint SQLite WAL: database is busy")
+		}
+		var mode string
+		if err := conn.QueryRowContext(ctx, "PRAGMA journal_mode=DELETE").Scan(&mode); err != nil {
+			return 0, false, 0, fmt.Errorf("switch SQLite journal mode for capped write: %w", err)
+		}
+		if !strings.EqualFold(mode, "delete") {
+			return 0, false, 0, fmt.Errorf("switch SQLite journal mode for capped write: got %q", mode)
+		}
+		restoreWAL = true
+	}
+	defer func() {
+		if restoreWAL {
+			var mode string
+			if err := conn.QueryRowContext(context.Background(), "PRAGMA journal_mode=WAL").Scan(&mode); err != nil && retErr == nil {
+				retErr = fmt.Errorf("restore SQLite WAL mode: %w", err)
+			} else if err == nil && !strings.EqualFold(mode, "wal") && retErr == nil {
+				retErr = fmt.Errorf("restore SQLite WAL mode: got %q", mode)
+			}
+		}
+		if retErr == nil {
+			finalSize, retErr = databaseSizeBytesContext(context.Background(), conn)
+			if retErr == nil && dbCapBytes > 0 && finalSize >= dbCapBytes {
+				capReached = true
+			}
+		}
+	}()
+
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return 0, false, 0, fmt.Errorf("begin atomic backfill: %w", err)
+	}
+	transactionOpen := true
+	defer func() {
+		if transactionOpen {
+			_, _ = conn.ExecContext(context.Background(), "ROLLBACK")
+		}
+	}()
+	var current int
+	if err := conn.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM tg_messages WHERE chat_id=? AND (deleted=0 OR deleted IS NULL)", chatID,
+	).Scan(&current); err != nil {
+		return 0, false, 0, err
+	}
+	if dbCapBytes > 0 {
+		size, err := databaseSizeBytesContext(ctx, conn)
+		if err != nil {
+			return 0, false, 0, err
+		}
+		if size >= dbCapBytes {
+			capReached = true
+		}
+	}
+	for _, sourceRow := range rows {
+		if current >= maxMessages || capReached {
+			break
+		}
+		row := sourceRow
+		if row.ChatID == 0 {
+			row.ChatID = chatID
+		}
+		if _, err := conn.ExecContext(ctx, "SAVEPOINT backfill_candidate"); err != nil {
+			return inserted, capReached, 0, err
+		}
+		if err := insertBackfillMessageContext(ctx, conn, row); err != nil {
+			_, _ = conn.ExecContext(context.Background(), "ROLLBACK TO backfill_candidate")
+			_, _ = conn.ExecContext(context.Background(), "RELEASE backfill_candidate")
+			return inserted, capReached, 0, err
+		}
+		if dbCapBytes > 0 {
+			size, err := databaseSizeBytesContext(ctx, conn)
+			if err != nil {
+				return inserted, capReached, 0, err
+			}
+			if size > dbCapBytes {
+				if _, err := conn.ExecContext(ctx, "ROLLBACK TO backfill_candidate"); err != nil {
+					return inserted, true, 0, err
+				}
+				if _, err := conn.ExecContext(ctx, "RELEASE backfill_candidate"); err != nil {
+					return inserted, true, 0, err
+				}
+				capReached = true
+				break
+			}
+		}
+		if _, err := conn.ExecContext(ctx, "RELEASE backfill_candidate"); err != nil {
+			return inserted, capReached, 0, err
+		}
+		inserted++
+		current++
+	}
+	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+		return inserted, capReached, 0, err
+	}
+	transactionOpen = false
+	return inserted, capReached, 0, nil
 }
 
 func discoverCommand(cfg CommandsConfig) *cobra.Command {
@@ -315,6 +480,10 @@ func capWarnings(count, max int) []string {
 }
 
 func insertBackfillMessage(db *sql.DB, row client.BackfillMessage) error {
+	return insertBackfillMessageContext(context.Background(), db, row)
+}
+
+func insertBackfillMessageContext(ctx context.Context, db sqliteContextExecer, row client.BackfillMessage) error {
 	var sender, reply any
 	if row.SenderID != 0 {
 		sender = row.SenderID
@@ -326,7 +495,7 @@ func insertBackfillMessage(db *sql.DB, row client.BackfillMessage) error {
 	if date == "" {
 		date = time.Now().UTC().Format(time.RFC3339)
 	}
-	_, err := db.Exec(`
+	_, err := db.ExecContext(ctx, `
 		INSERT INTO tg_messages(chat_id, message_id, sender_id, date, text, is_outgoing,
 			reply_to_msg_id, has_media, media_type, media_path, raw_json, deleted)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)

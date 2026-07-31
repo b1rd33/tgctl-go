@@ -753,15 +753,27 @@ func (g *GotdClient) SyncContacts(ctx context.Context) ([]ContactInfo, error) {
 // MessagesMessagesNotModified is the "history hasn't changed since last
 // fetch" hint and is intentionally treated as empty.
 func messagesFromHistoryResp(resp tg.MessagesMessagesClass) []tg.MessageClass {
+	return historyPageFromResp(resp).Messages
+}
+
+type historyPage struct {
+	Messages   []tg.MessageClass
+	Total      int
+	TotalKnown bool
+}
+
+// historyPageFromResp retains Telegram's total-result metadata so the pager
+// can distinguish an exact-full final page from a page with more history.
+func historyPageFromResp(resp tg.MessagesMessagesClass) historyPage {
 	switch m := resp.(type) {
 	case *tg.MessagesMessages:
-		return m.Messages
+		return historyPage{Messages: m.Messages, Total: len(m.Messages), TotalKnown: true}
 	case *tg.MessagesMessagesSlice:
-		return m.Messages
+		return historyPage{Messages: m.Messages, Total: m.Count, TotalKnown: true}
 	case *tg.MessagesChannelMessages:
-		return m.Messages
+		return historyPage{Messages: m.Messages, Total: m.Count, TotalKnown: true}
 	}
-	return nil
+	return historyPage{}
 }
 
 // pageSize is messages.getHistory's per-call ceiling. Telegram caps the
@@ -770,26 +782,29 @@ func messagesFromHistoryResp(resp tg.MessagesMessagesClass) []tg.MessageClass {
 const backfillPageSize = 100
 
 func (g *GotdClient) BackfillMessages(ctx context.Context, req BackfillReq) ([]BackfillMessage, error) {
-	peer, err := g.peerFromChatID(ctx, req.ChatID)
-	if err != nil {
-		return nil, err
-	}
 	limit := req.Limit
 	if limit <= 0 {
 		limit = backfillPageSize
 	}
+	if limit > MaxBackfillMessages {
+		return nil, safety.NewBadArgs("backfill limit %d exceeds maximum %d", limit, MaxBackfillMessages)
+	}
+	peer, err := g.peerFromChatID(ctx, req.ChatID)
+	if err != nil {
+		return nil, err
+	}
 	return paginateHistory(ctx, req.ChatID, limit, req.Throttle,
-		func(ctx context.Context, offsetID, pageLimit int) ([]tg.MessageClass, error) {
+		func(ctx context.Context, offsetID, pageLimit int) (historyPage, error) {
 			resp, err := g.api.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
 				Peer:     peer,
 				Limit:    pageLimit,
 				OffsetID: offsetID,
 			})
 			if err != nil {
-				return nil, mapRPCErr(err)
+				return historyPage{}, mapRPCErr(err)
 			}
-			return messagesFromHistoryResp(resp), nil
-		}, time.Sleep)
+			return historyPageFromResp(resp), nil
+		}, waitForThrottle)
 }
 
 // paginateHistory implements Telegram's 100-message history pagination behind
@@ -801,23 +816,33 @@ func paginateHistory(
 	chatID int64,
 	limit int,
 	throttle time.Duration,
-	fetch func(context.Context, int, int) ([]tg.MessageClass, error),
-	sleep func(time.Duration),
+	fetch func(context.Context, int, int) (historyPage, error),
+	wait func(context.Context, time.Duration) error,
 ) ([]BackfillMessage, error) {
-	out := make([]BackfillMessage, 0, limit)
+	if limit > MaxBackfillMessages {
+		return nil, safety.NewBadArgs("backfill limit %d exceeds maximum %d", limit, MaxBackfillMessages)
+	}
+	initialCapacity := limit
+	if initialCapacity > backfillPageSize {
+		initialCapacity = backfillPageSize
+	}
+	out := make([]BackfillMessage, 0, initialCapacity)
 	offsetID := 0
+	serverItemsSeen := 0
 	for len(out) < limit {
 		want := limit - len(out)
 		if want > backfillPageSize {
 			want = backfillPageSize
 		}
-		msgs, err := fetch(ctx, offsetID, want)
+		page, err := fetch(ctx, offsetID, want)
 		if err != nil {
 			return out, err
 		}
+		msgs := page.Messages
 		if len(msgs) == 0 {
 			break
 		}
+		serverItemsSeen += len(msgs)
 		minID := 0
 		for _, mc := range msgs {
 			m, ok := mc.(*tg.Message)
@@ -858,14 +883,34 @@ func paginateHistory(
 			break
 		}
 		offsetID = minID
-		if len(msgs) < want {
+		more := len(msgs) == want
+		if page.TotalKnown && serverItemsSeen >= page.Total {
+			more = false
+		}
+		if !more {
 			break
 		}
 		if len(out) < limit && throttle > 0 {
-			sleep(throttle)
+			if err := wait(ctx, throttle); err != nil {
+				return out, err
+			}
 		}
 	}
 	return out, nil
+}
+
+func waitForThrottle(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (g *GotdClient) ListTopics(ctx context.Context, chatID int64, limit int, query string) ([]TopicInfo, error) {

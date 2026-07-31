@@ -2,9 +2,13 @@ package commands
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,7 +18,8 @@ import (
 
 func TestDatabaseSizeBytesUsesSQLiteAllocatedPages(t *testing.T) {
 	cfg, _, _ := setupWriteEnv(t)
-	db, err := store.Connect(cfg.Paths.(stubPaths).db)
+	dbPath := cfg.Paths.(stubPaths).db
+	db, err := store.Connect(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,12 +31,31 @@ func TestDatabaseSizeBytesUsesSQLiteAllocatedPages(t *testing.T) {
 	if err := db.QueryRow("PRAGMA page_size").Scan(&pageSize); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := db.Exec("CREATE TABLE wal_size_fixture(payload BLOB)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("INSERT INTO wal_size_fixture(payload) VALUES (zeroblob(200000))"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow("PRAGMA page_count").Scan(&pageCount); err != nil {
+		t.Fatal(err)
+	}
+	walInfo, err := os.Stat(dbPath + "-wal")
+	if err != nil {
+		t.Fatalf("stat WAL: %v", err)
+	}
+	if walInfo.Size() == 0 {
+		t.Fatal("WAL did not grow")
+	}
 	got, err := databaseSizeBytes(db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := pageCount * pageSize; got != want {
-		t.Fatalf("size=%d, want page_count*page_size=%d", got, want)
+	if want := pageCount*pageSize + walInfo.Size(); got != want {
+		t.Fatalf("size=%d, want logical main + WAL=%d", got, want)
+	}
+	if _, err := os.Stat(dbPath + "-shm"); err != nil {
+		t.Fatalf("expected SHM coordination file: %v", err)
 	}
 }
 
@@ -135,11 +159,11 @@ func TestBackfillDatabaseCapStopsBeforeNextInsert(t *testing.T) {
 		t.Fatal(err)
 	}
 	data := env["data"].(map[string]any)
-	if data["messages_inserted"] != float64(1) || data["messages_skipped"] != float64(1) || data["db_cap_reached"] != true {
+	if data["messages_inserted"] != float64(0) || data["messages_skipped"] != float64(2) || data["db_cap_reached"] != true {
 		t.Fatalf("data=%#v", data)
 	}
-	if data["db_size_bytes"].(float64) < 1024*1024 {
-		t.Fatalf("db_size_bytes=%v, want at least cap", data["db_size_bytes"])
+	if data["db_size_bytes"].(float64) > 1024*1024 {
+		t.Fatalf("db_size_bytes=%v exceeds cap", data["db_size_bytes"])
 	}
 	if warnings, ok := data["warnings"].([]any); !ok || len(warnings) != 0 {
 		t.Fatalf("warnings=%#v, want non-null empty array", data["warnings"])
@@ -153,8 +177,47 @@ func TestBackfillDatabaseCapStopsBeforeNextInsert(t *testing.T) {
 	if err := db.QueryRow("SELECT COUNT(*) FROM tg_messages WHERE message_id IN (10, 11)").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 1 {
-		t.Fatalf("inserted fixture rows=%d, want 1", count)
+	if count != 0 {
+		t.Fatalf("inserted fixture rows=%d, want 0", count)
+	}
+}
+
+func TestBackfillDatabaseCapRollsBackOnlyOversizedCandidate(t *testing.T) {
+	cfg, fc, _ := setupWriteEnv(t)
+	fc.BackfillRows = []client.BackfillMessage{
+		{ChatID: 1, MessageID: 20, Date: "2026-05-08T12:00:00", Text: strings.Repeat("a", 400000)},
+		{ChatID: 1, MessageID: 21, Date: "2026-05-08T12:01:00", Text: strings.Repeat("b", 900000)},
+	}
+	out, code := runRoot(t, cfg, "backfill", "1", "--max-messages", "10", "--max-db-size-mb", "1", "--allow-write", "--json")
+	if code != 0 {
+		t.Fatalf("code=%d\nout:%s", code, out)
+	}
+	var env map[string]any
+	if err := json.Unmarshal([]byte(out), &env); err != nil {
+		t.Fatal(err)
+	}
+	data := env["data"].(map[string]any)
+	if data["messages_inserted"] != float64(1) || data["messages_skipped"] != float64(1) || data["db_cap_reached"] != true {
+		t.Fatalf("data=%#v", data)
+	}
+	db, err := store.Connect(cfg.Paths.(stubPaths).db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	size, err := databaseSizeBytes(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if size > 1024*1024 {
+		t.Fatalf("committed allocated size=%d exceeds cap", size)
+	}
+	var ids string
+	if err := db.QueryRow("SELECT group_concat(message_id, ',') FROM tg_messages WHERE message_id IN (20,21)").Scan(&ids); err != nil {
+		t.Fatal(err)
+	}
+	if ids != "20" {
+		t.Fatalf("committed message ids=%q, want 20", ids)
 	}
 }
 
@@ -187,6 +250,15 @@ func TestBackfillInsertsMessagesAndWarnsNearCap(t *testing.T) {
 	if len(fc.Backfills) != 1 || fc.Backfills[0].Throttle != 1500*time.Millisecond {
 		t.Fatalf("backfills=%#v, want throttle 1.5s", fc.Backfills)
 	}
+	audit, err := os.ReadFile(cfg.Paths.(stubPaths).audit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"max_db_size_mb":0`, `"throttle_seconds":1.5`, `"download_media":false`} {
+		if !strings.Contains(string(audit), want) {
+			t.Fatalf("audit missing %s: %s", want, audit)
+		}
+	}
 }
 
 func TestBackfillRejectsNegativeLimitsAndThrottle(t *testing.T) {
@@ -195,6 +267,7 @@ func TestBackfillRejectsNegativeLimitsAndThrottle(t *testing.T) {
 		args []string
 	}{
 		{name: "messages", args: []string{"--max-messages", "-1"}},
+		{name: "messages too large", args: []string{"--max-messages", "10001"}},
 		{name: "database size", args: []string{"--max-db-size-mb", "-1"}},
 		{name: "throttle", args: []string{"--throttle-seconds", "-0.1"}},
 	} {
@@ -209,6 +282,176 @@ func TestBackfillRejectsNegativeLimitsAndThrottle(t *testing.T) {
 				t.Fatalf("client called: %#v", fc.Backfills)
 			}
 		})
+	}
+}
+
+func setupLegacyBackfillEnv(t *testing.T) (CommandsConfig, *client.FakeClient, stubPaths) {
+	t.Helper()
+	dir := t.TempDir()
+	paths := stubPaths{db: filepath.Join(dir, "telegram.sqlite"), session: filepath.Join(dir, "tg.session"), audit: filepath.Join(dir, "audit.log")}
+	db, err := sql.Open("sqlite", paths.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacySchema := `
+		CREATE TABLE tg_chats (chat_id INTEGER PRIMARY KEY, type TEXT, title TEXT, username TEXT);
+		CREATE TABLE tg_messages (
+			chat_id INTEGER, message_id INTEGER, sender_id INTEGER, date TEXT, text TEXT,
+			is_outgoing INTEGER, reply_to_msg_id INTEGER, has_media INTEGER, media_type TEXT,
+			raw_json TEXT, PRIMARY KEY(chat_id, message_id));
+		CREATE INDEX idx_messages_chat_date ON tg_messages(chat_id, date DESC);
+		CREATE INDEX idx_messages_date ON tg_messages(date DESC);
+		INSERT INTO tg_chats(chat_id, type, title) VALUES (1, 'group', 'Legacy');`
+	if _, err := db.Exec(legacySchema); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	fc := &client.FakeClient{BackfillRows: []client.BackfillMessage{{ChatID: 1, MessageID: 7, Date: "2026-08-01T10:00:00Z", Text: "migrated"}}}
+	cfg := CommandsConfig{
+		Paths:                 paths,
+		ClientFactory:         func(context.Context, string, string) (client.Client, error) { return fc, nil },
+		ReadOnlyClientFactory: func(context.Context, string) (client.Client, error) { return fc, nil },
+	}
+	return cfg, fc, paths
+}
+
+func legacyHasColumn(t *testing.T, path, column string) bool {
+	t.Helper()
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	rows, err := db.Query("PRAGMA table_info(tg_messages)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, ctype string
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			t.Fatal(err)
+		}
+		if name == column {
+			return true
+		}
+	}
+	return false
+}
+
+func TestBackfillMigratesLegacySchemaBeforeCountAndInsert(t *testing.T) {
+	cfg, fc, paths := setupLegacyBackfillEnv(t)
+	out, code := runRoot(t, cfg, "backfill", "1", "--max-messages", "10", "--allow-write", "--json")
+	if code != 0 {
+		t.Fatalf("code=%d\nout:%s", code, out)
+	}
+	if len(fc.Backfills) != 1 || !legacyHasColumn(t, paths.db, "deleted") || !legacyHasColumn(t, paths.db, "media_path") {
+		t.Fatalf("migration/backfill missing: calls=%#v deleted=%v media_path=%v", fc.Backfills, legacyHasColumn(t, paths.db, "deleted"), legacyHasColumn(t, paths.db, "media_path"))
+	}
+	db, err := store.ConnectReadonly(paths.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM tg_messages WHERE message_id=7 AND deleted=0").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("inserted rows=%d, want 1", count)
+	}
+}
+
+func TestBackfillSafetyFailureDoesNotMigrateLegacySchema(t *testing.T) {
+	cfg, fc, paths := setupLegacyBackfillEnv(t)
+	before := captureImmutableFile(t, paths.db)
+	out, code := runRoot(t, cfg, "--read-only", "backfill", "1", "--max-messages", "10", "--allow-write", "--json")
+	if code != 6 {
+		t.Fatalf("code=%d, want WRITE_DISALLOWED=6\nout:%s", code, out)
+	}
+	if len(fc.Backfills) != 0 || legacyHasColumn(t, paths.db, "deleted") {
+		t.Fatalf("safety failure mutated/called client: calls=%#v", fc.Backfills)
+	}
+	assertImmutableFile(t, paths.db, before)
+}
+
+type concurrentBackfillResult struct {
+	code int
+	out  string
+}
+
+func runConcurrentBackfills(t *testing.T, cfg CommandsConfig, rowText string, maxMessages, maxDBSizeMB int) []concurrentBackfillResult {
+	t.Helper()
+	var calls int32
+	ready := make(chan struct{})
+	cfg.ClientFactory = func(context.Context, string, string) (client.Client, error) {
+		n := atomic.AddInt32(&calls, 1)
+		if n == 2 {
+			close(ready)
+		}
+		<-ready
+		return &client.FakeClient{BackfillRows: []client.BackfillMessage{{ChatID: 1, MessageID: int64(100 + n), Date: "2026-08-01T10:00:00Z", Text: rowText}}}, nil
+	}
+	results := make(chan concurrentBackfillResult, 2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			out, code := runRoot(t, cfg, "backfill", "1", "--max-messages", fmt.Sprint(maxMessages), "--max-db-size-mb", fmt.Sprint(maxDBSizeMB), "--allow-write", "--json")
+			results <- concurrentBackfillResult{code: code, out: out}
+		}()
+	}
+	return []concurrentBackfillResult{<-results, <-results}
+}
+
+func TestConcurrentBackfillsAtomicallyEnforceMessageLimit(t *testing.T) {
+	cfg, _, _ := setupWriteEnv(t)
+	for _, result := range runConcurrentBackfills(t, cfg, "small", 1, 0) {
+		if result.code != 0 {
+			t.Fatalf("code=%d, want 0\nout:%s", result.code, result.out)
+		}
+	}
+	db, err := store.ConnectReadonly(cfg.Paths.(stubPaths).db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM tg_messages WHERE chat_id=1").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("message count=%d exceeds max 1", count)
+	}
+}
+
+func TestConcurrentBackfillsAtomicallyEnforceDatabaseCap(t *testing.T) {
+	cfg, _, _ := setupWriteEnv(t)
+	for _, result := range runConcurrentBackfills(t, cfg, strings.Repeat("x", 650000), 10, 1) {
+		if result.code != 0 {
+			t.Fatalf("code=%d, want 0\nout:%s", result.code, result.out)
+		}
+	}
+	db, err := store.Connect(cfg.Paths.(stubPaths).db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	size, err := databaseSizeBytes(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if size > 1024*1024 {
+		t.Fatalf("allocated size=%d exceeds cap", size)
+	}
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM tg_messages WHERE chat_id=1").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("message count=%d, want exactly one fitting row", count)
 	}
 }
 
