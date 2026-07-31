@@ -778,7 +778,32 @@ func (g *GotdClient) BackfillMessages(ctx context.Context, req BackfillReq) ([]B
 	if limit <= 0 {
 		limit = backfillPageSize
 	}
+	return paginateHistory(ctx, req.ChatID, limit, req.Throttle,
+		func(ctx context.Context, offsetID, pageLimit int) ([]tg.MessageClass, error) {
+			resp, err := g.api.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
+				Peer:     peer,
+				Limit:    pageLimit,
+				OffsetID: offsetID,
+			})
+			if err != nil {
+				return nil, mapRPCErr(err)
+			}
+			return messagesFromHistoryResp(resp), nil
+		}, time.Sleep)
+}
 
+// paginateHistory implements Telegram's 100-message history pagination behind
+// test seams for page fetching and sleeping. Throttling happens only after a
+// non-empty full page when another request is needed; it never delays the first
+// request or runs after a final/partial page.
+func paginateHistory(
+	ctx context.Context,
+	chatID int64,
+	limit int,
+	throttle time.Duration,
+	fetch func(context.Context, int, int) ([]tg.MessageClass, error),
+	sleep func(time.Duration),
+) ([]BackfillMessage, error) {
 	out := make([]BackfillMessage, 0, limit)
 	offsetID := 0
 	for len(out) < limit {
@@ -786,15 +811,10 @@ func (g *GotdClient) BackfillMessages(ctx context.Context, req BackfillReq) ([]B
 		if want > backfillPageSize {
 			want = backfillPageSize
 		}
-		resp, err := g.api.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
-			Peer:     peer,
-			Limit:    want,
-			OffsetID: offsetID,
-		})
+		msgs, err := fetch(ctx, offsetID, want)
 		if err != nil {
-			return out, mapRPCErr(err)
+			return out, err
 		}
-		msgs := messagesFromHistoryResp(resp)
 		if len(msgs) == 0 {
 			break
 		}
@@ -817,7 +837,7 @@ func (g *GotdClient) BackfillMessages(ctx context.Context, req BackfillReq) ([]B
 				continue
 			}
 			row := BackfillMessage{
-				ChatID: req.ChatID, MessageID: int64(m.ID), Date: timeFromUnix(m.Date),
+				ChatID: chatID, MessageID: int64(m.ID), Date: timeFromUnix(m.Date),
 				Text: m.Message, IsOutgoing: m.Out, HasMedia: m.Media != nil,
 			}
 			row.SenderID = peerID(m.FromID)
@@ -838,6 +858,12 @@ func (g *GotdClient) BackfillMessages(ctx context.Context, req BackfillReq) ([]B
 			break
 		}
 		offsetID = minID
+		if len(msgs) < want {
+			break
+		}
+		if len(out) < limit && throttle > 0 {
+			sleep(throttle)
+		}
 	}
 	return out, nil
 }

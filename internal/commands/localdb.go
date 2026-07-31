@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -40,48 +41,92 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			maxMessages, _ := cmd.Flags().GetInt("max-messages")
-			if maxMessages <= 0 {
-				maxMessages = 100
-			}
+			maxDBSizeMB, _ := cmd.Flags().GetInt("max-db-size-mb")
+			throttleSeconds, _ := cmd.Flags().GetFloat64("throttle-seconds")
 			downloadMedia, _ := cmd.Flags().GetBool("download-media")
-			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
-			if pathErr != nil {
-				return emitDispatchedFailure(cmd, "backfill", pathErr)
+			if err := safety.RequireWriteAllowed(localWriteArgs(cmd)); err != nil {
+				return emitDispatchedFailure(cmd, "backfill", err)
+			}
+			if err := validateBackfillLimits(maxMessages, maxDBSizeMB, throttleSeconds); err != nil {
+				return emitDispatchedFailure(cmd, "backfill", err)
+			}
+			paths, err := resolveWritePathSet(cmd, cfg.Paths)
+			if err != nil {
+				return emitDispatchedFailure(cmd, "backfill", err)
+			}
+			dbCapBytes := int64(maxDBSizeMB) * 1024 * 1024
+			throttle := time.Duration(throttleSeconds * float64(time.Second))
+
+			// Cap, selector, and count preflight use a read-only handle. An
+			// already-capped DB is rejected without opening a writable handle,
+			// constructing a Telegram client, or creating an audit/session file.
+			preflightDB, err := store.ConnectReadonly(paths.dbPath)
+			if err != nil {
+				return emitDispatchedFailure(cmd, "backfill", err)
+			}
+			dbSize, err := databaseSizeBytes(preflightDB)
+			if err != nil {
+				preflightDB.Close()
+				return emitDispatchedFailure(cmd, "backfill", err)
+			}
+			if dbCapBytes > 0 && dbSize >= dbCapBytes {
+				preflightDB.Close()
+				return emitDispatchedFailure(cmd, "backfill", safety.NewBadArgs(
+					"backfill database cap reached: current size %d bytes >= --max-db-size-mb %d", dbSize, maxDBSizeMB))
+			}
+			chatID, title, err := resolve.ResolveChatDB(preflightDB, args[0])
+			if err != nil {
+				preflightDB.Close()
+				return emitDispatchedFailure(cmd, "backfill", err)
+			}
+			current, err := countCachedMessages(preflightDB, chatID)
+			preflightDB.Close()
+			if err != nil {
+				return emitDispatchedFailure(cmd, "backfill", err)
+			}
+			if current >= maxMessages {
+				return emitDispatchedFailure(cmd, "backfill", safety.NewBadArgs(
+					"backfill cap reached: current message count %d >= --max-messages %d", current, maxMessages))
 			}
 			code := dispatch.Run("backfill", dispatch.Options{
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
-				AuditPath: auditPath, Args: map[string]any{"chat": args[0], "max_messages": maxMessages},
+				AuditPath: paths.auditPath, Args: map[string]any{"chat": args[0], "max_messages": maxMessages},
 			}, func(ctx context.Context) (any, error) {
-				if err := safety.RequireWriteAllowed(localWriteArgs(cmd)); err != nil {
-					return nil, err
-				}
-				db, err := store.Connect(dbPath)
-				if err != nil {
-					return nil, err
-				}
-				defer db.Close()
-				chatID, title, err := resolve.ResolveChatDB(db, args[0])
-				if err != nil {
-					return nil, err
-				}
-				current, err := countCachedMessages(db, chatID)
-				if err != nil {
-					return nil, err
-				}
-				if current >= maxMessages {
-					return nil, safety.NewBadArgs("backfill cap reached: current message count %d >= --max-messages %d", current, maxMessages)
-				}
-				c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
+				c, err := cfg.ClientFactory(ctx, paths.sessionPath, paths.dbPath)
 				if err != nil {
 					return nil, err
 				}
 				defer c.Close()
-				rows, err := c.BackfillMessages(ctx, client.BackfillReq{ChatID: chatID, Limit: maxMessages - current})
+				rows, err := c.BackfillMessages(ctx, client.BackfillReq{
+					ChatID: chatID, Limit: maxMessages - current, Throttle: throttle,
+				})
 				if err != nil {
 					return nil, err
 				}
+				db, err := store.Connect(paths.dbPath)
+				if err != nil {
+					return nil, err
+				}
+				defer db.Close()
 				inserted := 0
+				dbCapReached := false
 				for _, row := range rows {
+					if current+inserted >= maxMessages {
+						break
+					}
+					if dbCapBytes > 0 {
+						dbSize, err = databaseSizeBytes(db)
+						if err != nil {
+							return nil, err
+						}
+						// Boundary semantics: an insert starts only while allocated
+						// bytes are strictly below the cap. SQLite may allocate enough
+						// pages for that insert to cross it; the next insert then stops.
+						if dbSize >= dbCapBytes {
+							dbCapReached = true
+							break
+						}
+					}
 					if row.ChatID == 0 {
 						row.ChatID = chatID
 					}
@@ -90,12 +135,26 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 					}
 					inserted++
 				}
+				dbSize, err = databaseSizeBytes(db)
+				if err != nil {
+					return nil, err
+				}
+				if dbCapBytes > 0 && dbSize >= dbCapBytes {
+					dbCapReached = true
+				}
+				skipped := len(rows) - inserted
 				warnings := capWarnings(current+inserted, maxMessages)
 				return map[string]any{
 					"chats_processed":   1,
 					"messages_inserted": inserted,
+					"messages_skipped":  skipped,
+					"db_size_bytes":     dbSize,
+					"db_cap_reached":    dbCapReached,
 					"media_downloaded":  0,
-					"skipped":           0,
+					"media_skipped":     0,
+					"media_failed":      0,
+					"warnings":          warnings,
+					"skipped":           skipped,
 					"cap_warnings":      warnings,
 					"download_media":    downloadMedia,
 					"per_chat":          []map[string]any{{"chat_id": chatID, "title": title, "messages_inserted": inserted}},
@@ -106,11 +165,45 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 		},
 	}
 	cmd.Flags().Int("max-messages", 100, "Maximum cached messages per chat")
-	cmd.Flags().Int("max-db-size-mb", 0, "Maximum database size in MiB")
+	cmd.Flags().Int("max-db-size-mb", 0, "Maximum allocated database size in MiB (0 disables the cap)")
 	cmd.Flags().Bool("download-media", false, "Download media during backfill")
-	cmd.Flags().Float64("throttle-seconds", 0, "Seconds to sleep between chats")
+	cmd.Flags().Float64("throttle-seconds", 0, "Seconds to sleep between Telegram history pages")
 	addLocalWriteFlags(cmd)
 	return cmd
+}
+
+func validateBackfillLimits(maxMessages, maxDBSizeMB int, throttleSeconds float64) error {
+	if maxMessages <= 0 {
+		return safety.NewBadArgs("--max-messages must be greater than zero")
+	}
+	if maxDBSizeMB < 0 {
+		return safety.NewBadArgs("--max-db-size-mb must be zero or greater")
+	}
+	if int64(maxDBSizeMB) > math.MaxInt64/(1024*1024) {
+		return safety.NewBadArgs("--max-db-size-mb is too large")
+	}
+	maxThrottleSeconds := float64(math.MaxInt64) / float64(time.Second)
+	if math.IsNaN(throttleSeconds) || math.IsInf(throttleSeconds, 0) || throttleSeconds < 0 || throttleSeconds > maxThrottleSeconds {
+		return safety.NewBadArgs("--throttle-seconds must be a finite non-negative duration")
+	}
+	return nil
+}
+
+// databaseSizeBytes reports SQLite's currently allocated main-database size.
+// The accounting intentionally follows SQLite's page_count * page_size rather
+// than filesystem length, which can vary with journaling/checkpoint state.
+func databaseSizeBytes(db *sql.DB) (int64, error) {
+	var pageCount, pageSize int64
+	if err := db.QueryRow("PRAGMA page_count").Scan(&pageCount); err != nil {
+		return 0, fmt.Errorf("read SQLite page_count: %w", err)
+	}
+	if err := db.QueryRow("PRAGMA page_size").Scan(&pageSize); err != nil {
+		return 0, fmt.Errorf("read SQLite page_size: %w", err)
+	}
+	if pageCount < 0 || pageSize < 0 || (pageSize > 0 && pageCount > math.MaxInt64/pageSize) {
+		return 0, fmt.Errorf("invalid SQLite page accounting: page_count=%d page_size=%d", pageCount, pageSize)
+	}
+	return pageCount * pageSize, nil
 }
 
 func discoverCommand(cfg CommandsConfig) *cobra.Command {

@@ -2,7 +2,10 @@
 // runners. Production wires this to gotd/td; tests use FakeClient.
 package client
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // User mirrors the subset of fields tgcli.commands.auth uses.
 type User struct {
@@ -135,8 +138,9 @@ type ContactInfo struct {
 }
 
 type BackfillReq struct {
-	ChatID int64
-	Limit  int
+	ChatID   int64
+	Limit    int
+	Throttle time.Duration
 }
 
 type BackfillMessage struct {

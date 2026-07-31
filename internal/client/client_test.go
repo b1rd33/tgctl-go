@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -293,6 +294,129 @@ func TestMessagesFromHistoryRespCoversAllThreeShapes(t *testing.T) {
 		if len(got) != tc.want {
 			t.Errorf("%s: len = %d, want %d", tc.name, len(got), tc.want)
 		}
+	}
+}
+
+func historyMessages(highID, count int) []tg.MessageClass {
+	msgs := make([]tg.MessageClass, 0, count)
+	for id := highID; id > highID-count; id-- {
+		msgs = append(msgs, &tg.Message{ID: id, Date: 1_700_000_000, Message: "message"})
+	}
+	return msgs
+}
+
+func TestBackfillThrottleSleepsOnceBetweenTwoFullPages(t *testing.T) {
+	pages := [][]tg.MessageClass{historyMessages(200, 100), historyMessages(100, 100)}
+	type request struct{ offsetID, limit int }
+	var requests []request
+	var sleeps []time.Duration
+
+	rows, err := paginateHistory(context.Background(), 42, 200, 250*time.Millisecond,
+		func(_ context.Context, offsetID, limit int) ([]tg.MessageClass, error) {
+			requests = append(requests, request{offsetID, limit})
+			page := pages[0]
+			pages = pages[1:]
+			return page, nil
+		},
+		func(d time.Duration) { sleeps = append(sleeps, d) },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 200 {
+		t.Fatalf("rows=%d, want 200", len(rows))
+	}
+	wantRequests := []request{{0, 100}, {101, 100}}
+	if !reflect.DeepEqual(requests, wantRequests) {
+		t.Fatalf("requests=%#v, want %#v", requests, wantRequests)
+	}
+	if !reflect.DeepEqual(sleeps, []time.Duration{250 * time.Millisecond}) {
+		t.Fatalf("sleeps=%v, want [250ms]", sleeps)
+	}
+}
+
+func TestBackfillThrottleDoesNotSleepForOnePageOrDisabledThrottle(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		limit    int
+		throttle time.Duration
+		pages    [][]tg.MessageClass
+	}{
+		{name: "one page", limit: 50, throttle: time.Second, pages: [][]tg.MessageClass{historyMessages(50, 50)}},
+		{name: "zero", limit: 200, pages: [][]tg.MessageClass{historyMessages(200, 100), historyMessages(100, 100)}},
+		{name: "negative", limit: 200, throttle: -time.Second, pages: [][]tg.MessageClass{historyMessages(200, 100), historyMessages(100, 100)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			sleeps := 0
+			_, err := paginateHistory(context.Background(), 42, tc.limit, tc.throttle,
+				func(_ context.Context, _, _ int) ([]tg.MessageClass, error) {
+					page := tc.pages[calls]
+					calls++
+					return page, nil
+				},
+				func(time.Duration) { sleeps++ },
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := len(tc.pages); calls != want {
+				t.Fatalf("calls=%d, want %d", calls, want)
+			}
+			if sleeps != 0 {
+				t.Fatalf("sleeps=%d, want 0", sleeps)
+			}
+		})
+	}
+}
+
+func TestBackfillPaginationFinalPartialPage(t *testing.T) {
+	pages := [][]tg.MessageClass{historyMessages(225, 100), historyMessages(125, 100), historyMessages(25, 25)}
+	var limits []int
+	var sleeps []time.Duration
+	rows, err := paginateHistory(context.Background(), 42, 250, time.Second,
+		func(_ context.Context, _ int, limit int) ([]tg.MessageClass, error) {
+			limits = append(limits, limit)
+			page := pages[0]
+			pages = pages[1:]
+			return page, nil
+		},
+		func(d time.Duration) { sleeps = append(sleeps, d) },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 225 {
+		t.Fatalf("rows=%d, want 225", len(rows))
+	}
+	if !reflect.DeepEqual(limits, []int{100, 100, 50}) {
+		t.Fatalf("limits=%v, want [100 100 50]", limits)
+	}
+	if !reflect.DeepEqual(sleeps, []time.Duration{time.Second, time.Second}) {
+		t.Fatalf("sleeps=%v, want two one-second sleeps", sleeps)
+	}
+}
+
+func TestBackfillPaginationStopsOnEmptyPage(t *testing.T) {
+	pages := [][]tg.MessageClass{historyMessages(100, 100), {}}
+	var limits []int
+	rows, err := paginateHistory(context.Background(), 42, 250, 0,
+		func(_ context.Context, _ int, limit int) ([]tg.MessageClass, error) {
+			limits = append(limits, limit)
+			page := pages[0]
+			pages = pages[1:]
+			return page, nil
+		},
+		func(time.Duration) { t.Fatal("unexpected sleep") },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 100 {
+		t.Fatalf("rows=%d, want 100", len(rows))
+	}
+	if !reflect.DeepEqual(limits, []int{100, 100}) {
+		t.Fatalf("limits=%v, want [100 100]", limits)
 	}
 }
 
