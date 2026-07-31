@@ -58,6 +58,25 @@ func TestBanFromChatRequiresTypedUserConfirm(t *testing.T) {
 	}
 }
 
+func TestPromoteRequiresResolvedChatConfirmation(t *testing.T) {
+	cfg, fc, _ := setupWriteEnv(t)
+	out, code := runRoot(t, cfg, "promote", "1", "42", "--allow-write", "--json")
+	if code != 7 {
+		t.Fatalf("missing confirm code=%d want NEEDS_CONFIRM=7\nout:%s", code, out)
+	}
+	out, code = runRoot(t, cfg, "promote", "1", "42", "--allow-write", "--confirm", "42", "--json")
+	if code != 2 {
+		t.Fatalf("user-id confirm code=%d want BAD_ARGS=2\nout:%s", code, out)
+	}
+	out, code = runRoot(t, cfg, "promote", "1", "42", "--allow-write", "--confirm", " 1 ", "--json")
+	if code != 0 {
+		t.Fatalf("chat-id confirm code=%d\nout:%s", code, out)
+	}
+	if len(fc.AdminActions) != 1 || fc.AdminActions[0].Action != "promote" {
+		t.Fatalf("AdminActions=%#v", fc.AdminActions)
+	}
+}
+
 func TestChatsInfoAndMembersReadCommands(t *testing.T) {
 	cfg, fc, _ := setupWriteEnv(t)
 	fc.ChatInfos = []client.ChatInfo{{ID: 1, Type: "user", Title: "Alpha"}}

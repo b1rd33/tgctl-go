@@ -202,6 +202,9 @@ func folderDeleteCommand(cfg CommandsConfig) *cobra.Command {
 				return emitDispatchedFailure(cmd, "folder-delete", safety.NewBadArgs("folder id 0 is reserved and cannot be deleted"))
 			}
 			return runFolderWrite(cmd, cfg, "folder-delete", "messages.UpdateDialogFilter", map[string]any{"folder_id": id}, func(ctx context.Context, c client.Client) (map[string]any, error) {
+				if err := safety.RequireTypedConfirm(writeArgsFrom(cmd).Args, id, "folder_id"); err != nil {
+					return nil, err
+				}
 				if err := c.DeleteFolder(ctx, id); err != nil {
 					return nil, err
 				}
@@ -283,12 +286,12 @@ func chatPinnedListCommand(cfg CommandsConfig) *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+			paths, pathErr := resolvePaths(cmd, cfg.Paths)
 			if pathErr != nil {
 				return emitDispatchedFailure(cmd, "chat-pinned-list", pathErr)
 			}
-			code := dispatch.Run("chat-pinned-list", dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: auditPath}, func(ctx context.Context) (any, error) {
-				db, err := store.Connect(dbPath)
+			code := dispatch.Run("chat-pinned-list", dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: paths.audit}, func(ctx context.Context) (any, error) {
+				db, err := connectReadDB(paths)
 				if err != nil {
 					return nil, err
 				}
@@ -297,7 +300,7 @@ func chatPinnedListCommand(cfg CommandsConfig) *cobra.Command {
 				if err != nil {
 					return nil, err
 				}
-				c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
+				c, err := openReadClient(ctx, cfg, paths)
 				if err != nil {
 					return nil, err
 				}
@@ -317,12 +320,12 @@ func chatPinnedListCommand(cfg CommandsConfig) *cobra.Command {
 }
 
 func runFolderRead(cmd *cobra.Command, cfg CommandsConfig, name string, runner func(context.Context, client.Client) (any, error)) error {
-	dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+	paths, pathErr := resolvePaths(cmd, cfg.Paths)
 	if pathErr != nil {
 		return emitDispatchedFailure(cmd, name, pathErr)
 	}
-	code := dispatch.Run(name, dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: auditPath}, func(ctx context.Context) (any, error) {
-		c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
+	code := dispatch.Run(name, dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: paths.audit}, func(ctx context.Context) (any, error) {
+		c, err := openReadClient(ctx, cfg, paths)
 		if err != nil {
 			return nil, err
 		}

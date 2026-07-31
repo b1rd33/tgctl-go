@@ -115,7 +115,15 @@ func accountsShowCommand(m *accounts.Manager) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runAccountCommand(cmd, "accounts-show", func() (any, error) {
 				name := m.Current()
-				p, err := m.ResolvePaths(name)
+				var (
+					p   accounts.Paths
+					err error
+				)
+				if commandReadOnly(cmd) {
+					p, err = m.Paths(name)
+				} else {
+					p, err = m.ResolvePaths(name)
+				}
 				if err != nil {
 					return nil, err
 				}
@@ -146,9 +154,8 @@ func accountsRemoveCommand(m *accounts.Manager) *cobra.Command {
 				if err := safety.RequireWritesNotReadOnly(safety.Args{ReadOnly: RootConfigFrom(cmd.Root()).ReadOnly}); err != nil {
 					return nil, err
 				}
-				if confirm != args[0] {
-					return nil, safety.NewBadArgs(
-						"accounts-remove requires --confirm %s to confirm deletion", args[0])
+				if err := safety.RequireTypedConfirm(safety.Args{Confirm: confirm}, args[0], "account"); err != nil {
+					return nil, err
 				}
 				if err := m.Remove(args[0]); err != nil {
 					var anf *accounts.AccountNotFound

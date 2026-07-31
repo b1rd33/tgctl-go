@@ -18,10 +18,26 @@ type Args struct {
 
 // RequireWritesNotReadOnly rejects writes when --read-only or TG_READONLY=1.
 func RequireWritesNotReadOnly(args Args) error {
-	if args.ReadOnly || os.Getenv("TG_READONLY") == "1" {
+	if ReadOnlyEnabled(args.ReadOnly) {
 		return NewWriteDisallowed("Writes blocked: read-only mode active (--read-only / TG_READONLY=1)")
 	}
 	return nil
+}
+
+// ReadOnlyEnabled combines the parsed CLI flag with a fail-safe truthy
+// interpretation of TG_READONLY. Explicit false-like values disable the env
+// switch; any other nonblank value enables read-only mode.
+func ReadOnlyEnabled(flag bool) bool {
+	if flag {
+		return true
+	}
+	value := strings.ToLower(strings.TrimSpace(os.Getenv("TG_READONLY")))
+	switch value {
+	case "", "0", "false", "no", "off":
+		return false
+	default:
+		return true
+	}
 }
 
 // RequireWriteAllowed enforces --read-only and then --allow-write / TG_ALLOW_WRITE=1.

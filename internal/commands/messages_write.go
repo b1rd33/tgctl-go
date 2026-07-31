@@ -23,10 +23,15 @@ import (
 // gotd client can read tg_entities to turn chat_ids into InputPeers).
 type ClientFactory func(ctx context.Context, sessionPath, dbPath string) (client.Client, error)
 
+// ReadOnlyClientFactory builds a Telegram client whose session state is
+// isolated from the real session path and which never opens the local DB.
+type ReadOnlyClientFactory func(ctx context.Context, sessionPath string) (client.Client, error)
+
 // CommandsConfig bundles dependencies the command tree needs.
 type CommandsConfig struct {
-	Paths         AccountPathProvider
-	ClientFactory ClientFactory
+	Paths                 AccountPathProvider
+	ClientFactory         ClientFactory
+	ReadOnlyClientFactory ReadOnlyClientFactory
 }
 
 // addWriteFlags adds the safety/idempotency flags every write command shares.
@@ -104,6 +109,9 @@ type resolvedWritePaths struct {
 }
 
 func resolveWritePathSet(cmd *cobra.Command, paths AccountPathProvider) (resolvedWritePaths, error) {
+	if err := safety.RequireWritesNotReadOnly(safety.Args{ReadOnly: RootConfigFrom(cmd.Root()).ReadOnly}); err != nil {
+		return resolvedWritePaths{}, err
+	}
 	account, err := selectedAccount(cmd, paths)
 	if err != nil {
 		return resolvedWritePaths{}, err

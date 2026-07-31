@@ -11,7 +11,6 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/dispatch"
 	"github.com/b1rd33/tgctl-go/internal/resolve"
 	"github.com/b1rd33/tgctl-go/internal/safety"
-	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
 func registerTopicCommands(root *cobra.Command, cfg CommandsConfig) {
@@ -31,15 +30,15 @@ func topicsListCommand(cfg CommandsConfig) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			limit, _ := cmd.Flags().GetInt("limit")
 			query, _ := cmd.Flags().GetString("query")
-			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+			paths, pathErr := resolvePaths(cmd, cfg.Paths)
 			if pathErr != nil {
 				return emitDispatchedFailure(cmd, "topics-list", pathErr)
 			}
 			code := dispatch.Run("topics-list", dispatch.Options{
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
-				AuditPath: auditPath, Args: map[string]any{"chat": args[0], "limit": limit, "query": query},
+				AuditPath: paths.audit, Args: map[string]any{"chat": args[0], "limit": limit, "query": query},
 			}, func(ctx context.Context) (any, error) {
-				db, err := store.Connect(dbPath)
+				db, err := connectReadDB(paths)
 				if err != nil {
 					return nil, err
 				}
@@ -48,7 +47,7 @@ func topicsListCommand(cfg CommandsConfig) *cobra.Command {
 				if err != nil {
 					return nil, err
 				}
-				c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
+				c, err := openReadClient(ctx, cfg, paths)
 				if err != nil {
 					return nil, err
 				}

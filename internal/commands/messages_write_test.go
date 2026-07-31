@@ -34,6 +34,9 @@ func setupWriteEnv(t *testing.T) (CommandsConfig, *client.FakeClient, string) {
 		ClientFactory: func(ctx context.Context, _, _ string) (client.Client, error) {
 			return fc, nil
 		},
+		ReadOnlyClientFactory: func(ctx context.Context, _ string) (client.Client, error) {
+			return fc, nil
+		},
 	}
 	return cfg, fc, dir
 }

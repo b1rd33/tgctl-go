@@ -5,8 +5,6 @@ import (
 	"database/sql"
 
 	"github.com/spf13/cobra"
-
-	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
 func registerExtraReadCommands(root *cobra.Command, paths AccountPathProvider) {
@@ -22,7 +20,7 @@ func statsCommand(paths AccountPathProvider) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runDispatchedRead(cmd, "stats", nil, paths, func(ctx context.Context, p readPaths) (any, error) {
-				db, err := store.Connect(p.db)
+				db, err := connectReadDB(p)
 				if err != nil {
 					return nil, err
 				}
@@ -47,7 +45,7 @@ func contactsCommand(paths AccountPathProvider) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			limit, _ := cmd.Flags().GetInt("limit")
 			return runDispatchedRead(cmd, "contacts", map[string]any{"limit": limit}, paths, func(ctx context.Context, p readPaths) (any, error) {
-				db, err := store.Connect(p.db)
+				db, err := connectReadDB(p)
 				if err != nil {
 					return nil, err
 				}
@@ -86,7 +84,7 @@ func unreadCommand(paths AccountPathProvider) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			limit, _ := cmd.Flags().GetInt("limit")
 			return runDispatchedRead(cmd, "unread", map[string]any{"limit": limit}, paths, func(ctx context.Context, p readPaths) (any, error) {
-				db, err := store.Connect(p.db)
+				db, err := connectReadDB(p)
 				if err != nil {
 					return nil, err
 				}

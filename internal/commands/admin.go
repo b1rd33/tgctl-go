@@ -8,7 +8,6 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/dispatch"
 	"github.com/b1rd33/tgctl-go/internal/resolve"
 	"github.com/b1rd33/tgctl-go/internal/safety"
-	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
 func registerAdminCommands(root *cobra.Command, cfg CommandsConfig) {
@@ -17,11 +16,11 @@ func registerAdminCommands(root *cobra.Command, cfg CommandsConfig) {
 	root.AddCommand(adminValueCommand(cfg, "chat-photo", "channels.EditPhoto", "Edit chat photo", "photo"))
 	root.AddCommand(setPermissionsCommand(cfg))
 	root.AddCommand(adminNoValueCommand(cfg, "chat-invite-link", "messages.ExportChatInvite", "Export an invite link"))
-	root.AddCommand(adminUserCommand(cfg, "promote", "channels.EditAdmin", false))
-	root.AddCommand(adminUserCommand(cfg, "demote", "channels.EditAdmin", false))
-	root.AddCommand(adminUserCommand(cfg, "ban-from-chat", "channels.EditBanned", true))
-	root.AddCommand(adminUserCommand(cfg, "kick", "channels.EditBanned", true))
-	root.AddCommand(adminUserCommand(cfg, "unban-from-chat", "channels.EditBanned", false))
+	root.AddCommand(adminUserCommand(cfg, "promote", "channels.EditAdmin", "chat_id"))
+	root.AddCommand(adminUserCommand(cfg, "demote", "channels.EditAdmin", ""))
+	root.AddCommand(adminUserCommand(cfg, "ban-from-chat", "channels.EditBanned", "user_id"))
+	root.AddCommand(adminUserCommand(cfg, "kick", "channels.EditBanned", "user_id"))
+	root.AddCommand(adminUserCommand(cfg, "unban-from-chat", "channels.EditBanned", ""))
 	root.AddCommand(chatMembersCommand(cfg))
 	root.AddCommand(chatsInfoCommand(cfg))
 	root.AddCommand(accountSessionsCommand(cfg))
@@ -111,7 +110,7 @@ func adminNoValueCommand(cfg CommandsConfig, name, method, short string) *cobra.
 	return cmd
 }
 
-func adminUserCommand(cfg CommandsConfig, name, method string, destructive bool) *cobra.Command {
+func adminUserCommand(cfg CommandsConfig, name, method, confirmSlot string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          name + " <chat> <user-id>",
 		Short:        name + " user in chat",
@@ -125,8 +124,12 @@ func adminUserCommand(cfg CommandsConfig, name, method string, destructive bool)
 			payload := map[string]any{"user_id": userID}
 			return runWrite(cmd, name, method, args[0], cfg, payload,
 				func(ctx context.Context, c client.Client, chatID int64, _ string) (map[string]any, error) {
-					if destructive {
-						if err := safety.RequireTypedConfirm(writeArgsFrom(cmd).Args, userID, "user_id"); err != nil {
+					if confirmSlot != "" {
+						expected := any(userID)
+						if confirmSlot == "chat_id" {
+							expected = chatID
+						}
+						if err := safety.RequireTypedConfirm(writeArgsFrom(cmd).Args, expected, confirmSlot); err != nil {
 							return nil, err
 						}
 					}
@@ -174,12 +177,12 @@ func chatsInfoCommand(cfg CommandsConfig) *cobra.Command {
 			if err != nil {
 				return emitDispatchedFailure(cmd, "chats-info", err)
 			}
-			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+			paths, pathErr := resolvePaths(cmd, cfg.Paths)
 			if pathErr != nil {
 				return emitDispatchedFailure(cmd, "chats-info", pathErr)
 			}
-			code := dispatch.Run("chats-info", dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: auditPath}, func(ctx context.Context) (any, error) {
-				c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
+			code := dispatch.Run("chats-info", dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: paths.audit}, func(ctx context.Context) (any, error) {
+				c, err := openReadClient(ctx, cfg, paths)
 				if err != nil {
 					return nil, err
 				}
@@ -204,12 +207,12 @@ func accountSessionsCommand(cfg CommandsConfig) *cobra.Command {
 		Short:        "List authorized Telegram sessions",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+			paths, pathErr := resolvePaths(cmd, cfg.Paths)
 			if pathErr != nil {
 				return emitDispatchedFailure(cmd, "account-sessions", pathErr)
 			}
-			code := dispatch.Run("account-sessions", dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: auditPath}, func(ctx context.Context) (any, error) {
-				c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
+			code := dispatch.Run("account-sessions", dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: paths.audit}, func(ctx context.Context) (any, error) {
+				c, err := openReadClient(ctx, cfg, paths)
 				if err != nil {
 					return nil, err
 				}
@@ -229,12 +232,12 @@ func accountSessionsCommand(cfg CommandsConfig) *cobra.Command {
 }
 
 func runAdminRead(cmd *cobra.Command, cfg CommandsConfig, name, selector string, runner func(context.Context, client.Client, int64, string) (any, error)) error {
-	dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+	paths, pathErr := resolvePaths(cmd, cfg.Paths)
 	if pathErr != nil {
 		return emitDispatchedFailure(cmd, name, pathErr)
 	}
-	code := dispatch.Run(name, dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: auditPath}, func(ctx context.Context) (any, error) {
-		db, err := store.Connect(dbPath)
+	code := dispatch.Run(name, dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: paths.audit}, func(ctx context.Context) (any, error) {
+		db, err := connectReadDB(paths)
 		if err != nil {
 			return nil, err
 		}
@@ -243,7 +246,7 @@ func runAdminRead(cmd *cobra.Command, cfg CommandsConfig, name, selector string,
 		if err != nil {
 			return nil, err
 		}
-		c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
+		c, err := openReadClient(ctx, cfg, paths)
 		if err != nil {
 			return nil, err
 		}

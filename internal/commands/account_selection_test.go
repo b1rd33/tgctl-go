@@ -168,6 +168,9 @@ func setupAccountIsolation(t *testing.T) (*accounts.Manager, CommandsConfig, acc
 		ClientFactory: func(context.Context, string, string) (client.Client, error) {
 			return &client.FakeClient{}, nil
 		},
+		ReadOnlyClientFactory: func(context.Context, string) (client.Client, error) {
+			return &client.FakeClient{}, nil
+		},
 	}
 	return mgr, cfg, defaultPaths, workPaths
 }

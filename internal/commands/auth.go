@@ -13,6 +13,7 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/client"
 	"github.com/b1rd33/tgctl-go/internal/dispatch"
 	"github.com/b1rd33/tgctl-go/internal/resolve"
+	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
@@ -148,7 +149,7 @@ func registerAuthWithFetcher(root *cobra.Command, paths AccountPathProvider, fet
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			offline, _ := cmd.Flags().GetBool("offline")
-			readOnly := RootConfigFrom(cmd.Root()).ReadOnly || os.Getenv("TG_READONLY") == "1"
+			readOnly := safety.ReadOnlyEnabled(RootConfigFrom(cmd.Root()).ReadOnly)
 			account, err := selectedAccount(cmd, paths)
 			if err != nil {
 				return emitDispatchedFailure(cmd, "me", err)

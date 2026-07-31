@@ -46,6 +46,19 @@ func TestEnvReadOnlyBlocksEvenWithAllowWrite(t *testing.T) {
 	}
 }
 
+func TestEnvReadOnlyTruthyValuesBlockWrites(t *testing.T) {
+	for _, value := range []string{"true", "TRUE", "yes", "on"} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("TG_READONLY", value)
+			err := RequireWritesNotReadOnly(Args{})
+			var wd *WriteDisallowed
+			if !errors.As(err, &wd) {
+				t.Fatalf("TG_READONLY=%q err = %v, want *WriteDisallowed", value, err)
+			}
+		})
+	}
+}
+
 func TestRequireTypedConfirmMissing(t *testing.T) {
 	err := RequireTypedConfirm(Args{}, int64(-100123), "chat_id")
 	var nc *NeedsConfirm

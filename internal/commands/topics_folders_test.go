@@ -64,6 +64,25 @@ func TestFolderDeleteRejectsDefaultFolder(t *testing.T) {
 	}
 }
 
+func TestFolderDeleteRequiresTypedFolderID(t *testing.T) {
+	cfg, fc, _ := setupWriteEnv(t)
+	out, code := runRoot(t, cfg, "folder-delete", "2", "--allow-write", "--json")
+	if code != 7 {
+		t.Fatalf("missing confirm code=%d want NEEDS_CONFIRM=7\nout:%s", code, out)
+	}
+	out, code = runRoot(t, cfg, "folder-delete", "2", "--allow-write", "--confirm", "3", "--json")
+	if code != 2 {
+		t.Fatalf("mismatch code=%d want BAD_ARGS=2\nout:%s", code, out)
+	}
+	out, code = runRoot(t, cfg, "folder-delete", "2", "--allow-write", "--confirm", " 2 ", "--json")
+	if code != 0 {
+		t.Fatalf("confirmed code=%d\nout:%s", code, out)
+	}
+	if len(fc.FolderDeletes) != 1 || fc.FolderDeletes[0] != 2 {
+		t.Fatalf("FolderDeletes=%#v", fc.FolderDeletes)
+	}
+}
+
 func TestFolderCreateReplaysIdempotency(t *testing.T) {
 	cfg, fc, _ := setupWriteEnv(t)
 	fc.Folders = []client.FolderInfo{{ID: 2, Title: "Existing"}}

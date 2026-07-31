@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/b1rd33/tgctl-go/internal/client"
 	"github.com/b1rd33/tgctl-go/internal/dispatch"
 	"github.com/b1rd33/tgctl-go/internal/resolve"
 	"github.com/b1rd33/tgctl-go/internal/safety"
@@ -254,7 +255,8 @@ func nullIfEmpty(s string) any {
 
 // readPaths bundles the per-account paths each read runner needs.
 type readPaths struct {
-	db, audit string
+	db, session, audit string
+	readOnly           bool
 }
 
 func registerReadCommands(root *cobra.Command, paths AccountPathProvider) {
@@ -270,11 +272,36 @@ func resolvePaths(cmd *cobra.Command, paths AccountPathProvider) (readPaths, err
 	if err != nil {
 		return readPaths{}, err
 	}
-	db, _, audit, err := paths.AccountPaths(account)
+	readOnly := commandReadOnly(cmd)
+	db, session, audit, err := accountPathsForMode(paths, account, readOnly)
 	if err != nil {
 		return readPaths{}, err
 	}
-	return readPaths{db: db, audit: audit}, nil
+	if readOnly {
+		audit = ""
+	}
+	return readPaths{db: db, session: session, audit: audit, readOnly: readOnly}, nil
+}
+
+func commandReadOnly(cmd *cobra.Command) bool {
+	return safety.ReadOnlyEnabled(RootConfigFrom(cmd.Root()).ReadOnly)
+}
+
+func connectReadDB(p readPaths) (*sql.DB, error) {
+	if p.readOnly {
+		return store.ConnectReadonly(p.db)
+	}
+	return store.Connect(p.db)
+}
+
+func openReadClient(ctx context.Context, cfg CommandsConfig, p readPaths) (client.Client, error) {
+	if p.readOnly {
+		if cfg.ReadOnlyClientFactory == nil {
+			return nil, fmt.Errorf("read-only Telegram client factory is not configured")
+		}
+		return cfg.ReadOnlyClientFactory(ctx, p.session)
+	}
+	return cfg.ClientFactory(ctx, p.session, p.db)
 }
 
 func runDispatchedRead(cmd *cobra.Command, name string, args map[string]any, paths AccountPathProvider, runner func(ctx context.Context, p readPaths) (any, error)) error {
