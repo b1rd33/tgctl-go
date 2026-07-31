@@ -614,7 +614,7 @@ tg demote <chat> <user-id> [flags]
 **Example**
 
 ```bash
-tg demote <group-chat-id> 1240314255 --allow-write --confirm 1240314255 --json
+tg demote 987654321 1240314255 --allow-write --confirm 987654321 --json
 ```
 
 **Flags**
@@ -1275,7 +1275,7 @@ tg promote <chat> <user-id> [flags]
 **Example**
 
 ```bash
-tg promote <group-chat-id> 1240314255 --allow-write --confirm 1240314255 --json
+tg promote 987654321 1240314255 --allow-write --confirm 987654321 --json
 ```
 
 **Flags**

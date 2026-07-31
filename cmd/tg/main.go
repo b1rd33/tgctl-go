@@ -48,7 +48,12 @@ func startupReadOnly(args []string) bool {
 		}
 		if strings.HasPrefix(arg, "--read-only=") {
 			value := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(arg, "--read-only=")))
-			if value != "0" && value != "false" && value != "no" && value != "off" {
+			switch value {
+			case "0", "f", "false", "no", "off":
+				continue
+			default:
+				// Recognized true spellings and malformed values both fail safe.
+				// Cobra remains responsible for reporting malformed booleans.
 				return true
 			}
 		}

@@ -15,9 +15,9 @@ parse args
    ↓
 write gate: --allow-write or TG_READONLY rejection
    ↓
-destructive gate (if applicable): typed --confirm <id>
+selector gate: --fuzzy required for title selectors; resolve from the cache read-only
    ↓
-fuzzy gate: --fuzzy required for non-int / non-@username selectors
+destructive gate (if applicable): typed --confirm <resolved-id>
    ↓
 dry-run short-circuit: print would-do envelope, exit 0
    ↓
@@ -53,9 +53,17 @@ scripts that are supposed to be pure-read.
 
 ## Destructive gate (typed `--confirm <id>`)
 
-Destructive commands (`delete-msg`, `leave-chat`, `block-user`,
-`promote`, `demote`, `ban-from-chat`, `kick`, `terminate-session`)
-require `--confirm <id>` matching the **resolved** id, not just a flag.
+Destructive commands require `--confirm <id>` matching their typed target,
+not just a flag. Confirmation is checked before dry-run, idempotency replay,
+audit writes, writable database/session access, or creation of a Telegram
+client.
+
+| Commands | Confirmation target |
+|---|---|
+| `delete-msg`, `leave-chat`, `promote`, `demote` | resolved `chat_id` |
+| `block-user`, `unblock-user`, `ban-from-chat`, `kick` | resolved `user_id` |
+| `folder-delete` | `folder_id` |
+| `terminate-session` | `session_hash` |
 
 ```bash
 tg delete-msg 1240314255 99 --allow-write                    # → exit 7: NEEDS_CONFIRM

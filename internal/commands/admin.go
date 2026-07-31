@@ -17,7 +17,7 @@ func registerAdminCommands(root *cobra.Command, cfg CommandsConfig) {
 	root.AddCommand(setPermissionsCommand(cfg))
 	root.AddCommand(adminNoValueCommand(cfg, "chat-invite-link", "messages.ExportChatInvite", "Export an invite link"))
 	root.AddCommand(adminUserCommand(cfg, "promote", "channels.EditAdmin", "chat_id"))
-	root.AddCommand(adminUserCommand(cfg, "demote", "channels.EditAdmin", ""))
+	root.AddCommand(adminUserCommand(cfg, "demote", "channels.EditAdmin", "chat_id"))
 	root.AddCommand(adminUserCommand(cfg, "ban-from-chat", "channels.EditBanned", "user_id"))
 	root.AddCommand(adminUserCommand(cfg, "kick", "channels.EditBanned", "user_id"))
 	root.AddCommand(adminUserCommand(cfg, "unban-from-chat", "channels.EditBanned", ""))
@@ -122,22 +122,20 @@ func adminUserCommand(cfg CommandsConfig, name, method, confirmSlot string) *cob
 				return emitDispatchedFailure(cmd, name, err)
 			}
 			payload := map[string]any{"user_id": userID}
-			return runWrite(cmd, name, method, args[0], cfg, payload,
-				func(ctx context.Context, c client.Client, chatID int64, _ string) (map[string]any, error) {
-					if confirmSlot != "" {
-						expected := any(userID)
-						if confirmSlot == "chat_id" {
-							expected = chatID
-						}
-						if err := safety.RequireTypedConfirm(writeArgsFrom(cmd).Args, expected, confirmSlot); err != nil {
-							return nil, err
-						}
-					}
-					if _, err := c.AdminAction(ctx, client.AdminActionReq{Action: name, ChatID: chatID, UserID: userID}); err != nil {
-						return nil, err
-					}
-					return map[string]any{"user_id": userID, "action": name}, nil
-				})
+			action := func(ctx context.Context, c client.Client, chatID int64, _ string) (map[string]any, error) {
+				if _, err := c.AdminAction(ctx, client.AdminActionReq{Action: name, ChatID: chatID, UserID: userID}); err != nil {
+					return nil, err
+				}
+				return map[string]any{"user_id": userID, "action": name}, nil
+			}
+			if confirmSlot != "" {
+				expected := func(int64) any { return userID }
+				if confirmSlot == "chat_id" {
+					expected = func(chatID int64) any { return chatID }
+				}
+				return runWriteWithResolvedConfirm(cmd, name, method, args[0], cfg, payload, confirmSlot, expected, action)
+			}
+			return runWrite(cmd, name, method, args[0], cfg, payload, action)
 		},
 	}
 	addWriteFlags(cmd)

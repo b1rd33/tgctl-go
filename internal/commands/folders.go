@@ -201,10 +201,10 @@ func folderDeleteCommand(cfg CommandsConfig) *cobra.Command {
 			if id == 0 {
 				return emitDispatchedFailure(cmd, "folder-delete", safety.NewBadArgs("folder id 0 is reserved and cannot be deleted"))
 			}
+			if err := requireTypedWriteConfirm(cmd, id, "folder_id"); err != nil {
+				return emitDispatchedFailure(cmd, "folder-delete", err)
+			}
 			return runFolderWrite(cmd, cfg, "folder-delete", "messages.UpdateDialogFilter", map[string]any{"folder_id": id}, func(ctx context.Context, c client.Client) (map[string]any, error) {
-				if err := safety.RequireTypedConfirm(writeArgsFrom(cmd).Args, id, "folder_id"); err != nil {
-					return nil, err
-				}
 				if err := c.DeleteFolder(ctx, id); err != nil {
 					return nil, err
 				}

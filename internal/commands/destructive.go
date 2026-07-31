@@ -44,6 +44,9 @@ func deleteMsgCommand(cfg CommandsConfig) *cobra.Command {
 			}
 
 			payload := map[string]any{"message_ids": ids, "for_everyone": forEveryone}
+			if err := requireResolvedTypedWriteConfirm(cmd, cfg.Paths, selector, "chat_id", func(chatID int64) any { return chatID }); err != nil {
+				return emitDispatchedFailure(cmd, "delete-msg", err)
+			}
 			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
 			if pathErr != nil {
 				return emitDispatchedFailure(cmd, "delete-msg", pathErr)
@@ -66,9 +69,6 @@ func deleteMsgCommand(cfg CommandsConfig) *cobra.Command {
 					TelethonMethod: "messages.DeleteMessages",
 					PayloadPreview: payload,
 					Run: func(ctx context.Context, chatID int64, _ string) (map[string]any, error) {
-						if err := safety.RequireTypedConfirm(wargs.Args, chatID, "chat_id"); err != nil {
-							return nil, err
-						}
 						effective := forEveryone
 						if !forEveryone && !noForEveryone {
 							out, err := allCachedMessagesOutgoing(db, chatID, ids)
@@ -154,6 +154,9 @@ func leaveChatCommand(cfg CommandsConfig) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selector := args[0]
 			payload := map[string]any{}
+			if err := requireResolvedTypedWriteConfirm(cmd, cfg.Paths, selector, "chat_id", func(chatID int64) any { return chatID }); err != nil {
+				return emitDispatchedFailure(cmd, "leave-chat", err)
+			}
 			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
 			if pathErr != nil {
 				return emitDispatchedFailure(cmd, "leave-chat", pathErr)
@@ -178,9 +181,6 @@ func leaveChatCommand(cfg CommandsConfig) *cobra.Command {
 						if isUserChat(db, chatID) {
 							return nil, safety.NewBadArgs(
 								"leave-chat refuses 1-on-1 user chats; use block-user instead")
-						}
-						if err := safety.RequireTypedConfirm(wargs.Args, chatID, "chat_id"); err != nil {
-							return nil, err
 						}
 						c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
 						if err != nil {
@@ -230,6 +230,9 @@ func blockUserCommand(cfg CommandsConfig, unblock bool) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selector := args[0]
 			payload := map[string]any{}
+			if err := requireResolvedTypedWriteConfirm(cmd, cfg.Paths, selector, "user_id", func(userID int64) any { return userID }); err != nil {
+				return emitDispatchedFailure(cmd, name, err)
+			}
 			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
 			if pathErr != nil {
 				return emitDispatchedFailure(cmd, name, pathErr)
@@ -249,9 +252,6 @@ func blockUserCommand(cfg CommandsConfig, unblock bool) *cobra.Command {
 					DBPath: dbPath, AuditPath: auditPath, TelethonMethod: method,
 					PayloadPreview: payload,
 					Run: func(ctx context.Context, userID int64, _ string) (map[string]any, error) {
-						if err := safety.RequireTypedConfirm(wargs.Args, userID, "user_id"); err != nil {
-							return nil, err
-						}
 						c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
 						if err != nil {
 							return nil, err
@@ -294,21 +294,17 @@ func terminateSessionCommand(cfg CommandsConfig) *cobra.Command {
 					safety.NewBadArgs("session-hash must be an integer (got %q)", rawHash))
 			}
 			payload := map[string]any{"session_hash": hash}
+			if err := requireTypedWriteConfirm(cmd, hash, "session_hash"); err != nil {
+				return emitDispatchedFailure(cmd, "terminate-session", err)
+			}
 			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
 			if pathErr != nil {
 				return emitDispatchedFailure(cmd, "terminate-session", pathErr)
 			}
-			wargs := writeArgsFrom(cmd)
 			code := dispatch.Run("terminate-session", dispatch.Options{
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				AuditPath: auditPath, Args: payload,
 			}, func(ctx context.Context) (any, error) {
-				if err := safety.RequireWriteAllowed(wargs.Args); err != nil {
-					return nil, err
-				}
-				if err := safety.RequireTypedConfirm(wargs.Args, hash, "session_hash"); err != nil {
-					return nil, err
-				}
 				c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
 				if err != nil {
 					return nil, err

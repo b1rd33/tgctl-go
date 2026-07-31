@@ -109,7 +109,7 @@ type resolvedWritePaths struct {
 }
 
 func resolveWritePathSet(cmd *cobra.Command, paths AccountPathProvider) (resolvedWritePaths, error) {
-	if err := safety.RequireWritesNotReadOnly(safety.Args{ReadOnly: RootConfigFrom(cmd.Root()).ReadOnly}); err != nil {
+	if err := safety.RequireWriteAllowed(writeArgsFrom(cmd).Args); err != nil {
 		return resolvedWritePaths{}, err
 	}
 	account, err := selectedAccount(cmd, paths)
@@ -121,6 +121,56 @@ func resolveWritePathSet(cmd *cobra.Command, paths AccountPathProvider) (resolve
 		return resolvedWritePaths{}, err
 	}
 	return resolvedWritePaths{dbPath: dbPath, sessionPath: sessionPath, auditPath: auditPath}, nil
+}
+
+// requireTypedWriteConfirm is the preflight for destructive commands whose
+// confirmation target is already explicit in the command arguments. Both
+// gates run before account paths, audit files, sessions, or clients are opened.
+func requireTypedWriteConfirm(cmd *cobra.Command, expected any, slot string) error {
+	wargs := writeArgsFrom(cmd)
+	if err := safety.RequireWriteAllowed(wargs.Args); err != nil {
+		return err
+	}
+	return safety.RequireTypedConfirm(wargs.Args, expected, slot)
+}
+
+// requireResolvedTypedWriteConfirm resolves a selector through the existing
+// cache in read-only mode and enforces typed confirmation before the writable
+// pipeline starts. In particular this precedes dry-run, idempotency lookup,
+// audit dispatch, session access, and ClientFactory.
+func requireResolvedTypedWriteConfirm(cmd *cobra.Command, paths AccountPathProvider, selector, slot string, expected func(int64) any) error {
+	wargs := writeArgsFrom(cmd)
+	if err := safety.RequireWriteAllowed(wargs.Args); err != nil {
+		return err
+	}
+	if err := safety.RequireExplicitOrFuzzy(wargs.Args, selector); err != nil {
+		return err
+	}
+	account, err := selectedAccount(cmd, paths)
+	if err != nil {
+		return err
+	}
+	dbPath, _, _, err := accountPathsForMode(paths, account, true)
+	if err != nil {
+		return err
+	}
+	db, err := store.ConnectReadonly(dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	resolvedID, _, err := resolve.ResolveChatDB(db, selector)
+	if err != nil {
+		return err
+	}
+	return safety.RequireTypedConfirm(wargs.Args, expected(resolvedID), slot)
+}
+
+func runWriteWithResolvedConfirm(cmd *cobra.Command, name, telethonMethod, selector string, cfg CommandsConfig, payloadPreview map[string]any, slot string, expected func(int64) any, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
+	if err := requireResolvedTypedWriteConfirm(cmd, cfg.Paths, selector, slot, expected); err != nil {
+		return emitDispatchedFailure(cmd, name, err)
+	}
+	return runWrite(cmd, name, telethonMethod, selector, cfg, payloadPreview, action)
 }
 
 func resolveWritePaths(cmd *cobra.Command, paths AccountPathProvider) (string, string, string, error) {

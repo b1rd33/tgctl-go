@@ -192,3 +192,84 @@ func TestTelegramWritesReadOnlyFailBeforeCreatingAccountPaths(t *testing.T) {
 		})
 	}
 }
+
+func TestTelegramWritesWithoutAllowWriteFailBeforeCreatingAccountPaths(t *testing.T) {
+	commands := []struct {
+		name     string
+		register func(*cobra.Command, *accounts.Manager, CommandsConfig)
+		args     []string
+	}{
+		{
+			name: "send",
+			register: func(root *cobra.Command, _ *accounts.Manager, cfg CommandsConfig) {
+				registerWriteCommands(root, cfg)
+			},
+			args: []string{"send", "1", "hello", "--json"},
+		},
+		{
+			name: "send dry-run",
+			register: func(root *cobra.Command, _ *accounts.Manager, cfg CommandsConfig) {
+				registerWriteCommands(root, cfg)
+			},
+			args: []string{"send", "1", "hello", "--dry-run", "--json"},
+		},
+		{
+			name: "delete-msg",
+			register: func(root *cobra.Command, _ *accounts.Manager, cfg CommandsConfig) {
+				registerDestructiveCommands(root, cfg)
+			},
+			args: []string{"delete-msg", "1", "1", "--confirm", "1", "--json"},
+		},
+		{
+			name: "folder-create",
+			register: func(root *cobra.Command, _ *accounts.Manager, cfg CommandsConfig) {
+				registerFolderCommands(root, cfg)
+			},
+			args: []string{"folder-create", "Ops", "--include-chats", "1", "--json"},
+		},
+		{
+			name: "discover",
+			register: func(root *cobra.Command, _ *accounts.Manager, cfg CommandsConfig) {
+				registerLocalDBCommands(root, cfg)
+			},
+			args: []string{"discover", "--json"},
+		},
+		{
+			name: "listen",
+			register: func(root *cobra.Command, _ *accounts.Manager, cfg CommandsConfig) {
+				registerLiveCommands(root, cfg)
+			},
+			args: []string{"listen", "--json"},
+		},
+		{
+			name: "send-by-username",
+			register: func(root *cobra.Command, mgr *accounts.Manager, _ CommandsConfig) {
+				registerSendByUsername(root, mgr)
+			},
+			args: []string{"send-by-username", "@ada", "hello", "--json"},
+		},
+	}
+	for _, tt := range commands {
+		t.Run(tt.name, func(t *testing.T) {
+			rootDir := t.TempDir()
+			mgr := accounts.New(rootDir)
+			factoryCalls := 0
+			cfg := CommandsConfig{Paths: mgr, ClientFactory: func(context.Context, string, string) (client.Client, error) {
+				factoryCalls++
+				return nil, errors.New("client factory called")
+			}}
+			root := NewRootCommand()
+			tt.register(root, mgr, cfg)
+			root.SetOut(&bytes.Buffer{})
+			root.SetErr(&bytes.Buffer{})
+			root.SetArgs(tt.args)
+			if code := ExecuteRoot(root); code != 6 {
+				t.Fatalf("exit code = %d, want WRITE_DISALLOWED=6", code)
+			}
+			if factoryCalls != 0 {
+				t.Fatalf("client factory calls = %d, want 0", factoryCalls)
+			}
+			assertPathMissing(t, filepath.Join(rootDir, "accounts"))
+		})
+	}
+}

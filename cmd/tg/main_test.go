@@ -150,3 +150,53 @@ func TestProcessStartupNormalModeStillMigratesLegacyState(t *testing.T) {
 		}
 	}
 }
+
+func TestProcessStartupFalseBooleanSpellingsStillMigrateLegacyState(t *testing.T) {
+	binary := buildTGProcess(t)
+	for _, spelling := range []string{"f", "F", "false", "0"} {
+		t.Run(spelling, func(t *testing.T) {
+			root := t.TempDir()
+			state := seedLegacyState(t, root)
+			runTGProcess(t, binary, root, withoutEnv(os.Environ(), "TG_READONLY"), "--read-only="+spelling, "version", "--json")
+			for name, want := range state.files {
+				destination := filepath.Join(root, "accounts", "default", name)
+				got, err := os.ReadFile(destination)
+				if err != nil {
+					t.Fatalf("read migrated %s: %v", name, err)
+				}
+				if !bytes.Equal(got, want) {
+					t.Fatalf("migrated %s = %q, want %q", name, got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestStartupReadOnlyRecognizesDocumentedBooleanSpellings(t *testing.T) {
+	for _, spelling := range []string{"f", "F", "false", "0", "no", "off"} {
+		if startupReadOnly([]string{"--read-only=" + spelling}) {
+			t.Errorf("--read-only=%s treated as true", spelling)
+		}
+	}
+	for _, spelling := range []string{"t", "T", "true", "1", "yes", "on"} {
+		if !startupReadOnly([]string{"--read-only=" + spelling}) {
+			t.Errorf("--read-only=%s treated as false", spelling)
+		}
+	}
+	if !startupReadOnly([]string{"--read-only=malformed"}) {
+		t.Error("malformed boolean must fail safe as read-only before Cobra reports it")
+	}
+}
+
+func TestProcessStartupMalformedReadOnlyFailsSafeAndLetsCobraRejectIt(t *testing.T) {
+	binary := buildTGProcess(t)
+	root := t.TempDir()
+	state := seedLegacyState(t, root)
+	cmd := exec.Command(binary, "--read-only=malformed", "version", "--json")
+	cmd.Dir = root
+	cmd.Env = withoutEnv(os.Environ(), "TG_READONLY")
+	if out, err := cmd.CombinedOutput(); err == nil {
+		t.Fatalf("malformed boolean unexpectedly succeeded: %s", out)
+	}
+	assertLegacyUnchanged(t, root, state)
+}

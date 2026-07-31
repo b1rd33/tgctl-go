@@ -271,9 +271,9 @@ func exampleFor(name, use string) string {
 	case "set-permissions":
 		return "tg set-permissions <group-chat-id> --send-messages --allow-write --json"
 	case "promote":
-		return "tg promote <group-chat-id> 1240314255 --allow-write --confirm 1240314255 --json"
+		return "tg promote 987654321 1240314255 --allow-write --confirm 987654321 --json"
 	case "demote":
-		return "tg demote <group-chat-id> 1240314255 --allow-write --confirm 1240314255 --json"
+		return "tg demote 987654321 1240314255 --allow-write --confirm 987654321 --json"
 	case "ban-from-chat":
 		return "tg ban-from-chat <group-chat-id> 1240314255 --allow-write --confirm 1240314255 --json"
 	case "unban-from-chat":

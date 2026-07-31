@@ -26,7 +26,8 @@ func registerSendByUsername(root *cobra.Command, mgr *accounts.Manager) {
 			selector := args[0]
 			text := args[1]
 			rootCfg := RootConfigFrom(cmd.Root())
-			if err := safety.RequireWritesNotReadOnly(safety.Args{ReadOnly: rootCfg.ReadOnly}); err != nil {
+			allow, _ := cmd.Flags().GetBool("allow-write")
+			if err := safety.RequireWriteAllowed(safety.Args{ReadOnly: rootCfg.ReadOnly, AllowWrite: allow}); err != nil {
 				return emitDispatchedFailure(cmd, "send-by-username", err)
 			}
 			account, err := selectedAccount(cmd, mgr)
@@ -38,7 +39,6 @@ func registerSendByUsername(root *cobra.Command, mgr *accounts.Manager) {
 				return emitDispatchedFailure(cmd, "send-by-username", err)
 			}
 
-			allow, _ := cmd.Flags().GetBool("allow-write")
 			dryRun, _ := cmd.Flags().GetBool("dry-run")
 			replyTo, _ := cmd.Flags().GetInt64("reply-to")
 			silent, _ := cmd.Flags().GetBool("silent")
@@ -58,12 +58,6 @@ func registerSendByUsername(root *cobra.Command, mgr *accounts.Manager) {
 				AuditPath: paths.AuditPath,
 				Args:      map[string]any{"selector": selector, "dry_run": dryRun},
 			}, func(ctx context.Context) (any, error) {
-				if err := safety.RequireWriteAllowed(safety.Args{
-					ReadOnly:   rootCfg.ReadOnly,
-					AllowWrite: allow,
-				}); err != nil {
-					return nil, err
-				}
 				if dryRun {
 					out := map[string]any{"dry_run": true, "selector": selector}
 					for k, v := range payload {
