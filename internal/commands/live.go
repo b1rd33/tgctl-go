@@ -22,7 +22,10 @@ func registerLiveCommands(root *cobra.Command, cfg CommandsConfig) {
 			once, _ := cmd.Flags().GetBool("once")
 			onlyDMs, _ := cmd.Flags().GetBool("only-dms")
 			onlyGroups, _ := cmd.Flags().GetBool("only-groups")
-			dbPath, sessionPath, auditPath := resolveWritePaths(cmd, cfg.Paths)
+			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+			if pathErr != nil {
+				return emitDispatchedFailure(cmd, "listen", pathErr)
+			}
 			code := dispatch.Run("listen", dispatch.Options{
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: auditPath,
 			}, func(ctx context.Context) (any, error) {

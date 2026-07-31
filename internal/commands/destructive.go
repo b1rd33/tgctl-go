@@ -44,7 +44,10 @@ func deleteMsgCommand(cfg CommandsConfig) *cobra.Command {
 			}
 
 			payload := map[string]any{"message_ids": ids, "for_everyone": forEveryone}
-			dbPath, sessionPath, auditPath := resolveWritePaths(cmd, cfg.Paths)
+			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+			if pathErr != nil {
+				return emitDispatchedFailure(cmd, "delete-msg", pathErr)
+			}
 			wargs := writeArgsFrom(cmd)
 
 			code := dispatch.Run("delete-msg", dispatch.Options{
@@ -151,7 +154,10 @@ func leaveChatCommand(cfg CommandsConfig) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selector := args[0]
 			payload := map[string]any{}
-			dbPath, sessionPath, auditPath := resolveWritePaths(cmd, cfg.Paths)
+			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+			if pathErr != nil {
+				return emitDispatchedFailure(cmd, "leave-chat", pathErr)
+			}
 			wargs := writeArgsFrom(cmd)
 
 			code := dispatch.Run("leave-chat", dispatch.Options{
@@ -224,7 +230,10 @@ func blockUserCommand(cfg CommandsConfig, unblock bool) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selector := args[0]
 			payload := map[string]any{}
-			dbPath, sessionPath, auditPath := resolveWritePaths(cmd, cfg.Paths)
+			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+			if pathErr != nil {
+				return emitDispatchedFailure(cmd, name, pathErr)
+			}
 			wargs := writeArgsFrom(cmd)
 			code := dispatch.Run(name, dispatch.Options{
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
@@ -285,7 +294,10 @@ func terminateSessionCommand(cfg CommandsConfig) *cobra.Command {
 					safety.NewBadArgs("session-hash must be an integer (got %q)", rawHash))
 			}
 			payload := map[string]any{"session_hash": hash}
-			dbPath, sessionPath, auditPath := resolveWritePaths(cmd, cfg.Paths)
+			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+			if pathErr != nil {
+				return emitDispatchedFailure(cmd, "terminate-session", pathErr)
+			}
 			wargs := writeArgsFrom(cmd)
 			code := dispatch.Run("terminate-session", dispatch.Options{
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),

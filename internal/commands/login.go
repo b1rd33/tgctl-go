@@ -28,7 +28,10 @@ func registerLogin(root *cobra.Command, mgr *accounts.Manager) {
 		Short:        "Interactively authorize this account against Telegram",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			account := selectedAccount(cmd, mgr)
+			account, err := selectedAccount(cmd, mgr)
+			if err != nil {
+				return emitDispatchedFailure(cmd, "login", err)
+			}
 			paths, err := mgr.ResolvePaths(account)
 			if err != nil {
 				return emitDispatchedFailure(cmd, "login", err)

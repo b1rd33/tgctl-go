@@ -52,6 +52,10 @@ func uploadCommand(cfg CommandsConfig, name, kind, short string) *cobra.Command 
 				"filename":           filename,
 				"supports_streaming": supportsStreaming,
 			}
+			dbPath, _, _, pathErr := resolveWritePaths(cmd, cfg.Paths)
+			if pathErr != nil {
+				return emitDispatchedFailure(cmd, name, pathErr)
+			}
 			return runWrite(cmd, name, "messages.SendMedia", selector, cfg, payload,
 				func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error) {
 					resp, err := c.UploadFile(ctx, client.UploadFileReq{
@@ -62,7 +66,6 @@ func uploadCommand(cfg CommandsConfig, name, kind, short string) *cobra.Command 
 					if err != nil {
 						return nil, err
 					}
-					dbPath, _, _ := resolveWritePaths(cmd, cfg.Paths)
 					if db, err := store.Connect(dbPath); err == nil {
 						_ = store.RecordUploadedMedia(db, chatID, resp.MessageID, caption, mediaType, path)
 						_ = db.Close()

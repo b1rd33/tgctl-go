@@ -174,7 +174,10 @@ func chatsInfoCommand(cfg CommandsConfig) *cobra.Command {
 			if err != nil {
 				return emitDispatchedFailure(cmd, "chats-info", err)
 			}
-			dbPath, sessionPath, auditPath := resolveWritePaths(cmd, cfg.Paths)
+			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+			if pathErr != nil {
+				return emitDispatchedFailure(cmd, "chats-info", pathErr)
+			}
 			code := dispatch.Run("chats-info", dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: auditPath}, func(ctx context.Context) (any, error) {
 				c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
 				if err != nil {
@@ -201,7 +204,10 @@ func accountSessionsCommand(cfg CommandsConfig) *cobra.Command {
 		Short:        "List authorized Telegram sessions",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			dbPath, sessionPath, auditPath := resolveWritePaths(cmd, cfg.Paths)
+			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+			if pathErr != nil {
+				return emitDispatchedFailure(cmd, "account-sessions", pathErr)
+			}
 			code := dispatch.Run("account-sessions", dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: auditPath}, func(ctx context.Context) (any, error) {
 				c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
 				if err != nil {
@@ -223,7 +229,10 @@ func accountSessionsCommand(cfg CommandsConfig) *cobra.Command {
 }
 
 func runAdminRead(cmd *cobra.Command, cfg CommandsConfig, name, selector string, runner func(context.Context, client.Client, int64, string) (any, error)) error {
-	dbPath, sessionPath, auditPath := resolveWritePaths(cmd, cfg.Paths)
+	dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+	if pathErr != nil {
+		return emitDispatchedFailure(cmd, name, pathErr)
+	}
 	code := dispatch.Run(name, dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: auditPath}, func(ctx context.Context) (any, error) {
 		db, err := store.Connect(dbPath)
 		if err != nil {

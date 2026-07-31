@@ -17,14 +17,11 @@ type stubPaths struct {
 	current            string
 }
 
-func (s stubPaths) AccountPaths(string) (string, string, string) {
-	return s.db, s.session, s.audit
+func (s stubPaths) AccountPaths(string) (string, string, string, error) {
+	return s.db, s.session, s.audit, nil
 }
 
 func (s stubPaths) Current() string {
-	if s.current == "" {
-		return "default"
-	}
 	return s.current
 }
 

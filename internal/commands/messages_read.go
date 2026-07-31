@@ -265,14 +265,23 @@ func registerReadCommands(root *cobra.Command, paths AccountPathProvider) {
 	registerExtraReadCommands(root, paths)
 }
 
-func resolvePaths(cmd *cobra.Command, paths AccountPathProvider) readPaths {
-	account := selectedAccount(cmd, paths)
-	db, _, audit := paths.AccountPaths(account)
-	return readPaths{db: db, audit: audit}
+func resolvePaths(cmd *cobra.Command, paths AccountPathProvider) (readPaths, error) {
+	account, err := selectedAccount(cmd, paths)
+	if err != nil {
+		return readPaths{}, err
+	}
+	db, _, audit, err := paths.AccountPaths(account)
+	if err != nil {
+		return readPaths{}, err
+	}
+	return readPaths{db: db, audit: audit}, nil
 }
 
 func runDispatchedRead(cmd *cobra.Command, name string, args map[string]any, paths AccountPathProvider, runner func(ctx context.Context, p readPaths) (any, error)) error {
-	p := resolvePaths(cmd, paths)
+	p, err := resolvePaths(cmd, paths)
+	if err != nil {
+		return emitDispatchedFailure(cmd, name, err)
+	}
 	code := dispatch.Run(name, dispatch.Options{
 		JSON:      jsonMode(cmd),
 		Stdout:    cmd.OutOrStdout(),

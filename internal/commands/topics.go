@@ -31,7 +31,10 @@ func topicsListCommand(cfg CommandsConfig) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			limit, _ := cmd.Flags().GetInt("limit")
 			query, _ := cmd.Flags().GetString("query")
-			dbPath, sessionPath, auditPath := resolveWritePaths(cmd, cfg.Paths)
+			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+			if pathErr != nil {
+				return emitDispatchedFailure(cmd, "topics-list", pathErr)
+			}
 			code := dispatch.Run("topics-list", dispatch.Options{
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				AuditPath: auditPath, Args: map[string]any{"chat": args[0], "limit": limit, "query": query},

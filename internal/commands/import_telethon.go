@@ -36,7 +36,10 @@ func registerImportTelethon(root *cobra.Command, mgr *accounts.Manager) {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			src := args[0]
-			account := selectedAccount(cmd, mgr)
+			account, err := selectedAccount(cmd, mgr)
+			if err != nil {
+				return emitDispatchedFailure(cmd, "import-telethon-session", err)
+			}
 			paths, err := mgr.ResolvePaths(account)
 			if err != nil {
 				return emitDispatchedFailure(cmd, "import-telethon-session", err)

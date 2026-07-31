@@ -99,13 +99,19 @@ func registerWriteCommands(root *cobra.Command, cfg CommandsConfig) {
 	root.AddCommand(markReadCommand(cfg))
 }
 
-func resolveWritePaths(cmd *cobra.Command, paths AccountPathProvider) (string, string, string) {
-	account := selectedAccount(cmd, paths)
+func resolveWritePaths(cmd *cobra.Command, paths AccountPathProvider) (string, string, string, error) {
+	account, err := selectedAccount(cmd, paths)
+	if err != nil {
+		return "", "", "", err
+	}
 	return paths.AccountPaths(account)
 }
 
 func runWrite(cmd *cobra.Command, name, telethonMethod, selector string, cfg CommandsConfig, payloadPreview map[string]any, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
-	dbPath, sessionPath, auditPath := resolveWritePaths(cmd, cfg.Paths)
+	dbPath, sessionPath, auditPath, err := resolveWritePaths(cmd, cfg.Paths)
+	if err != nil {
+		return emitDispatchedFailure(cmd, name, err)
+	}
 	wargs := writeArgsFrom(cmd)
 	args := map[string]any{"chat": selector, "dry_run": wargs.DryRun}
 
@@ -281,7 +287,10 @@ func forwardCommand(cfg CommandsConfig) *cobra.Command {
 			// Resolve both chats. The pipeline only resolves one selector
 			// natively, so we resolve the source manually before calling
 			// runWrite against the destination.
-			dbPath, sessionPath, auditPath := resolveWritePaths(cmd, cfg.Paths)
+			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+			if pathErr != nil {
+				return emitDispatchedFailure(cmd, "forward", pathErr)
+			}
 			db, err := store.Connect(dbPath)
 			if err != nil {
 				return err

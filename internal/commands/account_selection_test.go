@@ -11,8 +11,17 @@ import (
 
 	"github.com/b1rd33/tgctl-go/internal/accounts"
 	"github.com/b1rd33/tgctl-go/internal/client"
+	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
+
+type failingAccountPaths struct{}
+
+func (failingAccountPaths) Current() string { return "default" }
+
+func (failingAccountPaths) AccountPaths(string) (string, string, string, error) {
+	return "", "", "", safety.NewBadArgs("account path resolution failed")
+}
 
 func TestSelectedAccountPrecedence(t *testing.T) {
 	tests := []struct {
@@ -32,7 +41,11 @@ func TestSelectedAccountPrecedence(t *testing.T) {
 			t.Setenv("TG_ACCOUNT", tt.env)
 			root := NewRootCommand()
 			rootConfigPtr(root).Account = tt.flag
-			if got := selectedAccount(root, stubPaths{current: tt.current}); got != tt.want {
+			got, err := selectedAccount(root, stubPaths{current: tt.current})
+			if err != nil {
+				t.Fatalf("selectedAccount: %v", err)
+			}
+			if got != tt.want {
 				t.Fatalf("selectedAccount = %q, want %q", got, tt.want)
 			}
 		})
@@ -52,6 +65,9 @@ func TestCommandsUseTGAccountWithoutCrossAccountLeakage(t *testing.T) {
 	if got := me["data"].(map[string]any)["user_id"]; got != float64(2) {
 		t.Fatalf("me selected user_id = %v, want work user 2", got)
 	}
+	if got := me["data"].(map[string]any)["session_path"]; got != workPaths.SessionPath {
+		t.Fatalf("me session_path = %v, want %s", got, workPaths.SessionPath)
+	}
 
 	show := runIsolationCommand(t, mgr, cfg, "show", "10", "--json")
 	if got := show["data"].(map[string]any)["chat"].(map[string]any)["title"]; got != "Work Chat" {
@@ -63,12 +79,19 @@ func TestCommandsUseTGAccountWithoutCrossAccountLeakage(t *testing.T) {
 		t.Fatalf("send selected chat = %v, want Work Chat", got)
 	}
 
-	cfg.ClientFactory = func(context.Context, string, string) (client.Client, error) {
+	var gotSessionPath, gotDBPath string
+	cfg.ClientFactory = func(_ context.Context, sessionPath, dbPath string) (client.Client, error) {
+		gotSessionPath, gotDBPath = sessionPath, dbPath
 		return &client.FakeClient{Dialogs: []client.ChatInfo{{ID: 20, Type: "channel", Title: "Work Only"}}}, nil
 	}
 	runIsolationCommand(t, mgr, cfg, "discover", "--allow-write", "--json")
+	if gotSessionPath != workPaths.SessionPath || gotDBPath != workPaths.DBPath {
+		t.Fatalf("discover client paths = (%q, %q), want (%q, %q)", gotSessionPath, gotDBPath, workPaths.SessionPath, workPaths.DBPath)
+	}
 	assertChatExists(t, workPaths.DBPath, 20, true)
 	assertChatExists(t, defaultPaths.DBPath, 20, false)
+	assertAuditContains(t, workPaths.AuditPath, `"cmd":"me"`, `"cmd":"show"`, `"cmd":"send"`, `"cmd":"discover"`)
+	assertPathMissing(t, defaultPaths.AuditPath)
 }
 
 func TestBackfillUsesCurrentAccountWithoutCrossAccountLeakage(t *testing.T) {
@@ -79,13 +102,54 @@ func TestBackfillUsesCurrentAccountWithoutCrossAccountLeakage(t *testing.T) {
 	}
 	seedChat(t, defaultPaths.DBPath, 10, "Default Chat")
 	seedChat(t, workPaths.DBPath, 10, "Work Chat")
-	cfg.ClientFactory = func(context.Context, string, string) (client.Client, error) {
+	var gotSessionPath, gotDBPath string
+	cfg.ClientFactory = func(_ context.Context, sessionPath, dbPath string) (client.Client, error) {
+		gotSessionPath, gotDBPath = sessionPath, dbPath
 		return &client.FakeClient{BackfillRows: []client.BackfillMessage{{ChatID: 10, MessageID: 99, Date: "2026-07-31T12:00:00Z", Text: "work only"}}}, nil
 	}
 
 	runIsolationCommand(t, mgr, cfg, "backfill", "10", "--max-messages", "10", "--allow-write", "--json")
+	if gotSessionPath != workPaths.SessionPath || gotDBPath != workPaths.DBPath {
+		t.Fatalf("backfill client paths = (%q, %q), want (%q, %q)", gotSessionPath, gotDBPath, workPaths.SessionPath, workPaths.DBPath)
+	}
 	assertMessageExists(t, workPaths.DBPath, 10, 99, true)
 	assertMessageExists(t, defaultPaths.DBPath, 10, 99, false)
+	assertAuditContains(t, workPaths.AuditPath, `"cmd":"backfill"`)
+	assertPathMissing(t, defaultPaths.AuditPath)
+}
+
+func TestMalformedSelectedAccountsAreRejected(t *testing.T) {
+	tests := []struct {
+		name string
+		env  string
+		args []string
+	}{
+		{name: "environment", env: "bad/name", args: []string{"stats", "--json"}},
+		{name: "flag", args: []string{"--account", "bad/name", "doctor", "--json"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("TG_ACCOUNT", tt.env)
+			mgr, cfg, _, _ := setupAccountIsolation(t)
+			_, code := executeIsolationCommand(t, mgr, cfg, tt.args...)
+			if code != 2 {
+				t.Fatalf("%v exit code = %d, want BAD_ARGS=2", tt.args, code)
+			}
+			assertPathMissing(t, filepath.Join(mgr.Root, "accounts", "bad"))
+		})
+	}
+}
+
+func TestReadCommandPropagatesAccountPathResolutionError(t *testing.T) {
+	root := NewRootCommand()
+	registerReadCommands(root, failingAccountPaths{})
+	var stdout bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"stats", "--json"})
+	if code := ExecuteRoot(root); code != 2 {
+		t.Fatalf("exit code = %d, want BAD_ARGS=2; stdout: %s", code, stdout.String())
+	}
 }
 
 func setupAccountIsolation(t *testing.T) (*accounts.Manager, CommandsConfig, accounts.Paths, accounts.Paths) {
@@ -110,20 +174,27 @@ func setupAccountIsolation(t *testing.T) (*accounts.Manager, CommandsConfig, acc
 
 func runIsolationCommand(t *testing.T, mgr *accounts.Manager, cfg CommandsConfig, args ...string) map[string]any {
 	t.Helper()
+	envelope, code := executeIsolationCommand(t, mgr, cfg, args...)
+	if code != 0 {
+		t.Fatalf("%v exit code = %d\nenvelope: %#v", args, code, envelope)
+	}
+	return envelope
+}
+
+func executeIsolationCommand(t *testing.T, mgr *accounts.Manager, cfg CommandsConfig, args ...string) (map[string]any, int) {
+	t.Helper()
 	root := NewRootCommand()
 	RegisterAll(root, mgr, cfg)
 	var stdout, stderr bytes.Buffer
 	root.SetOut(&stdout)
 	root.SetErr(&stderr)
 	root.SetArgs(args)
-	if code := ExecuteRoot(root); code != 0 {
-		t.Fatalf("%v exit code = %d\nstdout: %s\nstderr: %s", args, code, stdout.String(), stderr.String())
-	}
+	code := ExecuteRoot(root)
 	var envelope map[string]any
 	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
-		t.Fatalf("decode %v: %v\nstdout: %s", args, err, stdout.String())
+		t.Fatalf("decode %v: %v\nstdout: %s\nstderr: %s", args, err, stdout.String(), stderr.String())
 	}
-	return envelope
+	return envelope, code
 }
 
 func seedMe(t *testing.T, dbPath string, id int64, name string) {
@@ -179,6 +250,26 @@ func assertMessageExists(t *testing.T, dbPath string, chatID, messageID int64, w
 	}
 	if got := count == 1; got != want {
 		t.Fatalf("message %d exists in %s = %v, want %v", messageID, dbPath, got, want)
+	}
+}
+
+func assertAuditContains(t *testing.T, auditPath string, fragments ...string) {
+	t.Helper()
+	b, err := os.ReadFile(auditPath)
+	if err != nil {
+		t.Fatalf("read audit %s: %v", auditPath, err)
+	}
+	for _, fragment := range fragments {
+		if !bytes.Contains(b, []byte(fragment)) {
+			t.Fatalf("audit %s missing %s:\n%s", auditPath, fragment, b)
+		}
+	}
+}
+
+func assertPathMissing(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("path %s exists or stat failed unexpectedly: %v", path, err)
 	}
 }
 

@@ -183,10 +183,13 @@ func (m *Manager) ResolvePaths(name string) (Paths, error) {
 }
 
 // AccountPaths satisfies the AccountPathProvider contract used by the commands
-// package: returns (db, session, audit) tuple.
-func (m *Manager) AccountPaths(name string) (string, string, string) {
-	p, _ := m.ResolvePaths(name)
-	return p.DBPath, p.SessionPath, p.AuditPath
+// package: returns (db, session, audit) tuple and any resolution error.
+func (m *Manager) AccountPaths(name string) (string, string, string, error) {
+	p, err := m.ResolvePaths(name)
+	if err != nil {
+		return "", "", "", err
+	}
+	return p.DBPath, p.SessionPath, p.AuditPath, nil
 }
 
 // MaybeMigrateDefaultFromRoot performs the one-time migration of root-level

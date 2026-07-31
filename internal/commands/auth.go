@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/b1rd33/tgctl-go/internal/accounts"
 	"github.com/b1rd33/tgctl-go/internal/client"
 	"github.com/b1rd33/tgctl-go/internal/dispatch"
 	"github.com/b1rd33/tgctl-go/internal/resolve"
@@ -125,8 +126,14 @@ func registerAuth(root *cobra.Command, paths AccountPathProvider) {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			offline, _ := cmd.Flags().GetBool("offline")
-			account := selectedAccount(cmd, paths)
-			dbPath, sessionPath, auditPath := paths.AccountPaths(account)
+			account, err := selectedAccount(cmd, paths)
+			if err != nil {
+				return emitDispatchedFailure(cmd, "me", err)
+			}
+			dbPath, sessionPath, auditPath, err := paths.AccountPaths(account)
+			if err != nil {
+				return emitDispatchedFailure(cmd, "me", err)
+			}
 			code := dispatch.Run("me", dispatch.Options{
 				JSON:           jsonMode(cmd),
 				Stdout:         cmd.OutOrStdout(),
@@ -152,21 +159,25 @@ func registerAuth(root *cobra.Command, paths AccountPathProvider) {
 // AccountPathProvider lets tests inject account paths and account selection
 // without depending on the real filesystem layout.
 type AccountPathProvider interface {
-	AccountPaths(account string) (db, session, audit string)
+	AccountPaths(account string) (db, session, audit string, err error)
 	Current() string
 }
 
 // selectedAccount is the single command-layer precedence policy for account
 // selection: explicit flag, environment, persisted current account, default.
-func selectedAccount(cmd *cobra.Command, paths AccountPathProvider) string {
-	if account := RootConfigFrom(cmd.Root()).Account; account != "" {
-		return account
+func selectedAccount(cmd *cobra.Command, paths AccountPathProvider) (string, error) {
+	account := RootConfigFrom(cmd.Root()).Account
+	if account == "" {
+		account = os.Getenv("TG_ACCOUNT")
 	}
-	if account := os.Getenv("TG_ACCOUNT"); account != "" {
-		return account
+	if account == "" {
+		account = paths.Current()
 	}
-	if account := paths.Current(); account != "" {
-		return account
+	if account == "" {
+		account = accounts.DefaultAccount
 	}
-	return "default"
+	if err := accounts.ValidateName(account); err != nil {
+		return "", err
+	}
+	return account, nil
 }

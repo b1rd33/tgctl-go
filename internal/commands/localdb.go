@@ -44,7 +44,10 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 				maxMessages = 100
 			}
 			downloadMedia, _ := cmd.Flags().GetBool("download-media")
-			dbPath, sessionPath, auditPath := resolveWritePaths(cmd, cfg.Paths)
+			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+			if pathErr != nil {
+				return emitDispatchedFailure(cmd, "backfill", pathErr)
+			}
 			code := dispatch.Run("backfill", dispatch.Options{
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				AuditPath: auditPath, Args: map[string]any{"chat": args[0], "max_messages": maxMessages},
@@ -120,7 +123,10 @@ func discoverCommand(cfg CommandsConfig) *cobra.Command {
 			if limit <= 0 {
 				limit = 200
 			}
-			dbPath, sessionPath, auditPath := resolveWritePaths(cmd, cfg.Paths)
+			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+			if pathErr != nil {
+				return emitDispatchedFailure(cmd, "discover", pathErr)
+			}
 			code := dispatch.Run("discover", dispatch.Options{
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				AuditPath: auditPath, Args: map[string]any{"limit": limit},
@@ -162,7 +168,10 @@ func syncContactsCommand(cfg CommandsConfig) *cobra.Command {
 		Short:        "Sync Telegram contacts into the local DB",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			dbPath, sessionPath, auditPath := resolveWritePaths(cmd, cfg.Paths)
+			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+			if pathErr != nil {
+				return emitDispatchedFailure(cmd, "sync-contacts", pathErr)
+			}
 			code := dispatch.Run("sync-contacts", dispatch.Options{
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				AuditPath: auditPath,

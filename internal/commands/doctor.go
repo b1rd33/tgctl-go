@@ -22,13 +22,16 @@ func registerDoctor(root *cobra.Command, m *accounts.Manager) {
 		Short:        "Diagnose tgctl-go setup",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			account := selectedAccount(cmd, m)
+			account, err := selectedAccount(cmd, m)
+			if err != nil {
+				return emitDispatchedFailure(cmd, "doctor", err)
+			}
 			code := dispatch.Run("doctor", dispatch.Options{
 				JSON:   jsonMode(cmd),
 				Stdout: cmd.OutOrStdout(),
 				Stderr: cmd.ErrOrStderr(),
 			}, func(_ context.Context) (any, error) {
-				return doctorReport(m, account), nil
+				return doctorReport(m, account)
 			})
 			storeExitCode(cmd, code)
 			return nil
@@ -38,12 +41,15 @@ func registerDoctor(root *cobra.Command, m *accounts.Manager) {
 	root.AddCommand(cmd)
 }
 
-func doctorReport(m *accounts.Manager, currentName string) map[string]any {
+func doctorReport(m *accounts.Manager, currentName string) (map[string]any, error) {
 	credsErr := ""
 	if _, _, err := client.EnsureCredentials(); err != nil {
 		credsErr = err.Error()
 	}
-	paths, _ := m.Paths(currentName)
+	paths, err := m.Paths(currentName)
+	if err != nil {
+		return nil, err
+	}
 
 	dbExists := false
 	dbSchemaOK := false
@@ -87,5 +93,5 @@ func doctorReport(m *accounts.Manager, currentName string) map[string]any {
 		"session_exists":       sessionExists,
 		"session_lock_present": sessionLockHeld,
 		"client_kind":          "gotd",
-	}
+	}, nil
 }

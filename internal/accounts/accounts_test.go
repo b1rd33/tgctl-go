@@ -137,6 +137,14 @@ func TestPathsDoesNotCreateAccountDir(t *testing.T) {
 	}
 }
 
+func TestAccountPathsPropagatesInvalidName(t *testing.T) {
+	m := New(t.TempDir())
+	_, _, _, err := m.AccountPaths("bad/name")
+	if err == nil {
+		t.Fatal("AccountPaths accepted invalid account name")
+	}
+}
+
 func TestMigrationMovesRootLevelFiles(t *testing.T) {
 	dir := t.TempDir()
 	// Seed root-level files.
