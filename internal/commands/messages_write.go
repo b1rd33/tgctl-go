@@ -108,6 +108,11 @@ type resolvedWritePaths struct {
 	dbPath, sessionPath, auditPath string
 }
 
+type confirmedWriteOperation struct {
+	paths  resolvedWritePaths
+	target writes.ConfirmedTarget
+}
+
 func resolveWritePathSet(cmd *cobra.Command, paths AccountPathProvider) (resolvedWritePaths, error) {
 	if err := safety.RequireWriteAllowed(writeArgsFrom(cmd).Args); err != nil {
 		return resolvedWritePaths{}, err
@@ -134,43 +139,57 @@ func requireTypedWriteConfirm(cmd *cobra.Command, expected any, slot string) err
 	return safety.RequireTypedConfirm(wargs.Args, expected, slot)
 }
 
-// requireResolvedTypedWriteConfirm resolves a selector through the existing
-// cache in read-only mode and enforces typed confirmation before the writable
-// pipeline starts. In particular this precedes dry-run, idempotency lookup,
-// audit dispatch, session access, and ClientFactory.
-func requireResolvedTypedWriteConfirm(cmd *cobra.Command, paths AccountPathProvider, selector, slot string, expected func(int64) any) error {
+// prepareResolvedTypedWrite resolves a selector through the existing cache in
+// read-only mode and captures immutable account paths, peer identity, and typed
+// confirmation target before the writable pipeline starts. In particular this
+// precedes dry-run, idempotency lookup, audit dispatch, session access, and
+// ClientFactory; callers must execute exclusively from the returned snapshot.
+func prepareResolvedTypedWrite(cmd *cobra.Command, paths AccountPathProvider, selector, slot string, expected func(int64) any) (confirmedWriteOperation, error) {
 	wargs := writeArgsFrom(cmd)
 	if err := safety.RequireWriteAllowed(wargs.Args); err != nil {
-		return err
+		return confirmedWriteOperation{}, err
 	}
 	if err := safety.RequireExplicitOrFuzzy(wargs.Args, selector); err != nil {
-		return err
+		return confirmedWriteOperation{}, err
 	}
 	account, err := selectedAccount(cmd, paths)
 	if err != nil {
-		return err
+		return confirmedWriteOperation{}, err
 	}
-	dbPath, _, _, err := accountPathsForMode(paths, account, true)
+	dbPath, sessionPath, auditPath, err := accountPathsForMode(paths, account, true)
 	if err != nil {
-		return err
+		return confirmedWriteOperation{}, err
 	}
 	db, err := store.ConnectReadonly(dbPath)
 	if err != nil {
-		return err
+		return confirmedWriteOperation{}, err
 	}
 	defer db.Close()
-	resolvedID, _, err := resolve.ResolveChatDB(db, selector)
+	resolvedID, resolvedTitle, err := resolve.ResolveChatDB(db, selector)
 	if err != nil {
-		return err
+		return confirmedWriteOperation{}, err
 	}
-	return safety.RequireTypedConfirm(wargs.Args, expected(resolvedID), slot)
+	confirmationValue := expected(resolvedID)
+	if err := safety.RequireTypedConfirm(wargs.Args, confirmationValue, slot); err != nil {
+		return confirmedWriteOperation{}, err
+	}
+	return confirmedWriteOperation{
+		paths: resolvedWritePaths{dbPath: dbPath, sessionPath: sessionPath, auditPath: auditPath},
+		target: writes.ConfirmedTarget{
+			ChatID:            resolvedID,
+			ChatTitle:         resolvedTitle,
+			ConfirmationSlot:  slot,
+			ConfirmationValue: strings.TrimSpace(fmt.Sprintf("%v", confirmationValue)),
+		},
+	}, nil
 }
 
 func runWriteWithResolvedConfirm(cmd *cobra.Command, name, telethonMethod, selector string, cfg CommandsConfig, payloadPreview map[string]any, slot string, expected func(int64) any, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
-	if err := requireResolvedTypedWriteConfirm(cmd, cfg.Paths, selector, slot, expected); err != nil {
+	operation, err := prepareResolvedTypedWrite(cmd, cfg.Paths, selector, slot, expected)
+	if err != nil {
 		return emitDispatchedFailure(cmd, name, err)
 	}
-	return runWrite(cmd, name, telethonMethod, selector, cfg, payloadPreview, action)
+	return runWriteResolvedTarget(cmd, name, telethonMethod, selector, cfg, operation.paths, payloadPreview, &operation.target, action)
 }
 
 func resolveWritePaths(cmd *cobra.Command, paths AccountPathProvider) (string, string, string, error) {
@@ -190,6 +209,10 @@ func runWrite(cmd *cobra.Command, name, telethonMethod, selector string, cfg Com
 }
 
 func runWriteResolved(cmd *cobra.Command, name, telethonMethod, selector string, cfg CommandsConfig, paths resolvedWritePaths, payloadPreview map[string]any, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
+	return runWriteResolvedTarget(cmd, name, telethonMethod, selector, cfg, paths, payloadPreview, nil, action)
+}
+
+func runWriteResolvedTarget(cmd *cobra.Command, name, telethonMethod, selector string, cfg CommandsConfig, paths resolvedWritePaths, payloadPreview map[string]any, target *writes.ConfirmedTarget, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
 	wargs := writeArgsFrom(cmd)
 	args := map[string]any{"chat": selector, "dry_run": wargs.DryRun}
 
@@ -206,13 +229,14 @@ func runWriteResolved(cmd *cobra.Command, name, telethonMethod, selector string,
 		}
 		defer db.Close()
 		return writes.Run(ctx, db, writes.PipelineInput{
-			Cmd:            name,
-			RawSelector:    selector,
-			Args:           wargs,
-			DBPath:         paths.dbPath,
-			AuditPath:      paths.auditPath,
-			TelethonMethod: telethonMethod,
-			PayloadPreview: payloadPreview,
+			Cmd:             name,
+			RawSelector:     selector,
+			Args:            wargs,
+			DBPath:          paths.dbPath,
+			AuditPath:       paths.auditPath,
+			TelethonMethod:  telethonMethod,
+			PayloadPreview:  payloadPreview,
+			ConfirmedTarget: target,
 			Run: func(ctx context.Context, chatID int64, chatTitle string) (map[string]any, error) {
 				c, err := cfg.ClientFactory(ctx, paths.sessionPath, paths.dbPath)
 				if err != nil {

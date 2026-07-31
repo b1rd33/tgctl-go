@@ -162,7 +162,7 @@ tg accounts-remove <name> [flags]
 **Example**
 
 ```bash
-tg accounts-remove work --json
+tg accounts-remove work --confirm work --json
 ```
 
 **Flags**

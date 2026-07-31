@@ -109,7 +109,9 @@ the cached envelope and returns the prior `message_id` — no double-send.
 
 The cache is per-account, in `accounts/<name>/telegram.sqlite`'s
 `tg_idempotency` table. Same key reused for a *different* command
-raises `BAD_ARGS`.
+raises `BAD_ARGS`. For typed-confirmation commands, the key is also bound to
+the confirmed target; reusing it for another confirmed chat or user raises
+`BAD_ARGS` instead of replaying the earlier operation.
 
 ## Audit log
 

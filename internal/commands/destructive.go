@@ -44,13 +44,11 @@ func deleteMsgCommand(cfg CommandsConfig) *cobra.Command {
 			}
 
 			payload := map[string]any{"message_ids": ids, "for_everyone": forEveryone}
-			if err := requireResolvedTypedWriteConfirm(cmd, cfg.Paths, selector, "chat_id", func(chatID int64) any { return chatID }); err != nil {
+			operation, err := prepareResolvedTypedWrite(cmd, cfg.Paths, selector, "chat_id", func(chatID int64) any { return chatID })
+			if err != nil {
 				return emitDispatchedFailure(cmd, "delete-msg", err)
 			}
-			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
-			if pathErr != nil {
-				return emitDispatchedFailure(cmd, "delete-msg", pathErr)
-			}
+			dbPath, sessionPath, auditPath := operation.paths.dbPath, operation.paths.sessionPath, operation.paths.auditPath
 			wargs := writeArgsFrom(cmd)
 
 			code := dispatch.Run("delete-msg", dispatch.Options{
@@ -66,8 +64,9 @@ func deleteMsgCommand(cfg CommandsConfig) *cobra.Command {
 				return writes.Run(ctx, db, writes.PipelineInput{
 					Cmd: "delete-msg", RawSelector: selector, Args: wargs,
 					DBPath: dbPath, AuditPath: auditPath,
-					TelethonMethod: "messages.DeleteMessages",
-					PayloadPreview: payload,
+					TelethonMethod:  "messages.DeleteMessages",
+					PayloadPreview:  payload,
+					ConfirmedTarget: &operation.target,
 					Run: func(ctx context.Context, chatID int64, _ string) (map[string]any, error) {
 						effective := forEveryone
 						if !forEveryone && !noForEveryone {
@@ -154,13 +153,11 @@ func leaveChatCommand(cfg CommandsConfig) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selector := args[0]
 			payload := map[string]any{}
-			if err := requireResolvedTypedWriteConfirm(cmd, cfg.Paths, selector, "chat_id", func(chatID int64) any { return chatID }); err != nil {
+			operation, err := prepareResolvedTypedWrite(cmd, cfg.Paths, selector, "chat_id", func(chatID int64) any { return chatID })
+			if err != nil {
 				return emitDispatchedFailure(cmd, "leave-chat", err)
 			}
-			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
-			if pathErr != nil {
-				return emitDispatchedFailure(cmd, "leave-chat", pathErr)
-			}
+			dbPath, sessionPath, auditPath := operation.paths.dbPath, operation.paths.sessionPath, operation.paths.auditPath
 			wargs := writeArgsFrom(cmd)
 
 			code := dispatch.Run("leave-chat", dispatch.Options{
@@ -175,8 +172,9 @@ func leaveChatCommand(cfg CommandsConfig) *cobra.Command {
 				return writes.Run(ctx, db, writes.PipelineInput{
 					Cmd: "leave-chat", RawSelector: selector, Args: wargs,
 					DBPath: dbPath, AuditPath: auditPath,
-					TelethonMethod: "channels.LeaveChannel",
-					PayloadPreview: payload,
+					TelethonMethod:  "channels.LeaveChannel",
+					PayloadPreview:  payload,
+					ConfirmedTarget: &operation.target,
 					Run: func(ctx context.Context, chatID int64, _ string) (map[string]any, error) {
 						if isUserChat(db, chatID) {
 							return nil, safety.NewBadArgs(
@@ -230,13 +228,11 @@ func blockUserCommand(cfg CommandsConfig, unblock bool) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selector := args[0]
 			payload := map[string]any{}
-			if err := requireResolvedTypedWriteConfirm(cmd, cfg.Paths, selector, "user_id", func(userID int64) any { return userID }); err != nil {
+			operation, err := prepareResolvedTypedWrite(cmd, cfg.Paths, selector, "user_id", func(userID int64) any { return userID })
+			if err != nil {
 				return emitDispatchedFailure(cmd, name, err)
 			}
-			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
-			if pathErr != nil {
-				return emitDispatchedFailure(cmd, name, pathErr)
-			}
+			dbPath, sessionPath, auditPath := operation.paths.dbPath, operation.paths.sessionPath, operation.paths.auditPath
 			wargs := writeArgsFrom(cmd)
 			code := dispatch.Run(name, dispatch.Options{
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
@@ -250,7 +246,8 @@ func blockUserCommand(cfg CommandsConfig, unblock bool) *cobra.Command {
 				return writes.Run(ctx, db, writes.PipelineInput{
 					Cmd: name, RawSelector: selector, Args: wargs,
 					DBPath: dbPath, AuditPath: auditPath, TelethonMethod: method,
-					PayloadPreview: payload,
+					PayloadPreview:  payload,
+					ConfirmedTarget: &operation.target,
 					Run: func(ctx context.Context, userID int64, _ string) (map[string]any, error) {
 						c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
 						if err != nil {

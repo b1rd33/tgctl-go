@@ -103,7 +103,7 @@ Delete an account directory. Permanent — back up the files first
 if you want them.
 
 ```bash
-tg accounts-remove old-test-account
+tg accounts-remove old-test-account --confirm old-test-account
 ```
 
 ### `tg import-telethon-session <path>`
