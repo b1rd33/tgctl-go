@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"os"
@@ -113,6 +114,17 @@ type confirmedWriteOperation struct {
 	target writes.ConfirmedTarget
 }
 
+type writeTargetResolver interface {
+	ResolveWriteTarget(db *sql.DB, selector string) (int64, string, error)
+}
+
+func resolveWriteTarget(paths AccountPathProvider, db *sql.DB, selector string) (int64, string, error) {
+	if resolver, ok := paths.(writeTargetResolver); ok {
+		return resolver.ResolveWriteTarget(db, selector)
+	}
+	return resolve.ResolveChatDB(db, selector)
+}
+
 func resolveWritePathSet(cmd *cobra.Command, paths AccountPathProvider) (resolvedWritePaths, error) {
 	if err := safety.RequireWriteAllowed(writeArgsFrom(cmd).Args); err != nil {
 		return resolvedWritePaths{}, err
@@ -165,7 +177,7 @@ func prepareResolvedTypedWrite(cmd *cobra.Command, paths AccountPathProvider, se
 		return confirmedWriteOperation{}, err
 	}
 	defer db.Close()
-	resolvedID, resolvedTitle, err := resolve.ResolveChatDB(db, selector)
+	resolvedID, resolvedTitle, err := resolveWriteTarget(paths, db, selector)
 	if err != nil {
 		return confirmedWriteOperation{}, err
 	}

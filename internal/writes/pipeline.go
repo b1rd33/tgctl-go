@@ -167,8 +167,9 @@ func Run(ctx context.Context, db *sql.DB, in PipelineInput) (any, error) {
 		}
 		if in.ConfirmedTarget != nil {
 			envelope["confirmed_target"] = map[string]any{
-				"slot":  in.ConfirmedTarget.ConfirmationSlot,
-				"value": in.ConfirmedTarget.ConfirmationValue,
+				"chat_id": strconv.FormatInt(in.ConfirmedTarget.ChatID, 10),
+				"slot":    in.ConfirmedTarget.ConfirmationSlot,
+				"value":   in.ConfirmedTarget.ConfirmationValue,
 			}
 		}
 		if err := idempotency.Record(db, in.Args.IdempotencyKey, in.Cmd, dispatch.RequestIDFrom(ctx), envelope); err != nil {
@@ -185,25 +186,31 @@ func validateConfirmedReplay(key string, cached map[string]any, target *Confirme
 	if metadata, ok := cached["confirmed_target"].(map[string]any); ok {
 		slot := strings.TrimSpace(fmt.Sprintf("%v", metadata["slot"]))
 		value := normalizedValue(metadata["value"])
-		if slot == target.ConfirmationSlot && value == target.ConfirmationValue {
-			return nil
+		if slot != target.ConfirmationSlot || value != target.ConfirmationValue {
+			return safety.NewBadArgs("Idempotency key %q was already used for a different confirmed target", key)
 		}
-		return safety.NewBadArgs("Idempotency key %q was already used for a different confirmed target", key)
+		if chatID, exists := metadata["chat_id"]; exists {
+			if normalizedValue(chatID) == strconv.FormatInt(target.ChatID, 10) {
+				return nil
+			}
+			return safety.NewBadArgs("Idempotency key %q was already used for a different confirmed target", key)
+		}
 	}
 
 	data, ok := cached["data"].(map[string]any)
 	if !ok {
 		return safety.NewBadArgs("Idempotency key %q has no confirmed target metadata", key)
 	}
-	var value any
+	chat, ok := data["chat"].(map[string]any)
+	if !ok {
+		return safety.NewBadArgs("Idempotency key %q has no confirmed target metadata", key)
+	}
+	if normalizedValue(chat["chat_id"]) != strconv.FormatInt(target.ChatID, 10) {
+		return safety.NewBadArgs("Idempotency key %q was already used for a different confirmed target", key)
+	}
+	value := data[target.ConfirmationSlot]
 	if target.ConfirmationSlot == "chat_id" {
-		chat, ok := data["chat"].(map[string]any)
-		if !ok {
-			return safety.NewBadArgs("Idempotency key %q has no confirmed target metadata", key)
-		}
 		value = chat["chat_id"]
-	} else {
-		value = data[target.ConfirmationSlot]
 	}
 	if normalizedValue(value) != target.ConfirmationValue {
 		return safety.NewBadArgs("Idempotency key %q was already used for a different confirmed target", key)

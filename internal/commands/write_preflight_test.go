@@ -3,13 +3,16 @@ package commands
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/b1rd33/tgctl-go/internal/client"
+	"github.com/b1rd33/tgctl-go/internal/resolve"
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
@@ -23,7 +26,8 @@ type adversarialAccountPaths struct {
 	writableCalls int
 	current       []string
 	accounts      map[string]operationTestPaths
-	beforeWrite   func()
+	resolverCalls int
+	afterResolve  func()
 }
 
 func (p *adversarialAccountPaths) Current() string {
@@ -46,14 +50,20 @@ func (p *adversarialAccountPaths) AccountPathsReadonly(account string) (string, 
 
 func (p *adversarialAccountPaths) AccountPaths(account string) (string, string, string, error) {
 	p.writableCalls++
-	if p.beforeWrite != nil {
-		p.beforeWrite()
-	}
 	paths, ok := p.accounts[account]
 	if !ok {
 		return "", "", "", fmt.Errorf("unknown account %q", account)
 	}
 	return paths.db, paths.session, paths.audit, nil
+}
+
+func (p *adversarialAccountPaths) ResolveWriteTarget(db *sql.DB, selector string) (int64, string, error) {
+	p.resolverCalls++
+	id, title, err := resolve.ResolveChatDB(db, selector)
+	if err == nil && p.resolverCalls == 1 && p.afterResolve != nil {
+		p.afterResolve()
+	}
+	return id, title, err
 }
 
 func operationAccount(t *testing.T, root, name string, chatID int64, title string) operationTestPaths {
@@ -167,7 +177,7 @@ func TestConfirmedWriteDoesNotResolveSelectorAgainAfterCacheChange(t *testing.T)
 		current:  []string{"alpha"},
 		accounts: map[string]operationTestPaths{"alpha": alpha},
 	}
-	paths.beforeWrite = func() {
+	paths.afterResolve = func() {
 		mutations++
 		db, err := store.Connect(alpha.db)
 		if err != nil {
@@ -189,14 +199,43 @@ func TestConfirmedWriteDoesNotResolveSelectorAgainAfterCacheChange(t *testing.T)
 	if code != 0 {
 		t.Fatalf("code=%d\nout:%s", code, out)
 	}
-	if paths.readonlyCalls != 1 || paths.writableCalls != 0 || mutations != 0 {
-		t.Fatalf("path/cache calls readonly=%d writable=%d mutations=%d, want 1/0/0", paths.readonlyCalls, paths.writableCalls, mutations)
+	if paths.readonlyCalls != 1 || paths.writableCalls != 0 || paths.resolverCalls != 1 || mutations != 1 {
+		t.Fatalf("path/cache calls readonly=%d writable=%d resolver=%d mutations=%d, want 1/0/1/1", paths.readonlyCalls, paths.writableCalls, paths.resolverCalls, mutations)
 	}
 	if len(fc.AdminActions) != 1 || fc.AdminActions[0].ChatID != 1 {
 		t.Fatalf("AdminActions=%#v, want confirmed chat 1", fc.AdminActions)
 	}
 	if got := auditResolvedChatID(t, alpha.audit); got != 1 {
 		t.Fatalf("audit resolved chat=%d want confirmed chat 1", got)
+	}
+}
+
+func TestAdminConfirmedReplayBindsDestinationChat(t *testing.T) {
+	for _, command := range []string{"ban-from-chat", "kick"} {
+		t.Run(command, func(t *testing.T) {
+			cfg, fc, _ := setupWriteEnv(t)
+			if _, err := openSeed(cfg.Paths.(stubPaths).db,
+				"INSERT INTO tg_chats(chat_id, type, title) VALUES (2, 'group', 'Other')"); err != nil {
+				t.Fatal(err)
+			}
+			key := command + "-destination-binding"
+			first := []string{command, "1", "42", "--allow-write", "--confirm", "42", "--idempotency-key", key, "--json"}
+			if out, code := runRoot(t, cfg, first...); code != 0 {
+				t.Fatalf("first code=%d\nout:%s", code, out)
+			}
+			replayOut, replayCode := runRoot(t, cfg, first...)
+			if replayCode != 0 || !strings.Contains(replayOut, `"idempotent_replay":true`) {
+				t.Fatalf("exact replay code=%d\nout:%s", replayCode, replayOut)
+			}
+			differentChat := []string{command, "2", "42", "--allow-write", "--confirm", "42", "--idempotency-key", key, "--json"}
+			out, code := runRoot(t, cfg, differentChat...)
+			if code != 2 {
+				t.Fatalf("different destination code=%d want BAD_ARGS=2\nout:%s", code, out)
+			}
+			if len(fc.AdminActions) != 1 {
+				t.Fatalf("AdminActions=%#v, want one original action", fc.AdminActions)
+			}
+		})
 	}
 }
 
