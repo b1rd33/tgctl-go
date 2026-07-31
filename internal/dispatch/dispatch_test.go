@@ -146,6 +146,23 @@ func TestRunUnknownErrorMapsToGeneric(t *testing.T) {
 	}
 }
 
+func TestRunClassifiesCommittedCleanupFailure(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Run("backfill", Options{JSON: true, Stdout: &stdout, Stderr: &stderr},
+		func(context.Context) (any, error) {
+			return nil, safety.NewCommittedWrite(
+				"backfill rows committed but SQLite cleanup failed",
+				safety.NewBadArgs("cleanup error with a classified cause"),
+			)
+		})
+	if code != int(output.Generic) {
+		t.Fatalf("code=%d, want GENERIC", code)
+	}
+	if !bytes.Contains(stdout.Bytes(), []byte(`"committed":true`)) || !bytes.Contains(stdout.Bytes(), []byte(`"partial":true`)) {
+		t.Fatalf("stdout missing committed classification: %s", stdout.Bytes())
+	}
+}
+
 func TestRunHumanFailureGoesToStderr(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := Run("show", Options{JSON: false, Stdout: &stdout, Stderr: &stderr},

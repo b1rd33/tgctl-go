@@ -1,20 +1,40 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/b1rd33/tgctl-go/internal/client"
+	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
+
+func sqliteJournalMode(t *testing.T, path string) string {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var mode string
+	if err := db.QueryRow("PRAGMA journal_mode").Scan(&mode); err != nil {
+		t.Fatal(err)
+	}
+	return strings.ToLower(mode)
+}
 
 func TestDatabaseSizeBytesUsesSQLiteAllocatedPages(t *testing.T) {
 	cfg, _, _ := setupWriteEnv(t)
@@ -180,6 +200,9 @@ func TestBackfillDatabaseCapStopsBeforeNextInsert(t *testing.T) {
 	if count != 0 {
 		t.Fatalf("inserted fixture rows=%d, want 0", count)
 	}
+	if mode := sqliteJournalMode(t, cfg.Paths.(stubPaths).db); mode != "wal" {
+		t.Fatalf("journal_mode=%q, want wal", mode)
+	}
 }
 
 func TestBackfillDatabaseCapRollsBackOnlyOversizedCandidate(t *testing.T) {
@@ -282,6 +305,351 @@ func TestBackfillRejectsNegativeLimitsAndThrottle(t *testing.T) {
 				t.Fatalf("client called: %#v", fc.Backfills)
 			}
 		})
+	}
+}
+
+func TestBackfillThrottleDurationBoundaryDoesNotOverflow(t *testing.T) {
+	maxSafeSeconds := math.Nextafter(float64(math.MaxInt64)/float64(time.Second), 0)
+	d, err := backfillThrottleDuration(maxSafeSeconds)
+	if err != nil {
+		t.Fatalf("boundary rejected: %v", err)
+	}
+	if d <= 0 {
+		t.Fatalf("boundary duration=%v, want positive", d)
+	}
+	if _, err := backfillThrottleDuration(math.Nextafter(maxSafeSeconds, math.Inf(1))); err == nil {
+		t.Fatal("overflowing next representable duration was accepted")
+	} else {
+		var badArgs *safety.BadArgs
+		if !errors.As(err, &badArgs) {
+			t.Fatalf("overflow error=%T, want *safety.BadArgs", err)
+		}
+	}
+}
+
+func TestBackfillPathLocksAreNormalizedAndPathScoped(t *testing.T) {
+	dir := t.TempDir()
+	pathA := filepath.Join(dir, "a.sqlite")
+	equivalentA := filepath.Join(dir, "nested", "..", "a.sqlite")
+	pathB := filepath.Join(dir, "b.sqlite")
+
+	unlockA, err := lockBackfillDBPath(pathA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlockA()
+
+	bAcquired := make(chan func(), 1)
+	go func() {
+		unlock, lockErr := lockBackfillDBPath(pathB)
+		if lockErr != nil {
+			bAcquired <- nil
+			return
+		}
+		bAcquired <- unlock
+	}()
+	select {
+	case unlockB := <-bAcquired:
+		if unlockB == nil {
+			t.Fatal("locking unrelated DB failed")
+		}
+		unlockB()
+	case <-time.After(time.Second):
+		t.Fatal("unrelated database path was serialized")
+	}
+
+	sameAcquired := make(chan func(), 1)
+	go func() {
+		unlock, _ := lockBackfillDBPath(equivalentA)
+		sameAcquired <- unlock
+	}()
+	select {
+	case unlock := <-sameAcquired:
+		if unlock != nil {
+			unlock()
+		}
+		t.Fatal("equivalent database path was not serialized")
+	case <-time.After(50 * time.Millisecond):
+	}
+	unlockA()
+	unlockA = func() {}
+	select {
+	case unlock := <-sameAcquired:
+		if unlock == nil {
+			t.Fatal("equivalent database path lock failed")
+		}
+		unlock()
+	case <-time.After(time.Second):
+		t.Fatal("equivalent database path did not acquire after release")
+	}
+}
+
+func TestCappedBackfillPrecommitFailureRollsBackAndRestoresWAL(t *testing.T) {
+	cfg, _, _ := setupWriteEnv(t)
+	path := cfg.Paths.(stubPaths).db
+	db, err := store.Connect(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	wantErr := errors.New("injected before commit")
+	_, _, _, err = insertBackfillRowsAtomicWithHooks(context.Background(), db, 1, 10, 1024*1024,
+		[]client.BackfillMessage{{ChatID: 1, MessageID: 300, Date: "2026-08-01T12:00:00Z", Text: "not committed"}},
+		backfillAtomicHooks{beforeCommit: func() error { return wantErr }},
+	)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("err=%v, want injected error", err)
+	}
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM tg_messages WHERE message_id=300").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("committed rows=%d, want 0", count)
+	}
+	if mode := sqliteJournalMode(t, path); mode != "wal" {
+		t.Fatalf("journal_mode=%q after precommit failure, want wal", mode)
+	}
+}
+
+func TestCappedBackfillActiveReaderFailsBeforeWriteAndKeepsWAL(t *testing.T) {
+	cfg, _, _ := setupWriteEnv(t)
+	path := cfg.Paths.(stubPaths).db
+	readerDB, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer readerDB.Close()
+	reader, err := readerDB.Conn(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	if _, err := reader.ExecContext(context.Background(), "BEGIN"); err != nil {
+		t.Fatal(err)
+	}
+	defer reader.ExecContext(context.Background(), "ROLLBACK")
+	var seeded int
+	if err := reader.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM tg_chats").Scan(&seeded); err != nil {
+		t.Fatal(err)
+	}
+
+	writerDB, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer writerDB.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	_, _, _, err = insertBackfillRowsAtomic(ctx, writerDB, 1, 10, 1024*1024,
+		[]client.BackfillMessage{{ChatID: 1, MessageID: 301, Date: "2026-08-01T12:00:00Z", Text: "blocked"}},
+	)
+	if err == nil {
+		t.Fatal("capped write succeeded with an active reader")
+	}
+	if time.Since(started) > 3*time.Second {
+		t.Fatalf("contention failure was not time-bounded: %v", time.Since(started))
+	}
+	var count int
+	if err := reader.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM tg_messages WHERE message_id=301").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("blocked row count=%d, want 0", count)
+	}
+	if mode := sqliteJournalMode(t, path); mode != "wal" {
+		t.Fatalf("journal_mode=%q after contention, want wal", mode)
+	}
+}
+
+func TestCappedBackfillRacingReaderCannotInterruptWALRestore(t *testing.T) {
+	cfg, _, _ := setupWriteEnv(t)
+	path := cfg.Paths.(stubPaths).db
+	db, err := store.Connect(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	committed := make(chan struct{})
+	attempting := make(chan struct{})
+	readerDone := make(chan error, 1)
+	go func() {
+		<-committed
+		readerDB, openErr := sql.Open("sqlite", path)
+		if openErr != nil {
+			readerDone <- openErr
+			return
+		}
+		defer readerDB.Close()
+		readerDB.SetMaxOpenConns(1)
+		if _, busyErr := readerDB.Exec("PRAGMA busy_timeout=1000"); busyErr != nil {
+			readerDone <- busyErr
+			return
+		}
+		close(attempting)
+		var count int
+		readerDone <- readerDB.QueryRow("SELECT COUNT(*) FROM tg_messages WHERE message_id=302").Scan(&count)
+	}()
+	_, _, _, err = insertBackfillRowsAtomicWithHooks(context.Background(), db, 1, 10, 1024*1024,
+		[]client.BackfillMessage{{ChatID: 1, MessageID: 302, Date: "2026-08-01T12:00:00Z", Text: "committed"}},
+		backfillAtomicHooks{afterCommit: func() error {
+			close(committed)
+			<-attempting
+			select {
+			case err := <-readerDone:
+				return fmt.Errorf("reader entered before WAL restoration: %w", err)
+			case <-time.After(50 * time.Millisecond):
+				return nil
+			}
+		}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-readerDone:
+		if err != nil {
+			t.Fatalf("reader failed after restoration: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("racing reader remained blocked after restoration")
+	}
+	if mode := sqliteJournalMode(t, path); mode != "wal" {
+		t.Fatalf("journal_mode=%q after success, want wal", mode)
+	}
+}
+
+func TestCappedBackfillPostcommitFailureIsClassifiedAndRestoresWAL(t *testing.T) {
+	cfg, _, _ := setupWriteEnv(t)
+	path := cfg.Paths.(stubPaths).db
+	db, err := store.Connect(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	wantErr := errors.New("injected after commit")
+	_, _, _, err = insertBackfillRowsAtomicWithHooks(context.Background(), db, 1, 10, 1024*1024,
+		[]client.BackfillMessage{{ChatID: 1, MessageID: 303, Date: "2026-08-01T12:00:00Z", Text: "durable"}},
+		backfillAtomicHooks{afterCommit: func() error { return wantErr }},
+	)
+	var committed *safety.CommittedWrite
+	if !errors.As(err, &committed) || !errors.Is(err, wantErr) {
+		t.Fatalf("err=%v, want classified committed error wrapping injected failure", err)
+	}
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM tg_messages WHERE message_id=303").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("durable row count=%d, want 1", count)
+	}
+	if mode := sqliteJournalMode(t, path); mode != "wal" {
+		t.Fatalf("journal_mode=%q after postcommit error, want wal", mode)
+	}
+}
+
+func TestBackfillCrossProcessHelper(t *testing.T) {
+	if os.Getenv("TGCTL_BACKFILL_HELPER") != "1" {
+		return
+	}
+	path := os.Getenv("TGCTL_BACKFILL_DB")
+	id, err := strconv.ParseInt(os.Getenv("TGCTL_BACKFILL_ID"), 10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ready := os.Getenv("TGCTL_BACKFILL_READY")
+	gate := os.Getenv("TGCTL_BACKFILL_GATE")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := os.WriteFile(ready, []byte("ready"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(gate); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for subprocess gate")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	_, _, _, err = insertBackfillRowsAtomic(context.Background(), db, 1, 10, 1024*1024,
+		[]client.BackfillMessage{{ChatID: 1, MessageID: id, Date: "2026-08-01T12:00:00Z", Text: strings.Repeat("x", 650000)}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCappedBackfillCrossProcessContentionRespectsCap(t *testing.T) {
+	cfg, _, dir := setupWriteEnv(t)
+	path := cfg.Paths.(stubPaths).db
+	gate := filepath.Join(dir, "process-gate")
+	type child struct {
+		cmd *exec.Cmd
+		out bytes.Buffer
+	}
+	children := make([]*child, 2)
+	for i := range children {
+		ready := filepath.Join(dir, fmt.Sprintf("ready-%d", i))
+		child := &child{}
+		child.cmd = exec.Command(os.Args[0], "-test.run=^TestBackfillCrossProcessHelper$")
+		child.cmd.Env = append(os.Environ(),
+			"TGCTL_BACKFILL_HELPER=1", "TGCTL_BACKFILL_DB="+path,
+			"TGCTL_BACKFILL_ID="+strconv.Itoa(400+i), "TGCTL_BACKFILL_READY="+ready,
+			"TGCTL_BACKFILL_GATE="+gate,
+		)
+		child.cmd.Stdout = &child.out
+		child.cmd.Stderr = &child.out
+		if err := child.cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		children[i] = child
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for i := range children {
+		ready := filepath.Join(dir, fmt.Sprintf("ready-%d", i))
+		for {
+			if _, err := os.Stat(ready); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("timed out waiting for child readiness")
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	if err := os.WriteFile(gate, []byte("go"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, child := range children {
+		if err := child.cmd.Wait(); err != nil {
+			t.Fatalf("child failed: %v\n%s", err, child.out.String())
+		}
+	}
+	db, err := store.Connect(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM tg_messages WHERE message_id IN (400,401)").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	size, err := databaseSizeBytes(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 || size > 1024*1024 {
+		t.Fatalf("cross-process count=%d size=%d, want one row within cap", count, size)
+	}
+	if mode := sqliteJournalMode(t, path); mode != "wal" {
+		t.Fatalf("journal_mode=%q after subprocess contention, want wal", mode)
 	}
 }
 
@@ -393,7 +761,11 @@ func runConcurrentBackfills(t *testing.T, cfg CommandsConfig, rowText string, ma
 		if n == 2 {
 			close(ready)
 		}
-		<-ready
+		select {
+		case <-ready:
+		case <-time.After(2 * time.Second):
+			return nil, errors.New("timed out waiting for concurrent backfill client")
+		}
 		return &client.FakeClient{BackfillRows: []client.BackfillMessage{{ChatID: 1, MessageID: int64(100 + n), Date: "2026-08-01T10:00:00Z", Text: rowText}}}, nil
 	}
 	results := make(chan concurrentBackfillResult, 2)

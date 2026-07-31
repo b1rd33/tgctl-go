@@ -36,6 +36,15 @@ type Options struct {
 
 // Classify maps a known error to (exit code, message, envelope-extra fields).
 func Classify(err error) (output.ExitCode, string, map[string]any) {
+	// A durable write with failed finalization must win over any classified
+	// cause it wraps so callers are explicitly warned not to retry blindly.
+	var committed *safety.CommittedWrite
+	if errors.As(err, &committed) {
+		return output.Generic, committed.Error(), map[string]any{
+			"committed": true,
+			"partial":   true,
+		}
+	}
 	var ambiguous *resolve.Ambiguous
 	if errors.As(err, &ambiguous) {
 		return output.BadArgs, ambiguous.Error(), map[string]any{"candidates": ambiguous.Candidates}

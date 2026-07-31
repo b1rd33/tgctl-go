@@ -65,3 +65,23 @@ type PremiumRequired struct{}
 func (e *PremiumRequired) Error() string {
 	return "Telegram Premium account required for this action"
 }
+
+// CommittedWrite marks an error discovered after a write was durably
+// committed. Callers must not retry it as if the operation were rolled back.
+type CommittedWrite struct {
+	Msg string
+	Err error
+}
+
+func (e *CommittedWrite) Error() string {
+	if e.Err == nil {
+		return e.Msg
+	}
+	return fmt.Sprintf("%s: %v", e.Msg, e.Err)
+}
+
+func (e *CommittedWrite) Unwrap() error { return e.Err }
+
+func NewCommittedWrite(msg string, err error) *CommittedWrite {
+	return &CommittedWrite{Msg: msg, Err: err}
+}
