@@ -132,7 +132,7 @@ func TestMeLiveReadOnlyFetchesWithoutChangingCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	fetched := client.User{ID: 123, Username: "live", DisplayName: "Live User"}
-	data, err := meLiveRunner(context.Background(), dbPath, sessionPath, false, func(context.Context, string) (client.User, error) {
+	data, err := meLiveRunner(context.Background(), dbPath, sessionPath, false, func(context.Context, string, bool) (client.User, error) {
 		return fetched, nil
 	})
 	if err != nil {
@@ -166,9 +166,11 @@ func TestMeCommandReadOnlyUsesNoCacheOrAuditWrites(t *testing.T) {
 	dbPath, sessionPath := setupCacheDB(t)
 	auditPath := filepath.Join(filepath.Dir(dbPath), "audit.log")
 	fetchCalls := 0
+	gotReadOnly := false
 	root := NewRootCommand()
-	registerAuthWithFetcher(root, stubPaths{db: dbPath, session: sessionPath, audit: auditPath}, func(context.Context, string) (client.User, error) {
+	registerAuthWithFetcher(root, stubPaths{db: dbPath, session: sessionPath, audit: auditPath}, func(_ context.Context, _ string, readOnly bool) (client.User, error) {
 		fetchCalls++
+		gotReadOnly = readOnly
 		return client.User{ID: 123, Username: "live", DisplayName: "Live User"}, nil
 	})
 	root.SetOut(&bytes.Buffer{})
@@ -180,6 +182,9 @@ func TestMeCommandReadOnlyUsesNoCacheOrAuditWrites(t *testing.T) {
 	if fetchCalls != 1 {
 		t.Fatalf("fetch calls = %d, want 1", fetchCalls)
 	}
+	if !gotReadOnly {
+		t.Fatal("production fetch was not told to use read-only session storage")
+	}
 	offline, err := MeOfflineRunner(context.Background(), dbPath, sessionPath)
 	if err != nil {
 		t.Fatal(err)
@@ -188,4 +193,39 @@ func TestMeCommandReadOnlyUsesNoCacheOrAuditWrites(t *testing.T) {
 		t.Fatalf("offline cache changed: user_id = %v, want 99", got)
 	}
 	assertPathMissing(t, auditPath)
+}
+
+func TestMeCommandReadOnlyDoesNotCreateAccountOrSessionPaths(t *testing.T) {
+	rootDir := t.TempDir()
+	mgr := accounts.New(rootDir)
+	root := NewRootCommand()
+	registerAuthWithFetcher(root, mgr, func(context.Context, string, bool) (client.User, error) {
+		return client.User{ID: 123, DisplayName: "Live User"}, nil
+	})
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"--read-only", "me", "--json"})
+	if code := ExecuteRoot(root); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	assertPathMissing(t, filepath.Join(rootDir, "accounts"))
+}
+
+func TestMeCommandWritableUsesPersistentSessionMode(t *testing.T) {
+	dbPath, sessionPath := setupCacheDB(t)
+	readOnlyMode := true
+	root := NewRootCommand()
+	registerAuthWithFetcher(root, stubPaths{db: dbPath, session: sessionPath, audit: filepath.Join(filepath.Dir(dbPath), "audit.log")}, func(_ context.Context, _ string, readOnly bool) (client.User, error) {
+		readOnlyMode = readOnly
+		return client.User{ID: 123, DisplayName: "Live User"}, nil
+	})
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"me", "--json"})
+	if code := ExecuteRoot(root); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	if readOnlyMode {
+		t.Fatal("normal live me unexpectedly used read-only session mode")
+	}
 }

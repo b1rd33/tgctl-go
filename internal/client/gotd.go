@@ -144,10 +144,49 @@ func (a fullAuthenticator) SignUp(_ context.Context) (auth.UserInfo, error) {
 // goroutine, and returns a Client that proxies API calls into it. The
 // returned Client must be closed to release the connection.
 func New(ctx context.Context, apiID int, apiHash, sessionPath, dbPath string) (*GotdClient, error) {
+	storage, err := sessionStorageForMode(ctx, sessionPath, false)
+	if err != nil {
+		return nil, err
+	}
+	return newClient(ctx, apiID, apiHash, sessionPath, dbPath, storage)
+}
+
+// NewReadonly opens a gotd client with an in-memory snapshot of sessionPath.
+// gotd can refresh its session state for the lifetime of the connection, but
+// no session data is written back to the real file.
+func NewReadonly(ctx context.Context, apiID int, apiHash, sessionPath string) (*GotdClient, error) {
+	storage, err := sessionStorageForMode(ctx, sessionPath, true)
+	if errors.Is(err, session.ErrNotFound) {
+		return nil, safety.NewMissingCredentials(
+			"not authorized; run `tg login` first to create a session at " + sessionPath,
+		)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return newClient(ctx, apiID, apiHash, sessionPath, "", storage)
+}
+
+func sessionStorageForMode(ctx context.Context, sessionPath string, readOnly bool) (session.Storage, error) {
+	fileStorage := &session.FileStorage{Path: sessionPath}
+	if !readOnly {
+		return fileStorage, nil
+	}
+	data, err := fileStorage.LoadSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+	memoryStorage := &session.StorageMemory{}
+	if err := memoryStorage.StoreSession(ctx, data); err != nil {
+		return nil, err
+	}
+	return memoryStorage, nil
+}
+
+func newClient(ctx context.Context, apiID int, apiHash, sessionPath, dbPath string, storage session.Storage) (*GotdClient, error) {
 	if apiID == 0 || apiHash == "" {
 		return nil, safety.NewMissingCredentials("TG_API_ID and TG_API_HASH must be set")
 	}
-	storage := &session.FileStorage{Path: sessionPath}
 	events := make(chan ListenEvent, 32)
 	tgc := telegram.NewClient(apiID, apiHash, telegram.Options{
 		SessionStorage: storage,

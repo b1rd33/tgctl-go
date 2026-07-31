@@ -1,13 +1,106 @@
 package client
 
 import (
+	"bytes"
+	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/b1rd33/tgctl-go/internal/safety"
+	"github.com/gotd/td/session"
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 )
+
+func TestSessionStorageForModeReadOnlyUsesInMemorySnapshot(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tg.session")
+	original := []byte("existing-authorized-session")
+	if err := os.WriteFile(path, original, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	wantModTime := time.Unix(1_700_000_000, 0)
+	if err := os.Chtimes(path, wantModTime, wantModTime); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	storage, err := sessionStorageForMode(context.Background(), path, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := storage.LoadSession(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(loaded, original) {
+		t.Fatalf("snapshot = %q, want %q", loaded, original)
+	}
+	replacement := []byte("gotd-refreshed-session-state")
+	if err := storage.StoreSession(context.Background(), replacement); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err = storage.LoadSession(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(loaded, replacement) {
+		t.Fatalf("in-memory update = %q, want %q", loaded, replacement)
+	}
+
+	afterBytes, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(afterBytes, original) {
+		t.Fatalf("real session changed: got %q, want %q", afterBytes, original)
+	}
+	if !os.SameFile(before, after) || before.Mode() != after.Mode() || before.Size() != after.Size() || !before.ModTime().Equal(after.ModTime()) {
+		t.Fatalf("real session metadata changed: before=%v after=%v", before, after)
+	}
+}
+
+func TestSessionStorageForModeReadOnlyMissingDoesNotCreateFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing", "tg.session")
+	_, err := sessionStorageForMode(context.Background(), path, true)
+	if !errors.Is(err, session.ErrNotFound) {
+		t.Fatalf("error = %v, want session.ErrNotFound", err)
+	}
+	if _, statErr := os.Stat(path); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("session path created or unexpected stat error: %v", statErr)
+	}
+	if _, statErr := os.Stat(filepath.Dir(path)); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("session parent created or unexpected stat error: %v", statErr)
+	}
+}
+
+func TestSessionStorageForModeWritablePersistsUpdates(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tg.session")
+	storage, err := sessionStorageForMode(context.Background(), path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []byte("persisted-session-state")
+	if err := storage.StoreSession(context.Background(), want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("session file = %q, want %q", got, want)
+	}
+}
 
 func TestEnsureCredentialsMissing(t *testing.T) {
 	t.Setenv("TG_API_ID", "")

@@ -16,15 +16,20 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
-type meFetcher func(context.Context, string) (client.User, error)
+type meFetcher func(context.Context, string, bool) (client.User, error)
 
 // fetchMeLive connects to Telegram without opening the SQLite cache.
-func fetchMeLive(ctx context.Context, sessionPath string) (client.User, error) {
+func fetchMeLive(ctx context.Context, sessionPath string, readOnly bool) (client.User, error) {
 	apiID, apiHash, err := client.EnsureCredentials()
 	if err != nil {
 		return client.User{}, err
 	}
-	gc, err := client.New(ctx, apiID, apiHash, sessionPath, "")
+	var gc *client.GotdClient
+	if readOnly {
+		gc, err = client.NewReadonly(ctx, apiID, apiHash, sessionPath)
+	} else {
+		gc, err = client.New(ctx, apiID, apiHash, sessionPath, "")
+	}
 	if err != nil {
 		return client.User{}, err
 	}
@@ -33,7 +38,7 @@ func fetchMeLive(ctx context.Context, sessionPath string) (client.User, error) {
 }
 
 func meLiveRunner(ctx context.Context, dbPath, sessionPath string, cache bool, fetch meFetcher) (any, error) {
-	me, err := fetch(ctx, sessionPath)
+	me, err := fetch(ctx, sessionPath, !cache)
 	if err != nil {
 		return nil, err
 	}
