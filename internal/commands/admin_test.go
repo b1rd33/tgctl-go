@@ -43,8 +43,8 @@ func TestSetPermissionsAcceptsSendMessagesFlag(t *testing.T) {
 func TestBanFromChatRequiresTypedUserConfirm(t *testing.T) {
 	cfg, fc, _ := setupWriteEnv(t)
 	out, code := runRoot(t, cfg, "ban-from-chat", "1", "42", "--allow-write", "--json")
-	if code != 2 {
-		t.Fatalf("code=%d want BAD_ARGS=2\nout:%s", code, out)
+	if code != 7 {
+		t.Fatalf("code=%d want NEEDS_CONFIRM=7\nout:%s", code, out)
 	}
 	if len(fc.AdminActions) != 0 {
 		t.Fatalf("client called: %#v", fc.AdminActions)

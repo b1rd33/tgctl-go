@@ -48,9 +48,24 @@ func TestEnvReadOnlyBlocksEvenWithAllowWrite(t *testing.T) {
 
 func TestRequireTypedConfirmMissing(t *testing.T) {
 	err := RequireTypedConfirm(Args{}, int64(-100123), "chat_id")
-	var ba *BadArgs
-	if !errors.As(err, &ba) {
+	var nc *NeedsConfirm
+	if !errors.As(err, &nc) {
 		t.Fatalf("err = %v", err)
+	}
+	if got, want := err.Error(), "destructive op requires --confirm <chat_id>. Pass --confirm -100123 to confirm."; got != want {
+		t.Fatalf("error = %q, want %q", got, want)
+	}
+	var ba *BadArgs
+	if errors.As(err, &ba) {
+		t.Fatalf("missing confirmation classified as BadArgs: %v", err)
+	}
+}
+
+func TestRequireTypedConfirmBlankIsMissing(t *testing.T) {
+	err := RequireTypedConfirm(Args{Confirm: " \t\n "}, "abc123", "session_hash")
+	var nc *NeedsConfirm
+	if !errors.As(err, &nc) {
+		t.Fatalf("err = %v, want *NeedsConfirm", err)
 	}
 }
 
@@ -59,6 +74,13 @@ func TestRequireTypedConfirmMismatchRejects(t *testing.T) {
 	var ba *BadArgs
 	if !errors.As(err, &ba) {
 		t.Fatalf("err = %v", err)
+	}
+	if got, want := err.Error(), `--confirm value "Bjørn" must equal the resolved chat_id -100123. Pass --confirm -100123 to confirm.`; got != want {
+		t.Fatalf("error = %q, want %q", got, want)
+	}
+	var nc *NeedsConfirm
+	if errors.As(err, &nc) {
+		t.Fatalf("mismatched confirmation classified as NeedsConfirm: %v", err)
 	}
 }
 

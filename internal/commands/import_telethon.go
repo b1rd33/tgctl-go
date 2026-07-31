@@ -35,6 +35,9 @@ func registerImportTelethon(root *cobra.Command, mgr *accounts.Manager) {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := safety.RequireWritesNotReadOnly(safety.Args{ReadOnly: RootConfigFrom(cmd.Root()).ReadOnly}); err != nil {
+				return emitDispatchedFailure(cmd, "import-telethon-session", err)
+			}
 			src := args[0]
 			account, err := selectedAccount(cmd, mgr)
 			if err != nil {

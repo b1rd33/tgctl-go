@@ -10,8 +10,8 @@ import (
 func TestDeleteMsgRequiresTypedConfirm(t *testing.T) {
 	cfg, fc, _ := setupWriteEnv(t)
 	out, code := runRoot(t, cfg, "delete-msg", "1", "10", "--allow-write", "--json")
-	if code != 2 {
-		t.Fatalf("code = %d, want BAD_ARGS=2\nout: %s", code, out)
+	if code != 7 {
+		t.Fatalf("code = %d, want NEEDS_CONFIRM=7\nout: %s", code, out)
 	}
 	if len(fc.Deletes) != 0 {
 		t.Fatalf("client called without confirm: %v", fc.Deletes)
@@ -80,8 +80,8 @@ func TestBlockUserRequiresConfirm(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	out, code := runRoot(t, cfg, "block-user", "77", "--allow-write", "--json")
-	if code != 2 {
-		t.Fatalf("code=%d\nout: %s", code, out)
+	if code != 7 {
+		t.Fatalf("code=%d, want NEEDS_CONFIRM=7\nout: %s", code, out)
 	}
 	if len(fc.Blocks) != 0 {
 		t.Fatalf("client called without confirm")
@@ -115,8 +115,8 @@ func TestUnblockUserExecutes(t *testing.T) {
 func TestTerminateSessionTypedConfirm(t *testing.T) {
 	cfg, fc, _ := setupWriteEnv(t)
 	out, code := runRoot(t, cfg, "terminate-session", "12345", "--allow-write", "--json")
-	if code != 2 {
-		t.Fatalf("code=%d, want 2\nout: %s", code, out)
+	if code != 7 {
+		t.Fatalf("code=%d, want NEEDS_CONFIRM=7\nout: %s", code, out)
 	}
 	if len(fc.Terms) != 0 {
 		t.Fatalf("client called without confirm")

@@ -38,6 +38,9 @@ func accountsAddCommand(m *accounts.Manager) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAccountCommand(cmd, "accounts-add", func() (any, error) {
+				if err := safety.RequireWritesNotReadOnly(safety.Args{ReadOnly: RootConfigFrom(cmd.Root()).ReadOnly}); err != nil {
+					return nil, err
+				}
 				dir, err := m.Add(args[0])
 				if err != nil {
 					return nil, err
@@ -58,6 +61,9 @@ func accountsUseCommand(m *accounts.Manager) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAccountCommand(cmd, "accounts-use", func() (any, error) {
+				if err := safety.RequireWritesNotReadOnly(safety.Args{ReadOnly: RootConfigFrom(cmd.Root()).ReadOnly}); err != nil {
+					return nil, err
+				}
 				if err := m.Use(args[0]); err != nil {
 					var anf *accounts.AccountNotFound
 					if errors.As(err, &anf) {
@@ -137,6 +143,9 @@ func accountsRemoveCommand(m *accounts.Manager) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			confirm, _ := cmd.Flags().GetString("confirm")
 			return runAccountCommand(cmd, "accounts-remove", func() (any, error) {
+				if err := safety.RequireWritesNotReadOnly(safety.Args{ReadOnly: RootConfigFrom(cmd.Root()).ReadOnly}); err != nil {
+					return nil, err
+				}
 				if confirm != args[0] {
 					return nil, safety.NewBadArgs(
 						"accounts-remove requires --confirm %s to confirm deletion", args[0])

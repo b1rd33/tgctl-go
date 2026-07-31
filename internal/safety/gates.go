@@ -41,17 +41,16 @@ func RequireWriteAllowed(args Args) error {
 
 // RequireTypedConfirm verifies --confirm exactly matches the resolved id (string-trimmed).
 func RequireTypedConfirm(args Args, expected any, slot string) error {
-	if args.Confirm == "" {
-		return NewBadArgs(
-			"destructive op requires --confirm <%s>. Pass --confirm %v to confirm.", slot, expected,
-		)
-	}
-	got := strings.TrimSpace(args.Confirm)
 	want := strings.TrimSpace(fmt.Sprintf("%v", expected))
-	if got != want {
+	if strings.TrimSpace(args.Confirm) == "" {
+		return &NeedsConfirm{Msg: fmt.Sprintf(
+			"destructive op requires --confirm <%s>. Pass --confirm %s to confirm.", slot, want,
+		)}
+	}
+	if got := strings.TrimSpace(args.Confirm); got != want {
 		return NewBadArgs(
-			"--confirm value %q must equal the resolved %s %v. Pass --confirm %v to confirm.",
-			args.Confirm, slot, expected, expected,
+			"--confirm value %q must equal the resolved %s %s. Pass --confirm %s to confirm.",
+			args.Confirm, slot, want, want,
 		)
 	}
 	return nil

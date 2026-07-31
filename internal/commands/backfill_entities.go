@@ -13,6 +13,7 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/accounts"
 	"github.com/b1rd33/tgctl-go/internal/client"
 	"github.com/b1rd33/tgctl-go/internal/dispatch"
+	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
@@ -26,6 +27,9 @@ func registerBackfillEntities(root *cobra.Command, mgr *accounts.Manager) {
 		Short:        "Populate the local entity cache so chat_id-keyed sends work",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := safety.RequireWriteAllowed(localWriteArgs(cmd)); err != nil {
+				return emitDispatchedFailure(cmd, "backfill-entities", err)
+			}
 			account, err := selectedAccount(cmd, mgr)
 			if err != nil {
 				return emitDispatchedFailure(cmd, "backfill-entities", err)
@@ -57,7 +61,7 @@ func registerBackfillEntities(root *cobra.Command, mgr *accounts.Manager) {
 		},
 	}
 	cmd.Flags().Int("limit", 200, "Max dialogs to fetch in one pass (Telegram caps at ~200)")
-	AddOutputFlags(cmd)
+	addLocalWriteFlags(cmd)
 	root.AddCommand(cmd)
 }
 

@@ -16,27 +16,27 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
-// MeLiveRunner connects to Telegram via gotd and refreshes tg_me.
-func MeLiveRunner(ctx context.Context, dbPath, sessionPath string) (any, error) {
+type meFetcher func(context.Context, string) (client.User, error)
+
+// fetchMeLive connects to Telegram without opening the SQLite cache.
+func fetchMeLive(ctx context.Context, sessionPath string) (client.User, error) {
 	apiID, apiHash, err := client.EnsureCredentials()
 	if err != nil {
-		return nil, err
+		return client.User{}, err
 	}
-	gc, err := client.New(ctx, apiID, apiHash, sessionPath, dbPath)
+	gc, err := client.New(ctx, apiID, apiHash, sessionPath, "")
 	if err != nil {
-		return nil, err
+		return client.User{}, err
 	}
 	defer gc.Close()
+	return gc.GetMe(ctx)
+}
 
-	me, err := gc.GetMe(ctx)
+func meLiveRunner(ctx context.Context, dbPath, sessionPath string, cache bool, fetch meFetcher) (any, error) {
+	me, err := fetch(ctx, sessionPath)
 	if err != nil {
 		return nil, err
 	}
-	db, err := store.Connect(dbPath)
-	if err != nil {
-		return nil, err
-	}
-	defer db.Close()
 	row := store.MeRow{
 		UserID:      me.ID,
 		Username:    nullStringOf(me.Username),
@@ -47,14 +47,27 @@ func MeLiveRunner(ctx context.Context, dbPath, sessionPath string) (any, error) 
 		IsBot:       boolInt(me.IsBot),
 		CachedAt:    timeNow(),
 	}
-	if err := store.UpsertMe(db, row); err != nil {
-		return nil, err
+	if cache {
+		db, err := store.Connect(dbPath)
+		if err != nil {
+			return nil, err
+		}
+		defer db.Close()
+		if err := store.UpsertMe(db, row); err != nil {
+			return nil, err
+		}
+		loaded, err := store.LoadMe(db)
+		if err != nil {
+			return nil, err
+		}
+		return mePayload(loaded, "live", sessionPath), nil
 	}
-	loaded, err := store.LoadMe(db)
-	if err != nil {
-		return nil, err
-	}
-	return mePayload(loaded, "live", sessionPath), nil
+	return mePayload(&row, "live", sessionPath), nil
+}
+
+// MeLiveRunner connects to Telegram and refreshes tg_me.
+func MeLiveRunner(ctx context.Context, dbPath, sessionPath string) (any, error) {
+	return meLiveRunner(ctx, dbPath, sessionPath, true, fetchMeLive)
 }
 
 // MeOfflineRunner returns the cached self-user envelope data, or
@@ -120,19 +133,27 @@ func meHumanFormatter(stdout interface{ Write([]byte) (int, error) }) func(any) 
 }
 
 func registerAuth(root *cobra.Command, paths AccountPathProvider) {
+	registerAuthWithFetcher(root, paths, fetchMeLive)
+}
+
+func registerAuthWithFetcher(root *cobra.Command, paths AccountPathProvider, fetch meFetcher) {
 	me := &cobra.Command{
 		Use:          "me",
 		Short:        "Print authenticated user info",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			offline, _ := cmd.Flags().GetBool("offline")
+			readOnly := RootConfigFrom(cmd.Root()).ReadOnly || os.Getenv("TG_READONLY") == "1"
 			account, err := selectedAccount(cmd, paths)
 			if err != nil {
 				return emitDispatchedFailure(cmd, "me", err)
 			}
-			dbPath, sessionPath, auditPath, err := paths.AccountPaths(account)
+			dbPath, sessionPath, auditPath, err := accountPathsForMode(paths, account, readOnly)
 			if err != nil {
 				return emitDispatchedFailure(cmd, "me", err)
+			}
+			if readOnly {
+				auditPath = ""
 			}
 			code := dispatch.Run("me", dispatch.Options{
 				JSON:           jsonMode(cmd),
@@ -145,7 +166,7 @@ func registerAuth(root *cobra.Command, paths AccountPathProvider) {
 				if offline {
 					return MeOfflineRunner(ctx, dbPath, sessionPath)
 				}
-				return MeLiveRunner(ctx, dbPath, sessionPath)
+				return meLiveRunner(ctx, dbPath, sessionPath, !readOnly, fetch)
 			})
 			storeExitCode(cmd, code)
 			return nil
@@ -154,6 +175,19 @@ func registerAuth(root *cobra.Command, paths AccountPathProvider) {
 	me.Flags().Bool("offline", false, "Read cached self user info without connecting to Telegram")
 	AddOutputFlags(me)
 	root.AddCommand(me)
+}
+
+type readonlyAccountPathProvider interface {
+	AccountPathsReadonly(account string) (db, session, audit string, err error)
+}
+
+func accountPathsForMode(paths AccountPathProvider, account string, readOnly bool) (db, session, audit string, err error) {
+	if readOnly {
+		if p, ok := paths.(readonlyAccountPathProvider); ok {
+			return p.AccountPathsReadonly(account)
+		}
+	}
+	return paths.AccountPaths(account)
 }
 
 // AccountPathProvider lets tests inject account paths and account selection

@@ -16,6 +16,7 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/accounts"
 	"github.com/b1rd33/tgctl-go/internal/client"
 	"github.com/b1rd33/tgctl-go/internal/dispatch"
+	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
 
 	"github.com/gotd/td/tg"
@@ -28,6 +29,9 @@ func registerLogin(root *cobra.Command, mgr *accounts.Manager) {
 		Short:        "Interactively authorize this account against Telegram",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := safety.RequireWritesNotReadOnly(safety.Args{ReadOnly: RootConfigFrom(cmd.Root()).ReadOnly}); err != nil {
+				return emitDispatchedFailure(cmd, "login", err)
+			}
 			account, err := selectedAccount(cmd, mgr)
 			if err != nil {
 				return emitDispatchedFailure(cmd, "login", err)

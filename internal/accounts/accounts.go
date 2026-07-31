@@ -192,6 +192,15 @@ func (m *Manager) AccountPaths(name string) (string, string, string, error) {
 	return p.DBPath, p.SessionPath, p.AuditPath, nil
 }
 
+// AccountPathsReadonly resolves account paths without creating any directories.
+func (m *Manager) AccountPathsReadonly(name string) (string, string, string, error) {
+	p, err := m.Paths(name)
+	if err != nil {
+		return "", "", "", err
+	}
+	return p.DBPath, p.SessionPath, p.AuditPath, nil
+}
+
 // MaybeMigrateDefaultFromRoot performs the one-time migration of root-level
 // telegram.sqlite/tg.session/audit.log/media into accounts/default/.
 // Returns true when files were moved.
