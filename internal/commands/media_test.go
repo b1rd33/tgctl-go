@@ -1,12 +1,37 @@
 package commands
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/b1rd33/tgctl-go/internal/client"
+	"github.com/b1rd33/tgctl-go/internal/store"
 )
+
+type changingAccountPaths struct {
+	firstName, secondName string
+	first, second         stubPaths
+	calls                 int
+}
+
+func (p *changingAccountPaths) Current() string {
+	if p.calls == 0 {
+		return p.firstName
+	}
+	return p.secondName
+}
+
+func (p *changingAccountPaths) AccountPaths(account string) (string, string, string, error) {
+	p.calls++
+	if account == p.firstName {
+		return p.first.db, p.first.session, p.first.audit, nil
+	}
+	return p.second.db, p.second.session, p.second.audit, nil
+}
 
 func writeMediaFixture(t *testing.T, name string, data []byte) string {
 	t.Helper()
@@ -50,6 +75,64 @@ func TestUploadDocumentInvokesClientAndAuditsPath(t *testing.T) {
 	needle, _ := json.Marshal(filepath.Clean(path))
 	if !strings.Contains(string(auditBytes), string(needle[1:len(needle)-1])) {
 		t.Fatalf("audit missing source path:\n%s", auditBytes)
+	}
+}
+
+func TestUploadDocumentUsesOneResolvedAccountForAllSideEffects(t *testing.T) {
+	rootDir := t.TempDir()
+	first := stubPaths{
+		db:      filepath.Join(rootDir, "first", "telegram.sqlite"),
+		session: filepath.Join(rootDir, "first", "tg.session"),
+		audit:   filepath.Join(rootDir, "first", "audit.log"),
+	}
+	second := stubPaths{
+		db:      filepath.Join(rootDir, "second", "telegram.sqlite"),
+		session: filepath.Join(rootDir, "second", "tg.session"),
+		audit:   filepath.Join(rootDir, "second", "audit.log"),
+	}
+	seedChat(t, first.db, 1, "First")
+	seedChat(t, second.db, 1, "Second")
+	paths := &changingAccountPaths{firstName: "first", secondName: "second", first: first, second: second}
+	fake := &client.FakeClient{NextMessageID: 777}
+	var clientSession, clientDB string
+	cfg := CommandsConfig{
+		Paths: paths,
+		ClientFactory: func(_ context.Context, sessionPath, dbPath string) (client.Client, error) {
+			clientSession, clientDB = sessionPath, dbPath
+			return fake, nil
+		},
+	}
+	path := writeMediaFixture(t, "doc.bin", []byte("document"))
+
+	out, code := runRoot(t, cfg, "upload-document", "1", path, "--allow-write", "--json")
+	if code != 0 {
+		t.Fatalf("code=%d\nout: %s", code, out)
+	}
+	if paths.calls != 1 {
+		t.Errorf("account paths resolved %d times, want once", paths.calls)
+	}
+	if clientSession != first.session || clientDB != first.db {
+		t.Errorf("client paths = (%q, %q), want (%q, %q)", clientSession, clientDB, first.session, first.db)
+	}
+	assertAuditContains(t, first.audit, `"cmd":"upload-document"`)
+	assertPathMissing(t, second.audit)
+	assertUploadedMessage(t, first.db, 1, 777, true)
+	assertUploadedMessage(t, second.db, 1, 777, false)
+}
+
+func assertUploadedMessage(t *testing.T, dbPath string, chatID, messageID int64, want bool) {
+	t.Helper()
+	db, err := store.Connect(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM tg_messages WHERE chat_id=? AND message_id=? AND has_media=1", chatID, messageID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if got := count == 1; got != want {
+		t.Errorf("uploaded message exists in %s = %v, want %v", dbPath, got, want)
 	}
 }
 

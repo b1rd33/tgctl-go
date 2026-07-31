@@ -99,19 +99,39 @@ func registerWriteCommands(root *cobra.Command, cfg CommandsConfig) {
 	root.AddCommand(markReadCommand(cfg))
 }
 
-func resolveWritePaths(cmd *cobra.Command, paths AccountPathProvider) (string, string, string, error) {
+type resolvedWritePaths struct {
+	dbPath, sessionPath, auditPath string
+}
+
+func resolveWritePathSet(cmd *cobra.Command, paths AccountPathProvider) (resolvedWritePaths, error) {
 	account, err := selectedAccount(cmd, paths)
+	if err != nil {
+		return resolvedWritePaths{}, err
+	}
+	dbPath, sessionPath, auditPath, err := paths.AccountPaths(account)
+	if err != nil {
+		return resolvedWritePaths{}, err
+	}
+	return resolvedWritePaths{dbPath: dbPath, sessionPath: sessionPath, auditPath: auditPath}, nil
+}
+
+func resolveWritePaths(cmd *cobra.Command, paths AccountPathProvider) (string, string, string, error) {
+	resolved, err := resolveWritePathSet(cmd, paths)
 	if err != nil {
 		return "", "", "", err
 	}
-	return paths.AccountPaths(account)
+	return resolved.dbPath, resolved.sessionPath, resolved.auditPath, nil
 }
 
 func runWrite(cmd *cobra.Command, name, telethonMethod, selector string, cfg CommandsConfig, payloadPreview map[string]any, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
-	dbPath, sessionPath, auditPath, err := resolveWritePaths(cmd, cfg.Paths)
+	paths, err := resolveWritePathSet(cmd, cfg.Paths)
 	if err != nil {
 		return emitDispatchedFailure(cmd, name, err)
 	}
+	return runWriteResolved(cmd, name, telethonMethod, selector, cfg, paths, payloadPreview, action)
+}
+
+func runWriteResolved(cmd *cobra.Command, name, telethonMethod, selector string, cfg CommandsConfig, paths resolvedWritePaths, payloadPreview map[string]any, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
 	wargs := writeArgsFrom(cmd)
 	args := map[string]any{"chat": selector, "dry_run": wargs.DryRun}
 
@@ -119,10 +139,10 @@ func runWrite(cmd *cobra.Command, name, telethonMethod, selector string, cfg Com
 		JSON:      jsonMode(cmd),
 		Stdout:    cmd.OutOrStdout(),
 		Stderr:    cmd.ErrOrStderr(),
-		AuditPath: auditPath,
+		AuditPath: paths.auditPath,
 		Args:      args,
 	}, func(ctx context.Context) (any, error) {
-		db, err := store.Connect(dbPath)
+		db, err := store.Connect(paths.dbPath)
 		if err != nil {
 			return nil, err
 		}
@@ -131,12 +151,12 @@ func runWrite(cmd *cobra.Command, name, telethonMethod, selector string, cfg Com
 			Cmd:            name,
 			RawSelector:    selector,
 			Args:           wargs,
-			DBPath:         dbPath,
-			AuditPath:      auditPath,
+			DBPath:         paths.dbPath,
+			AuditPath:      paths.auditPath,
 			TelethonMethod: telethonMethod,
 			PayloadPreview: payloadPreview,
 			Run: func(ctx context.Context, chatID int64, chatTitle string) (map[string]any, error) {
-				c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
+				c, err := cfg.ClientFactory(ctx, paths.sessionPath, paths.dbPath)
 				if err != nil {
 					return nil, err
 				}
