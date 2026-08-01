@@ -48,7 +48,7 @@ brews:
     install: |
       bin.install "tg"
     test: |
-      assert_match "v", shell_output("#{bin}/tg --version")
+      assert_match(/\Av?\d+\.\d+\.\d+/, shell_output("#{bin}/tg --version"))
 
 checksum:
   name_template: "checksums.txt"

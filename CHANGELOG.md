@@ -4,6 +4,13 @@
 
 Future changes will be listed here.
 
+## v0.1.6 — 2026-08-01
+
+### Fixed
+
+- Homebrew's generated formula test accepts the release binary's semver
+  output with or without a leading `v`.
+
 ## v0.1.5 — 2026-08-01
 
 ### Added
