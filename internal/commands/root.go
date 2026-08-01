@@ -168,4 +168,5 @@ func RegisterAll(root *cobra.Command, mgr *accounts.Manager, cfg CommandsConfig)
 	registerImportTelethon(root, mgr)
 	registerSendByUsername(root, mgr)
 	registerBackfillEntities(root, mgr)
+	installLegacyMigrationPreflight(root, mgr)
 }

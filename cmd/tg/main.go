@@ -2,27 +2,19 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/b1rd33/tgctl-go/internal/accounts"
 	"github.com/b1rd33/tgctl-go/internal/client"
 	"github.com/b1rd33/tgctl-go/internal/commands"
 	"github.com/b1rd33/tgctl-go/internal/env"
-	"github.com/b1rd33/tgctl-go/internal/safety"
 )
 
 func main() {
 	root := projectRoot()
 	_ = env.LoadFile(filepath.Join(root, ".env"))
 	mgr := accounts.New(root)
-	if !startupReadOnly(os.Args[1:]) {
-		if _, err := mgr.MaybeMigrateDefaultFromRoot(); err != nil {
-			fmt.Fprintln(os.Stderr, "WARN: account migration failed:", err)
-		}
-	}
 
 	cfg := commands.CommandsConfig{
 		Paths:                 mgr,
@@ -33,32 +25,6 @@ func main() {
 	cmd := commands.NewRootCommand()
 	commands.RegisterAll(cmd, mgr, cfg)
 	os.Exit(commands.ExecuteRoot(cmd))
-}
-
-func startupReadOnly(args []string) bool {
-	if safety.ReadOnlyEnabled(false) {
-		return true
-	}
-	for _, arg := range args {
-		if arg == "--" {
-			break
-		}
-		if arg == "--read-only" {
-			return true
-		}
-		if strings.HasPrefix(arg, "--read-only=") {
-			value := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(arg, "--read-only=")))
-			switch value {
-			case "0", "f", "false", "no", "off":
-				continue
-			default:
-				// Recognized true spellings and malformed values both fail safe.
-				// Cobra remains responsible for reporting malformed booleans.
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func projectRoot() string {

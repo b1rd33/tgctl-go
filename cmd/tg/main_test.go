@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -66,6 +68,22 @@ func runTGProcess(t *testing.T, binary, root string, env []string, args ...strin
 	}
 }
 
+func runTGProcessResult(t *testing.T, binary, root string, env []string, args ...string) (string, int) {
+	t.Helper()
+	cmd := exec.Command(binary, args...)
+	cmd.Dir = root
+	cmd.Env = env
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return string(out), 0
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("tg %v: %v\n%s", args, err, out)
+	}
+	return string(out), exitErr.ExitCode()
+}
+
 func withoutEnv(environ []string, key string) []string {
 	prefix := key + "="
 	out := make([]string, 0, len(environ))
@@ -75,6 +93,10 @@ func withoutEnv(environ []string, key string) []string {
 		}
 	}
 	return out
+}
+
+func withoutStartupSafetyEnv(environ []string) []string {
+	return withoutEnv(withoutEnv(environ, "TG_READONLY"), "TG_ALLOW_WRITE")
 }
 
 func assertLegacyUnchanged(t *testing.T, root string, state legacyState) {
@@ -96,6 +118,133 @@ func assertLegacyUnchanged(t *testing.T, root string, state legacyState) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "accounts")); !os.IsNotExist(err) {
 		t.Fatalf("accounts directory created: %v", err)
+	}
+}
+
+func assertWriteDisallowedEnvelope(t *testing.T, output string) {
+	t.Helper()
+	var envelope struct {
+		OK        bool   `json:"ok"`
+		Command   string `json:"command"`
+		RequestID string `json:"request_id"`
+		Error     struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(output), &envelope); err != nil {
+		t.Fatalf("decode envelope: %v\n%s", err, output)
+	}
+	if envelope.OK || envelope.Command != "download-media" || envelope.Error.Code != "WRITE_DISALLOWED" || !strings.HasPrefix(envelope.RequestID, "req-") {
+		t.Fatalf("unexpected envelope: %#v", envelope)
+	}
+}
+
+func TestProcessDownloadMediaMissingAllowSkipsLegacyMigration(t *testing.T) {
+	binary := buildTGProcess(t)
+	for _, args := range [][]string{
+		{"download-media", "1", "9", "--json"},
+		{"download-media", "--allow-write=false", "1", "9", "--json"},
+		{"download-media", "1", "9", "--allow-write=false", "--json"},
+	} {
+		t.Run(strings.Join(args, "_"), func(t *testing.T) {
+			root := t.TempDir()
+			state := seedLegacyState(t, root)
+			out, code := runTGProcessResult(t, binary, root, withoutStartupSafetyEnv(os.Environ()), args...)
+			if code != 6 {
+				t.Fatalf("code=%d want 6\n%s", code, out)
+			}
+			assertWriteDisallowedEnvelope(t, out)
+			assertLegacyUnchanged(t, root, state)
+		})
+	}
+}
+
+func TestProcessDownloadMediaReadOnlyAllowSkipsLegacyMigration(t *testing.T) {
+	binary := buildTGProcess(t)
+	baseEnv := withoutStartupSafetyEnv(os.Environ())
+	tests := []struct {
+		name   string
+		args   []string
+		env    []string
+		dotEnv string
+	}{
+		{name: "global flag before", args: []string{"--read-only", "download-media", "1", "9", "--allow-write", "--json"}, env: baseEnv},
+		{name: "global flag after", args: []string{"download-media", "1", "9", "--allow-write", "--read-only", "--json"}, env: baseEnv},
+		{name: "environment", args: []string{"download-media", "1", "9", "--allow-write", "--json"}, env: append(baseEnv, "TG_READONLY=1")},
+		{name: "dotenv", args: []string{"download-media", "1", "9", "--allow-write", "--json"}, env: baseEnv, dotEnv: "TG_READONLY=yes\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			state := seedLegacyState(t, root)
+			if tt.dotEnv != "" {
+				if err := os.WriteFile(filepath.Join(root, ".env"), []byte(tt.dotEnv), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			out, code := runTGProcessResult(t, binary, root, tt.env, tt.args...)
+			if code != 6 {
+				t.Fatalf("code=%d want 6\n%s", code, out)
+			}
+			assertWriteDisallowedEnvelope(t, out)
+			assertLegacyUnchanged(t, root, state)
+		})
+	}
+}
+
+func TestProcessAuthorizedDownloadMediaMigratesBeforeLeafExecution(t *testing.T) {
+	binary := buildTGProcess(t)
+	for _, args := range [][]string{
+		{"download-media", "1", "9", "--allow-write", "--json"},
+		{"download-media", "--allow-write", "1", "9", "--json"},
+	} {
+		t.Run(strings.Join(args, "_"), func(t *testing.T) {
+			root := t.TempDir()
+			state := seedLegacyState(t, root)
+			out, code := runTGProcessResult(t, binary, root, withoutStartupSafetyEnv(os.Environ()), args...)
+			if code == 0 || code == 6 {
+				t.Fatalf("code=%d want later command failure after authorization\n%s", code, out)
+			}
+			assertLegacyMigrated(t, root, state)
+		})
+	}
+}
+
+func TestProcessMigrationErrorWarnsAndContinues(t *testing.T) {
+	binary := buildTGProcess(t)
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "telegram.sqlite"), []byte("legacy-db"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "accounts"), []byte("blocks directory creation"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, code := runTGProcessResult(t, binary, root, withoutStartupSafetyEnv(os.Environ()), "version", "--json")
+	if code != 0 {
+		t.Fatalf("version code=%d\n%s", code, out)
+	}
+	if !strings.Contains(out, "WARN: account migration failed:") || !strings.Contains(out, `"command":"version"`) {
+		t.Fatalf("warning or successful command output missing:\n%s", out)
+	}
+}
+
+func assertLegacyMigrated(t *testing.T, root string, state legacyState) {
+	t.Helper()
+	for name, want := range state.files {
+		destination := filepath.Join(root, "accounts", "default", name)
+		got, err := os.ReadFile(destination)
+		if err != nil {
+			t.Fatalf("read migrated %s: %v", name, err)
+		}
+		if name == "audit.log" {
+			if !bytes.HasPrefix(got, want) {
+				t.Fatalf("migrated audit lost legacy prefix: %q", got)
+			}
+			continue
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("migrated %s = %q, want %q", name, got, want)
+		}
 	}
 }
 
@@ -169,22 +318,6 @@ func TestProcessStartupFalseBooleanSpellingsStillMigrateLegacyState(t *testing.T
 				}
 			}
 		})
-	}
-}
-
-func TestStartupReadOnlyRecognizesDocumentedBooleanSpellings(t *testing.T) {
-	for _, spelling := range []string{"f", "F", "false", "0", "no", "off"} {
-		if startupReadOnly([]string{"--read-only=" + spelling}) {
-			t.Errorf("--read-only=%s treated as true", spelling)
-		}
-	}
-	for _, spelling := range []string{"t", "T", "true", "1", "yes", "on"} {
-		if !startupReadOnly([]string{"--read-only=" + spelling}) {
-			t.Errorf("--read-only=%s treated as false", spelling)
-		}
-	}
-	if !startupReadOnly([]string{"--read-only=malformed"}) {
-		t.Error("malformed boolean must fail safe as read-only before Cobra reports it")
 	}
 }
 
