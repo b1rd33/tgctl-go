@@ -44,6 +44,7 @@ type FakeClient struct {
 	Backfills      []BackfillReq
 	BackfillRows   []BackfillMessage // Legacy test configuration; used when BackfillResult.Messages is nil.
 	BackfillResult BackfillResult
+	BackfillErr    error
 	Topics         []TopicInfo
 	NextTopicID    int64
 	Folders        []FolderInfo
@@ -276,7 +277,7 @@ func (f *FakeClient) BackfillMessages(_ context.Context, req BackfillReq) (Backf
 	if result.Warnings == nil {
 		result.Warnings = []string{}
 	}
-	return result, nil
+	return result, f.BackfillErr
 }
 
 func (f *FakeClient) ListTopics(_ context.Context, chatID int64, limit int, query string) ([]TopicInfo, error) {

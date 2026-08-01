@@ -112,7 +112,7 @@ func TestBackfillHistoryDownloadsRawPageMediaAndContinuesAfterItemFailures(t *te
 			t.Fatalf("message %d path = %q, want downloaded absolute path", id, byID[id].MediaPath)
 		}
 	}
-	if filepath.Base(byID[4].MediaPath) != "4_photo_700.jpg" || filepath.Base(byID[1].MediaPath) != "1_same.bin" {
+	if filepath.Base(byID[4].MediaPath) != "42_4_photo_700_photo_700.jpg" || filepath.Base(byID[1].MediaPath) != "42_1_document_800_same.bin" {
 		t.Fatalf("unique paths = photo:%q document:%q", byID[4].MediaPath, byID[1].MediaPath)
 	}
 	if byID[3].MediaPath != "" || byID[2].MediaPath != "" {
@@ -185,7 +185,7 @@ func TestBackfillMediaTransferFailureDoesNotStopLaterMessages(t *testing.T) {
 	if got := result.Warnings; !reflect.DeepEqual(got, []string{"chat_id=42 message_id=20 media=failed code=TRANSFER"}) {
 		t.Fatalf("warnings=%#v", got)
 	}
-	if result.Messages[0].MediaPath != "" || filepath.Base(result.Messages[1].MediaPath) != "10_same.bin" {
+	if result.Messages[0].MediaPath != "" || filepath.Base(result.Messages[1].MediaPath) != "42_10_document_10_same.bin" {
 		t.Fatalf("message paths=%#v", result.Messages)
 	}
 	if strings.Contains(strings.Join(result.Warnings, ""), "secret") || strings.Contains(strings.Join(result.Warnings, ""), "access_hash") {
@@ -208,8 +208,75 @@ func TestBackfillDuplicateTelegramFilenamesUseDistinctMessagePaths(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.MediaDownloaded != 2 || filepath.Base(result.Messages[0].MediaPath) != "2_duplicate.bin" || filepath.Base(result.Messages[1].MediaPath) != "1_duplicate.bin" || result.Messages[0].MediaPath == result.Messages[1].MediaPath {
+	if result.MediaDownloaded != 2 || filepath.Base(result.Messages[0].MediaPath) != "42_2_document_2_duplicate.bin" || filepath.Base(result.Messages[1].MediaPath) != "42_1_document_1_duplicate.bin" || result.Messages[0].MediaPath == result.Messages[1].MediaPath {
 		t.Fatalf("result=%#v", result)
+	}
+}
+
+func TestBackfillDestinationNameSeparatesChatAndEditedMediaProvenance(t *testing.T) {
+	dir := t.TempDir()
+	g := &GotdClient{fileDownloader: &recordingFileDownloader{chunks: [][]byte{[]byte("data")}}}
+	download := func(chatID, documentID int64) BackfillMessage {
+		message := documentMessageWithSize(documentID, 4, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "same.bin"})
+		message.ID = 9
+		result, err := g.paginateBackfillHistory(context.Background(), BackfillReq{ChatID: chatID, Limit: 1, DownloadMedia: true, MediaDir: dir}, func(context.Context, int, int) (historyPage, error) {
+			return historyPage{Messages: []tg.MessageClass{message}, Total: 1, TotalKnown: true}, nil
+		}, waitForThrottle)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return result.Messages[0]
+	}
+	chatA := download(42, 700)
+	chatB := download(43, 700)
+	edited := download(42, 701)
+	if chatA.MediaPath == chatB.MediaPath || chatA.MediaPath == edited.MediaPath || chatB.MediaPath == edited.MediaPath {
+		t.Fatalf("paths collide: %q %q %q", chatA.MediaPath, chatB.MediaPath, edited.MediaPath)
+	}
+	result, err := g.paginateBackfillHistory(context.Background(), BackfillReq{ChatID: 42, Limit: 1, DownloadMedia: true, MediaDir: dir}, func(context.Context, int, int) (historyPage, error) {
+		message := documentMessageWithSize(700, 4, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "same.bin"})
+		message.ID = 9
+		return historyPage{Messages: []tg.MessageClass{message}, Total: 1, TotalKnown: true}, nil
+	}, waitForThrottle)
+	if err != nil || result.MediaSkipped != 1 || result.Messages[0].MediaPath != chatA.MediaPath {
+		t.Fatalf("same provenance rerun err=%v result=%#v", err, result)
+	}
+}
+
+func TestBackfillReturnsDownloadedPartialResultOnLaterPageFailure(t *testing.T) {
+	mediaMessage := documentMessageWithSize(900, 4, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "asset.bin"})
+	mediaMessage.ID = 100
+	messages := []tg.MessageClass{mediaMessage}
+	for id := 99; id >= 1; id-- {
+		messages = append(messages, &tg.Message{ID: id, Message: "text"})
+	}
+	calls := 0
+	g := &GotdClient{fileDownloader: &recordingFileDownloader{chunks: [][]byte{[]byte("data")}}}
+	result, err := g.paginateBackfillHistory(context.Background(), BackfillReq{ChatID: 42, Limit: 101, DownloadMedia: true, MediaDir: t.TempDir()}, func(context.Context, int, int) (historyPage, error) {
+		calls++
+		if calls == 1 {
+			return historyPage{Messages: messages, Total: 101, TotalKnown: true}, nil
+		}
+		return historyPage{}, errors.New("page 2 failed")
+	}, waitForThrottle)
+	if err == nil || calls != 2 || result.MediaDownloaded != 1 || len(result.Messages) != 100 || len(result.MediaOutcomes) != 1 {
+		t.Fatalf("calls=%d err=%v result=%#v", calls, err, result)
+	}
+}
+
+func TestBackfillCancellationDuringLaterDownloadReturnsPromptPartialWithoutFailureCount(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	first := documentMessageWithSize(1, 4, "application/octet-stream")
+	first.ID = 2
+	second := documentMessageWithSize(2, 4, "application/octet-stream")
+	second.ID = 1
+	downloader := &scriptedFileDownloader{steps: []downloadStep{{data: []byte("data")}, {before: cancel, err: context.Canceled}}}
+	g := &GotdClient{fileDownloader: downloader}
+	result, err := g.paginateBackfillHistory(ctx, BackfillReq{ChatID: 42, Limit: 2, DownloadMedia: true, MediaDir: t.TempDir()}, func(context.Context, int, int) (historyPage, error) {
+		return historyPage{Messages: []tg.MessageClass{first, second}, Total: 2, TotalKnown: true}, nil
+	}, waitForThrottle)
+	if !errors.Is(err, context.Canceled) || result.MediaDownloaded != 1 || result.MediaFailed != 0 || len(result.Messages) != 1 || len(result.MediaOutcomes) != 1 {
+		t.Fatalf("err=%v result=%#v", err, result)
 	}
 }
 
@@ -1260,8 +1327,9 @@ type recordingFileDownloader struct {
 }
 
 type downloadStep struct {
-	data []byte
-	err  error
+	data   []byte
+	err    error
+	before func()
 }
 
 type scriptedFileDownloader struct {
@@ -1279,6 +1347,9 @@ func (d *scriptedFileDownloader) Download(_ context.Context, _ tg.InputFileLocat
 	step := d.steps[d.next]
 	d.next++
 	d.mu.Unlock()
+	if step.before != nil {
+		step.before()
+	}
 	if len(step.data) > 0 {
 		if _, err := out.Write(step.data); err != nil {
 			return err

@@ -19,17 +19,18 @@ type MessageSummary struct {
 
 // Message mirrors the Python `_full_message` row shape.
 type Message struct {
-	ChatID       int64
-	MessageID    int64
-	SenderID     *int64
-	Date         string
-	Text         *string
-	IsOutgoing   bool
-	ReplyToMsgID *int64
-	HasMedia     bool
-	MediaType    *string
-	MediaPath    *string
-	RawJSON      *string
+	ChatID        int64
+	MessageID     int64
+	SenderID      *int64
+	Date          string
+	Text          *string
+	IsOutgoing    bool
+	ReplyToMsgID  *int64
+	HasMedia      bool
+	MediaType     *string
+	MediaPath     *string
+	MediaIdentity *string
+	RawJSON       *string
 }
 
 // ShowOptions mirrors the Python `show` arg surface.
@@ -155,25 +156,26 @@ func GetOne(db *sql.DB, chatID, messageID int64, includeDeleted bool) (*Message,
 	}
 	q := fmt.Sprintf(`
 		SELECT chat_id, message_id, sender_id, date, text, is_outgoing,
-		       reply_to_msg_id, has_media, media_type, media_path, raw_json
+		       reply_to_msg_id, has_media, media_type, media_path, media_id, raw_json
 		FROM tg_messages
 		WHERE chat_id = ? AND message_id = ?%s`,
 		deletedClause,
 	)
 	var (
-		m           Message
-		text        sql.NullString
-		mediaType   sql.NullString
-		mediaPath   sql.NullString
-		rawJSON     sql.NullString
-		senderID    sql.NullInt64
-		replyTo     sql.NullInt64
-		hasMediaInt sql.NullInt64
-		isOutgoingI sql.NullInt64
+		m             Message
+		text          sql.NullString
+		mediaType     sql.NullString
+		mediaPath     sql.NullString
+		mediaIdentity sql.NullString
+		rawJSON       sql.NullString
+		senderID      sql.NullInt64
+		replyTo       sql.NullInt64
+		hasMediaInt   sql.NullInt64
+		isOutgoingI   sql.NullInt64
 	)
 	err := db.QueryRow(q, chatID, messageID).Scan(
 		&m.ChatID, &m.MessageID, &senderID, &m.Date, &text, &isOutgoingI,
-		&replyTo, &hasMediaInt, &mediaType, &mediaPath, &rawJSON,
+		&replyTo, &hasMediaInt, &mediaType, &mediaPath, &mediaIdentity, &rawJSON,
 	)
 	if err != nil {
 		return nil, err
@@ -194,6 +196,9 @@ func GetOne(db *sql.DB, chatID, messageID int64, includeDeleted bool) (*Message,
 	}
 	if mediaPath.Valid {
 		m.MediaPath = &mediaPath.String
+	}
+	if mediaIdentity.Valid {
+		m.MediaIdentity = &mediaIdentity.String
 	}
 	if rawJSON.Valid {
 		m.RawJSON = &rawJSON.String
@@ -232,11 +237,11 @@ func InsertMessage(db *sql.DB, m Message) error {
 	_, err := db.Exec(`
 		INSERT INTO tg_messages(
 			chat_id, message_id, sender_id, date, text, is_outgoing,
-			reply_to_msg_id, has_media, media_type, media_path, raw_json, deleted
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+			reply_to_msg_id, has_media, media_type, media_path, media_id, raw_json, deleted
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
 		m.ChatID, m.MessageID, optInt64(m.SenderID), m.Date, optStr(m.Text),
 		boolInt(m.IsOutgoing), optInt64(m.ReplyToMsgID), boolInt(m.HasMedia),
-		optStr(m.MediaType), optStr(m.MediaPath), optStr(m.RawJSON),
+		optStr(m.MediaType), optStr(m.MediaPath), optStr(m.MediaIdentity), optStr(m.RawJSON),
 	)
 	return err
 }

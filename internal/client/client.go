@@ -202,17 +202,41 @@ type BackfillReq struct {
 const MaxBackfillMessages = 10_000
 
 type BackfillMessage struct {
-	ChatID       int64
-	MessageID    int64
-	SenderID     int64
-	Date         string
-	Text         string
-	IsOutgoing   bool
-	ReplyToMsgID int64
-	HasMedia     bool
-	MediaType    string
-	MediaPath    string
-	RawJSON      string
+	ChatID           int64
+	MessageID        int64
+	SenderID         int64
+	Date             string
+	Text             string
+	IsOutgoing       bool
+	ReplyToMsgID     int64
+	HasMedia         bool
+	MediaType        string
+	MediaPath        string
+	MediaIdentity    string
+	MediaDisposition BackfillMediaStatus
+	RawJSON          string
+}
+
+type BackfillMediaStatus string
+
+const (
+	BackfillMediaNone        BackfillMediaStatus = "none"
+	BackfillMediaDownloaded  BackfillMediaStatus = "downloaded"
+	BackfillMediaSkipped     BackfillMediaStatus = "skipped"
+	BackfillMediaFailed      BackfillMediaStatus = "failed"
+	BackfillMediaUnsupported BackfillMediaStatus = "unsupported"
+	BackfillMediaMalformed   BackfillMediaStatus = "malformed"
+)
+
+type BackfillMediaOutcome struct {
+	ChatID        int64
+	MessageID     int64
+	MediaIdentity string
+	Status        BackfillMediaStatus
+	MediaType     string
+	MediaPath     string
+	Bytes         int64
+	ErrorCode     string
 }
 
 type BackfillResult struct {
@@ -221,6 +245,7 @@ type BackfillResult struct {
 	MediaSkipped    int
 	MediaFailed     int
 	Warnings        []string
+	MediaOutcomes   []BackfillMediaOutcome `json:"-"`
 }
 
 type TopicInfo struct {

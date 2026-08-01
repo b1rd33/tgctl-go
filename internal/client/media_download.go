@@ -76,6 +76,7 @@ type mediaDownloadAPI interface {
 }
 
 type extractedDownloadMedia struct {
+	Identity  string
 	MediaType string
 	MIMEType  string
 	Filename  string
@@ -313,6 +314,7 @@ func extractDownloadMedia(message *tg.Message) (extractedDownloadMedia, error) {
 		file.MIMEType = "image/jpeg"
 		size, sizeKnown := selectedPhotoSize(photo.Sizes, file.Location)
 		return extractedDownloadMedia{
+			Identity:  fmt.Sprintf("photo:%d", photo.ID),
 			MediaType: "photo", MIMEType: file.MIMEType, Filename: file.Name,
 			Size: size, SizeKnown: sizeKnown, File: file,
 		}, nil
@@ -359,6 +361,7 @@ func extractDownloadMedia(message *tg.Message) (extractedDownloadMedia, error) {
 		file.Name = filename
 		file.MIMEType = mimeType
 		return extractedDownloadMedia{
+			Identity:  fmt.Sprintf("document:%d", document.ID),
 			MediaType: mediaType, MIMEType: mimeType, Filename: filename,
 			Size: document.Size, SizeKnown: document.Size >= 0, File: file,
 		}, nil

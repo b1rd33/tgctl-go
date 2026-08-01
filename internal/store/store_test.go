@@ -53,7 +53,7 @@ func TestMessagesHasMigratedColumns(t *testing.T) {
 	}
 	defer db.Close()
 
-	for _, col := range []string{"media_path", "deleted"} {
+	for _, col := range []string{"media_path", "media_id", "deleted"} {
 		if !columnExists(db, "tg_messages", col) {
 			t.Fatalf("tg_messages missing column %s", col)
 		}
@@ -74,6 +74,7 @@ func TestConnectMigratesOldSchema(t *testing.T) {
 	// COLUMN since 3.35; modernc.org/sqlite is current.
 	for _, alt := range []string{
 		"ALTER TABLE tg_messages DROP COLUMN media_path",
+		"ALTER TABLE tg_messages DROP COLUMN media_id",
 		"ALTER TABLE tg_messages DROP COLUMN deleted",
 		"ALTER TABLE tg_chats DROP COLUMN left",
 	} {
@@ -88,7 +89,7 @@ func TestConnectMigratesOldSchema(t *testing.T) {
 		t.Fatalf("reopen: %v", err)
 	}
 	defer db2.Close()
-	for _, col := range []string{"media_path", "deleted"} {
+	for _, col := range []string{"media_path", "media_id", "deleted"} {
 		if !columnExists(db2, "tg_messages", col) {
 			t.Fatalf("migration failed: tg_messages.%s", col)
 		}

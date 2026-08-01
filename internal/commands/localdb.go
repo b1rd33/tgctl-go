@@ -108,43 +108,50 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 					return emitDispatchedFailure(cmd, "backfill", fmt.Errorf("resolve backfill media directory: %w", err))
 				}
 			}
+			auditArgs := map[string]any{
+				"chat": args[0], "max_messages": maxMessages, "max_db_size_mb": maxDBSizeMB,
+				"throttle_seconds": throttleSeconds, "download_media": downloadMedia,
+				"max_media_size_mb": maxMediaSizeMB, "overwrite_media": overwriteMedia,
+				"media_dir_policy": "account-chat",
+			}
+			recoveryExtras := map[string]any{}
 			code := dispatch.Run("backfill", dispatch.Options{
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
-				AuditPath: paths.auditPath, Args: map[string]any{
-					"chat": args[0], "max_messages": maxMessages, "max_db_size_mb": maxDBSizeMB,
-					"throttle_seconds": throttleSeconds, "download_media": downloadMedia,
-					"max_media_size_mb": maxMediaSizeMB, "overwrite_media": overwriteMedia,
-					"media_dir_policy": "account-chat",
-				},
+				AuditPath: paths.auditPath, Args: auditArgs, DurableAudit: true, CommittedExtras: recoveryExtras,
 			}, func(ctx context.Context) (any, error) {
 				c, err := cfg.ClientFactory(ctx, paths.sessionPath, paths.dbPath)
 				if err != nil {
 					return nil, err
 				}
-				defer c.Close()
 				result, err := c.BackfillMessages(ctx, client.BackfillReq{
 					ChatID: chatID, Limit: maxMessages - current, Throttle: throttle,
 					DownloadMedia: downloadMedia, MediaDir: mediaDir, MaxMediaBytes: maxMediaBytes,
 					OverwriteMedia: overwriteMedia,
 				})
-				if err != nil {
-					return nil, err
+				recountBackfillMedia(&result)
+				setBackfillRecoveryExtras(recoveryExtras, result, mediaDir)
+				setBackfillAuditResult(auditArgs, result)
+				clientCloseErr := c.Close()
+				if operationErr := errors.Join(err, clientCloseErr); operationErr != nil {
+					return nil, wrapBackfillMediaCommit(operationErr, result, mediaDir, "backfill media committed before Telegram finalization failed")
 				}
 				unlock, err := lockBackfillDBPath(paths.dbPath)
 				if err != nil {
-					return nil, err
+					return nil, wrapBackfillMediaCommit(err, result, mediaDir, "backfill media committed before database locking failed")
 				}
 				defer unlock()
 				db, err := store.Connect(paths.dbPath)
 				if err != nil {
-					return nil, err
+					return nil, wrapBackfillMediaCommit(err, result, mediaDir, "backfill media committed before database open failed")
 				}
-				defer db.Close()
 				inserted, dbCapReached, dbSize, finalCount, capSkippedMedia, err := insertBackfillRowsAtomic(
 					ctx, db, chatID, maxMessages, dbCapBytes, result.Messages,
 				)
 				if err != nil {
-					return nil, err
+					return nil, wrapBackfillMediaCommit(errors.Join(err, db.Close()), result, mediaDir, "backfill media committed before database insertion finalized")
+				}
+				if closeErr := db.Close(); closeErr != nil {
+					return nil, safety.NewCommittedWriteWithExtras("backfill database committed but close failed", closeErr, mergedBackfillExtras(closeErr, recoveryExtras))
 				}
 				skipped := len(result.Messages) - inserted
 				capOnlyWarnings := capWarnings(finalCount, maxMessages)
@@ -153,6 +160,9 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 				}
 				warnings := append([]string{}, result.Warnings...)
 				warnings = append(warnings, capOnlyWarnings...)
+				auditArgs["warning_count"] = len(warnings)
+				auditArgs["warnings"] = boundedBackfillWarnings(warnings, 20)
+				auditArgs["cap_skipped_media"] = capSkippedMedia
 				return map[string]any{
 					"chats_processed":   1,
 					"messages_inserted": inserted,
@@ -757,6 +767,121 @@ func capSkippedMediaWarning(count int) string {
 	return fmt.Sprintf("media files for %d messages skipped by a backfill cap were preserved", count)
 }
 
+const maxBackfillRecoveryOutcomes = 20
+
+func recountBackfillMedia(result *client.BackfillResult) {
+	if len(result.MediaOutcomes) == 0 {
+		if result.Warnings == nil {
+			result.Warnings = []string{}
+		}
+		return
+	}
+	result.MediaDownloaded, result.MediaSkipped, result.MediaFailed = 0, 0, 0
+	for _, outcome := range result.MediaOutcomes {
+		switch outcome.Status {
+		case client.BackfillMediaDownloaded:
+			result.MediaDownloaded++
+		case client.BackfillMediaSkipped, client.BackfillMediaUnsupported:
+			result.MediaSkipped++
+		case client.BackfillMediaFailed, client.BackfillMediaMalformed:
+			result.MediaFailed++
+		}
+	}
+	if result.Warnings == nil {
+		result.Warnings = []string{}
+	}
+}
+
+func setBackfillRecoveryExtras(dst map[string]any, result client.BackfillResult, mediaRoot string) {
+	dst["artifact_count"] = result.MediaDownloaded
+	dst["media_downloaded"] = result.MediaDownloaded
+	dst["media_skipped"] = result.MediaSkipped
+	dst["media_failed"] = result.MediaFailed
+	outcomes := make([]map[string]any, 0, min(len(result.MediaOutcomes), maxBackfillRecoveryOutcomes))
+	for _, outcome := range result.MediaOutcomes {
+		if len(outcomes) >= maxBackfillRecoveryOutcomes {
+			break
+		}
+		item := map[string]any{
+			"chat_id": outcome.ChatID, "message_id": outcome.MessageID,
+			"status": string(outcome.Status), "media_type": outcome.MediaType,
+			"media_id": safeBackfillIdentity(outcome.MediaIdentity), "bytes": outcome.Bytes,
+			"error_code": outcome.ErrorCode,
+		}
+		if backfillRecoveryPathAllowed(outcome.MediaPath, mediaRoot) {
+			item["media_path"] = filepath.Clean(outcome.MediaPath)
+		}
+		outcomes = append(outcomes, item)
+	}
+	dst["media_outcomes"] = outcomes
+	if len(result.MediaOutcomes) > len(outcomes) {
+		dst["media_outcomes_truncated"] = true
+	}
+}
+
+func backfillRecoveryPathAllowed(path, root string) bool {
+	if !filepath.IsAbs(path) || !filepath.IsAbs(root) {
+		return false
+	}
+	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(path))
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func safeBackfillIdentity(identity string) string {
+	if len(identity) > 80 {
+		return ""
+	}
+	for _, r := range identity {
+		if !(r == ':' || r == '_' || r == '-' || r >= '0' && r <= '9' || r >= 'a' && r <= 'z') {
+			return ""
+		}
+	}
+	return identity
+}
+
+func setBackfillAuditResult(args map[string]any, result client.BackfillResult) {
+	args["media_downloaded"] = result.MediaDownloaded
+	args["media_skipped"] = result.MediaSkipped
+	args["media_failed"] = result.MediaFailed
+	args["client_warning_count"] = len(result.Warnings)
+	args["client_warnings"] = boundedBackfillWarnings(result.Warnings, 20)
+}
+
+func boundedBackfillWarnings(warnings []string, limit int) []string {
+	if limit < 0 {
+		limit = 0
+	}
+	if len(warnings) < limit {
+		limit = len(warnings)
+	}
+	return append([]string{}, warnings[:limit]...)
+}
+
+func wrapBackfillMediaCommit(err error, result client.BackfillResult, mediaRoot, message string) error {
+	if err == nil || result.MediaDownloaded == 0 {
+		return err
+	}
+	extras := map[string]any{}
+	setBackfillRecoveryExtras(extras, result, mediaRoot)
+	return safety.NewCommittedWriteWithExtras(message, errors.New("backfill finalization failed after media commit"), mergedBackfillExtras(err, extras))
+}
+
+func mergedBackfillExtras(err error, extras map[string]any) map[string]any {
+	merged := map[string]any{}
+	var committed *safety.CommittedWrite
+	if errors.As(err, &committed) {
+		for key, value := range committed.ClassificationExtras() {
+			merged[key] = value
+		}
+	}
+	for key, value := range extras {
+		if _, exists := merged[key]; !exists {
+			merged[key] = value
+		}
+	}
+	return merged
+}
+
 func insertBackfillMessage(db *sql.DB, row client.BackfillMessage) error {
 	return insertBackfillMessageContext(context.Background(), db, row)
 }
@@ -775,19 +900,33 @@ func insertBackfillMessageContext(ctx context.Context, db sqliteContextExecer, r
 	}
 	_, err := db.ExecContext(ctx, `
 		INSERT INTO tg_messages(chat_id, message_id, sender_id, date, text, is_outgoing,
-			reply_to_msg_id, has_media, media_type, media_path, raw_json, deleted)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+			reply_to_msg_id, has_media, media_type, media_path, media_id, raw_json, deleted)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
 		ON CONFLICT(chat_id, message_id) DO UPDATE SET
 			sender_id=excluded.sender_id, date=excluded.date, text=excluded.text,
 			is_outgoing=excluded.is_outgoing, reply_to_msg_id=excluded.reply_to_msg_id,
 			has_media=excluded.has_media,
-			media_type=CASE WHEN excluded.has_media=1 AND excluded.media_type IS NULL
-				THEN tg_messages.media_type ELSE excluded.media_type END,
-			media_path=CASE WHEN excluded.has_media=1 AND excluded.media_path IS NULL
-				THEN tg_messages.media_path ELSE excluded.media_path END,
+			media_type=CASE
+				WHEN ? IN ('downloaded','skipped') THEN excluded.media_type
+				WHEN ?='failed' AND excluded.media_id IS NOT NULL AND tg_messages.media_id=excluded.media_id THEN tg_messages.media_type
+				WHEN ?='' AND excluded.has_media=1 AND excluded.media_type IS NULL THEN tg_messages.media_type
+				ELSE excluded.media_type END,
+			media_path=CASE
+				WHEN ? IN ('downloaded','skipped') THEN excluded.media_path
+				WHEN ?='failed' AND excluded.media_id IS NOT NULL AND tg_messages.media_id=excluded.media_id THEN tg_messages.media_path
+				WHEN ?='' AND excluded.has_media=1 AND excluded.media_path IS NULL THEN tg_messages.media_path
+				ELSE excluded.media_path END,
+			media_id=CASE
+				WHEN ? IN ('downloaded','skipped') THEN excluded.media_id
+				WHEN ?='failed' AND excluded.media_id IS NOT NULL AND tg_messages.media_id=excluded.media_id THEN tg_messages.media_id
+				WHEN ?='' THEN excluded.media_id
+				ELSE NULL END,
 			raw_json=excluded.raw_json, deleted=0`,
 		row.ChatID, row.MessageID, sender, date, nullIfEmpty(row.Text), localDBBoolInt(row.IsOutgoing),
-		reply, localDBBoolInt(row.HasMedia), nullIfEmpty(row.MediaType), nullIfEmpty(row.MediaPath), nullIfEmpty(row.RawJSON))
+		reply, localDBBoolInt(row.HasMedia), nullIfEmpty(row.MediaType), nullIfEmpty(row.MediaPath), nullIfEmpty(row.MediaIdentity), nullIfEmpty(row.RawJSON),
+		row.MediaDisposition, row.MediaDisposition, row.MediaDisposition,
+		row.MediaDisposition, row.MediaDisposition, row.MediaDisposition,
+		row.MediaDisposition, row.MediaDisposition, row.MediaDisposition)
 	return err
 }
 

@@ -3,6 +3,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -93,6 +94,28 @@ func TestBackfillMediaContractAndFake(t *testing.T) {
 	}
 	if !reflect.DeepEqual(fake.Backfills, []BackfillReq{wantReq}) {
 		t.Fatalf("backfills = %#v, want request recorded", fake.Backfills)
+	}
+}
+
+func TestBackfillStructuredMediaOutcomeContract(t *testing.T) {
+	want := BackfillResult{MediaOutcomes: []BackfillMediaOutcome{{
+		ChatID: 42, MessageID: 9, MediaIdentity: "document:700", Status: BackfillMediaDownloaded,
+		MediaType: "document", MediaPath: "/safe/42_9_document_700_report.pdf", Bytes: 12,
+	}}}
+	fake := &FakeClient{BackfillResult: want}
+	got, err := fake.BackfillMessages(context.Background(), BackfillReq{ChatID: 42})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.MediaOutcomes, want.MediaOutcomes) {
+		t.Fatalf("outcomes=%#v", got.MediaOutcomes)
+	}
+	encoded, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(encoded, []byte("MediaOutcomes")) || bytes.Contains(encoded, []byte("document:700")) {
+		t.Fatalf("structured recovery metadata leaked into default JSON: %s", encoded)
 	}
 }
 

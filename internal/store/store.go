@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -55,6 +56,11 @@ func migrate(db *sql.DB) error {
 	if !columnExists(db, "tg_messages", "media_path") {
 		if _, err := db.Exec("ALTER TABLE tg_messages ADD COLUMN media_path TEXT"); err != nil {
 			return err
+		}
+	}
+	if !columnExists(db, "tg_messages", "media_id") {
+		if _, err := db.Exec("ALTER TABLE tg_messages ADD COLUMN media_id TEXT"); err != nil {
+			return fmt.Errorf("migrate tg_messages.media_id: %w", err)
 		}
 	}
 	if !columnExists(db, "tg_messages", "deleted") {

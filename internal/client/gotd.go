@@ -933,7 +933,7 @@ func (g *GotdClient) paginateBackfillHistory(
 			}
 			row := BackfillMessage{
 				ChatID: req.ChatID, MessageID: int64(m.ID), Date: timeFromUnix(m.Date),
-				Text: m.Message, IsOutgoing: m.Out, HasMedia: m.Media != nil,
+				Text: m.Message, IsOutgoing: m.Out, HasMedia: m.Media != nil, MediaDisposition: BackfillMediaNone,
 			}
 			row.SenderID = peerID(m.FromID)
 			if req.DownloadMedia {
@@ -981,37 +981,65 @@ func (g *GotdClient) backfillMessageMedia(ctx context.Context, req BackfillReq, 
 	case *tg.MessageMediaPhoto, *tg.MessageMediaDocument:
 		// Continue below: these are Telegram's downloadable file media classes.
 	default:
-		result.MediaSkipped++
+		row.MediaDisposition = BackfillMediaUnsupported
+		appendBackfillMediaOutcome(result, BackfillMediaOutcome{
+			ChatID: req.ChatID, MessageID: int64(message.ID), Status: BackfillMediaUnsupported, ErrorCode: "UNSUPPORTED",
+		})
 		result.Warnings = append(result.Warnings, backfillMediaWarning(req.ChatID, int64(message.ID), "skipped", "UNSUPPORTED"))
 		return nil
 	}
 	extracted, err := extractDownloadMedia(message)
 	if err != nil {
-		result.MediaFailed++
+		row.MediaDisposition = BackfillMediaMalformed
+		appendBackfillMediaOutcome(result, BackfillMediaOutcome{
+			ChatID: req.ChatID, MessageID: int64(message.ID), Status: BackfillMediaMalformed, ErrorCode: mediaFailureCode(err),
+		})
 		result.Warnings = append(result.Warnings, backfillMediaWarning(req.ChatID, int64(message.ID), "failed", mediaFailureCode(err)))
 		return nil
 	}
-	uniqueName := fmt.Sprintf("%d_%s", message.ID, media.SanitizeDownloadName(extracted.Filename))
+	row.MediaIdentity = extracted.Identity
+	identityName := strings.ReplaceAll(extracted.Identity, ":", "_")
+	uniqueName := fmt.Sprintf("%d_%d_%s_%s", req.ChatID, message.ID, identityName, media.SanitizeDownloadName(extracted.Filename))
 	resp, err := g.downloadExtractedMessageMedia(ctx, DownloadMediaReq{
 		ChatID: req.ChatID, MessageID: int64(message.ID), OutputDir: req.MediaDir,
 		MaxBytes: req.MaxMediaBytes, Overwrite: req.OverwriteMedia,
 	}, message, extracted, uniqueName)
 	if err != nil {
-		result.MediaFailed++
-		result.Warnings = append(result.Warnings, backfillMediaWarning(req.ChatID, int64(message.ID), "failed", mediaFailureCode(err)))
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
+		row.MediaDisposition = BackfillMediaFailed
+		appendBackfillMediaOutcome(result, BackfillMediaOutcome{
+			ChatID: req.ChatID, MessageID: int64(message.ID), MediaIdentity: extracted.Identity,
+			Status: BackfillMediaFailed, MediaType: extracted.MediaType, ErrorCode: mediaFailureCode(err),
+		})
+		result.Warnings = append(result.Warnings, backfillMediaWarning(req.ChatID, int64(message.ID), "failed", mediaFailureCode(err)))
 		return nil
 	}
 	row.MediaType = resp.MediaType
 	row.MediaPath = resp.Path
+	status := BackfillMediaDownloaded
 	if resp.Skipped {
-		result.MediaSkipped++
-	} else {
-		result.MediaDownloaded++
+		status = BackfillMediaSkipped
 	}
+	row.MediaDisposition = status
+	appendBackfillMediaOutcome(result, BackfillMediaOutcome{
+		ChatID: req.ChatID, MessageID: int64(message.ID), MediaIdentity: extracted.Identity,
+		Status: status, MediaType: resp.MediaType, MediaPath: resp.Path, Bytes: resp.Bytes,
+	})
 	return nil
+}
+
+func appendBackfillMediaOutcome(result *BackfillResult, outcome BackfillMediaOutcome) {
+	result.MediaOutcomes = append(result.MediaOutcomes, outcome)
+	switch outcome.Status {
+	case BackfillMediaDownloaded:
+		result.MediaDownloaded++
+	case BackfillMediaSkipped, BackfillMediaUnsupported:
+		result.MediaSkipped++
+	case BackfillMediaFailed, BackfillMediaMalformed:
+		result.MediaFailed++
+	}
 }
 
 func backfillMediaWarning(chatID, messageID int64, outcome, code string) string {

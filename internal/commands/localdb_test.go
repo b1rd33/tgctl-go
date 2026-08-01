@@ -482,6 +482,75 @@ func TestBackfillDownloadMediaPassesOptionsPersistsPathsAndReturnsCounters(t *te
 	}
 }
 
+func TestBackfillFatalErrorAfterDownloadedPartialReturnsCommittedRecovery(t *testing.T) {
+	cfg, fc, _ := setupWriteEnv(t)
+	path := filepath.Join(filepath.Dir(cfg.Paths.(stubPaths).db), "media", "1", "42_9_document_700_asset.bin")
+	fc.BackfillResult = client.BackfillResult{
+		Messages: []client.BackfillMessage{{ChatID: 1, MessageID: 9, Date: "2026-08-01T10:00:00Z"}},
+		MediaOutcomes: []client.BackfillMediaOutcome{{
+			ChatID: 1, MessageID: 9, MediaIdentity: "document:700", Status: client.BackfillMediaDownloaded,
+			MediaType: "document", MediaPath: path, Bytes: 4,
+		}},
+	}
+	fc.BackfillErr = errors.New("page 2 failed session=/secret access_hash=123")
+	out, code := runRoot(t, cfg, "backfill", "1", "--download-media", "--allow-write", "--json")
+	if code != 1 || !strings.Contains(out, `"committed":true`) || !strings.Contains(out, `"artifact_count":1`) || !strings.Contains(out, `"media_path":"`+path+`"`) {
+		t.Fatalf("code=%d\nout:%s", code, out)
+	}
+	if strings.Contains(out, "access_hash") || strings.Contains(out, "/secret") {
+		t.Fatalf("recovery output leaked raw error: %s", out)
+	}
+	if _, err := loadMessage(cfg.Paths.(stubPaths).db, 1, 9); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("partial fatal result was inserted: %v", err)
+	}
+}
+
+func TestBackfillFatalErrorAfterPreexistingSkipIsNotCommitted(t *testing.T) {
+	cfg, fc, _ := setupWriteEnv(t)
+	fc.BackfillResult = client.BackfillResult{MediaOutcomes: []client.BackfillMediaOutcome{{
+		ChatID: 1, MessageID: 9, MediaIdentity: "document:700", Status: client.BackfillMediaSkipped,
+		MediaType: "document", MediaPath: filepath.Join(t.TempDir(), "existing.bin"), Bytes: 4,
+	}}}
+	fc.BackfillErr = errors.New("page 2 unavailable")
+	out, code := runRoot(t, cfg, "backfill", "1", "--download-media", "--allow-write", "--json")
+	if code != 1 || strings.Contains(out, `"committed":true`) {
+		t.Fatalf("code=%d\nout:%s", code, out)
+	}
+}
+
+func TestBackfillClientCloseFailureAfterDownloadIsCommitted(t *testing.T) {
+	cfg, fc, _ := setupWriteEnv(t)
+	fc.BackfillResult = client.BackfillResult{MediaOutcomes: []client.BackfillMediaOutcome{{
+		ChatID: 1, MessageID: 9, MediaIdentity: "document:700", Status: client.BackfillMediaDownloaded,
+		MediaType: "document", MediaPath: filepath.Join(filepath.Dir(cfg.Paths.(stubPaths).db), "media", "1", "asset.bin"), Bytes: 4,
+	}}}
+	fc.CloseErr = errors.New("close failed")
+	out, code := runRoot(t, cfg, "backfill", "1", "--download-media", "--allow-write", "--json")
+	if code != 1 || !strings.Contains(out, `"committed":true`) || !strings.Contains(out, `"artifact_count":1`) {
+		t.Fatalf("code=%d\nout:%s", code, out)
+	}
+}
+
+func TestBackfillDurableAuditFailureAfterMediaAndDBSuccessReturnsRecovery(t *testing.T) {
+	cfg, fc, _ := setupWriteEnv(t)
+	paths := cfg.Paths.(stubPaths)
+	blocker := filepath.Join(t.TempDir(), "audit-blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	paths.audit = filepath.Join(blocker, "audit.log")
+	cfg.Paths = paths
+	fc.BackfillResult = client.BackfillResult{
+		Messages:      []client.BackfillMessage{{ChatID: 1, MessageID: 9, Date: "2026-08-01T10:00:00Z", HasMedia: true, MediaType: "document", MediaPath: filepath.Join(t.TempDir(), "asset.bin"), MediaIdentity: "document:700", MediaDisposition: client.BackfillMediaDownloaded}},
+		MediaOutcomes: []client.BackfillMediaOutcome{{ChatID: 1, MessageID: 9, MediaIdentity: "document:700", Status: client.BackfillMediaDownloaded, MediaType: "document", MediaPath: filepath.Join(t.TempDir(), "asset.bin"), Bytes: 4}},
+		Warnings:      []string{},
+	}
+	out, code := runRoot(t, cfg, "backfill", "1", "--download-media", "--allow-write", "--json")
+	if code != 1 || !strings.Contains(out, `"committed":true`) || !strings.Contains(out, `"artifact_count":1`) {
+		t.Fatalf("code=%d\nout:%s", code, out)
+	}
+}
+
 func TestBackfillMediaFailurePreservesExistingCachedMediaPath(t *testing.T) {
 	cfg, fc, _ := setupWriteEnv(t)
 	paths := cfg.Paths.(stubPaths)
@@ -489,10 +558,10 @@ func TestBackfillMediaFailurePreservesExistingCachedMediaPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oldText, oldType, oldPath := "old", "document", "/existing/9_report.pdf"
+	oldText, oldType, oldPath, oldIdentity := "old", "document", "/existing/9_report.pdf", "document:700"
 	if err := store.InsertMessage(db, store.Message{
 		ChatID: 1, MessageID: 9, Date: "2026-08-01T09:00:00Z", Text: &oldText,
-		HasMedia: true, MediaType: &oldType, MediaPath: &oldPath,
+		HasMedia: true, MediaType: &oldType, MediaPath: &oldPath, MediaIdentity: &oldIdentity,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -500,7 +569,8 @@ func TestBackfillMediaFailurePreservesExistingCachedMediaPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	fc.BackfillResult = client.BackfillResult{
-		Messages:    []client.BackfillMessage{{ChatID: 1, MessageID: 9, Date: "2026-08-01T10:00:00Z", Text: "new text", HasMedia: true}},
+		Messages: []client.BackfillMessage{{ChatID: 1, MessageID: 9, Date: "2026-08-01T10:00:00Z", Text: "new text", HasMedia: true,
+			MediaIdentity: oldIdentity, MediaDisposition: client.BackfillMediaFailed}},
 		MediaFailed: 1,
 		Warnings:    []string{"chat_id=1 message_id=9 media=failed code=TRANSFER"},
 	}
@@ -516,6 +586,59 @@ func TestBackfillMediaFailurePreservesExistingCachedMediaPath(t *testing.T) {
 		t.Fatalf("cached row=%#v, want updated text and preserved media", got)
 	}
 }
+
+func TestBackfillExplicitMediaProvenanceClearsOrPreservesStalePaths(t *testing.T) {
+	tests := []struct {
+		name     string
+		seedID   *string
+		row      client.BackfillMessage
+		wantPath bool
+		wantID   string
+	}{
+		{name: "same identity failure preserves", seedID: ptrString("document:1"), row: client.BackfillMessage{HasMedia: true, MediaIdentity: "document:1", MediaDisposition: client.BackfillMediaFailed}, wantPath: true, wantID: "document:1"},
+		{name: "edited document failure clears", seedID: ptrString("document:1"), row: client.BackfillMessage{HasMedia: true, MediaIdentity: "document:2", MediaDisposition: client.BackfillMediaFailed}},
+		{name: "media removed clears", seedID: ptrString("document:1"), row: client.BackfillMessage{HasMedia: false, MediaDisposition: client.BackfillMediaNone}},
+		{name: "unsupported replacement clears", seedID: ptrString("document:1"), row: client.BackfillMessage{HasMedia: true, MediaDisposition: client.BackfillMediaUnsupported}},
+		{name: "legacy identity failure fails closed", row: client.BackfillMessage{HasMedia: true, MediaIdentity: "document:1", MediaDisposition: client.BackfillMediaFailed}},
+		{name: "successful replacement sets new", seedID: ptrString("document:1"), row: client.BackfillMessage{HasMedia: true, MediaType: "document", MediaPath: "/new/b.bin", MediaIdentity: "document:2", MediaDisposition: client.BackfillMediaDownloaded}, wantPath: true, wantID: "document:2"},
+	}
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, _, _ := setupWriteEnv(t)
+			db, err := store.Connect(cfg.Paths.(stubPaths).db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			oldType, oldPath := "document", "/old/a.bin"
+			id := int64(800 + i)
+			if err := store.InsertMessage(db, store.Message{ChatID: 1, MessageID: id, Date: "2026-08-01T09:00:00Z", HasMedia: true, MediaType: &oldType, MediaPath: &oldPath, MediaIdentity: tt.seedID}); err != nil {
+				t.Fatal(err)
+			}
+			row := tt.row
+			row.ChatID, row.MessageID, row.Date = 1, id, "2026-08-01T10:00:00Z"
+			if err := insertBackfillMessage(db, row); err != nil {
+				t.Fatal(err)
+			}
+			got, err := store.GetOne(db, 1, id, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (got.MediaPath != nil) != tt.wantPath {
+				t.Fatalf("row=%#v", got)
+			}
+			if tt.wantID == "" {
+				if got.MediaIdentity != nil {
+					t.Fatalf("media identity=%v, want nil", *got.MediaIdentity)
+				}
+			} else if got.MediaIdentity == nil || *got.MediaIdentity != tt.wantID {
+				t.Fatalf("row=%#v", got)
+			}
+		})
+	}
+}
+
+func ptrString(v string) *string { return &v }
 
 func TestBackfillWarningUsesAuthoritativeCountAfterConcurrentRPCWrite(t *testing.T) {
 	cfg, _, _ := setupWriteEnv(t)
