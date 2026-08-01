@@ -100,6 +100,10 @@ failure-safe cleanup.
 Live scripts must require test chat/account selectors through environment
 variables. They must not default to a maintainer's account, session, username, or
 local path, and raw transcripts/reports must stay outside the repository.
+The import/export simulation additionally requires an explicit dedicated forum
+chat in `TGCTL_LIVE_FORUM_CHAT` and four ordered, comma-separated dedicated
+folder targets in `TGCTL_LIVE_FOLDER_TARGETS`; it never discovers write targets
+from the local cache.
 
 Before filing an issue or opening a PR, remove Telegram phone numbers, usernames,
 peer/message IDs, invite links, session/auth data, local database paths, message

@@ -48,6 +48,8 @@ expect_failure invite telegram-invite-link notes.txt 'https://t.me/+SyntheticInv
 expect_failure phone telegram-phone config.env 'TG_PHONE=+15555550123'
 expect_failure chat_id telegram-numeric-selector config.env 'TG_CHAT_ID=123456789'
 expect_failure username telegram-owner-selector config.env 'SELF_USERNAME=@synthetic_owner'
+expect_failure human_selector telegram-human-selector scripts/live.sh './tg send SyntheticPerson "fixture" --allow-write --json'
+expect_failure human_assignment telegram-human-selector scripts/live.sh 'CHAT=SyntheticPerson'
 
 untracked_repo="$(new_repo untracked)"
 printf '%s\n' 'TG_CHAT_ID=123456789' >"$untracked_repo/local.env"

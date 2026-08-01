@@ -53,6 +53,8 @@ while IFS= read -r path; do
 	if report_matches telegram-phone '(TG_PHONE|TELEGRAM_PHONE|PHONE_NUMBER)[[:space:]]*=[[:space:]]*[^+[:space:]]*\+[0-9][0-9 ()-]{7,}' "$path"; then failures=$((failures + 1)); fi
 	if report_matches telegram-numeric-selector '(TG_(CHAT|USER|TARGET|FORUM|OWNER)_ID|CHAT|FORUM_CHAT|TARGET_USER|OWNER_ID)[[:space:]]*=[[:space:]]*[^[:space:]0-9-]*-?[0-9]{7,15}' "$path"; then failures=$((failures + 1)); fi
 	if report_matches telegram-owner-selector '(SELF_USERNAME|OWNER_USERNAME|TG_(OWNER|TARGET)_USERNAME)[[:space:]]*=[[:space:]]*[^@[:space:]]*@[A-Za-z0-9_]{5,}' "$path"; then failures=$((failures + 1)); fi
+	if report_matches telegram-human-selector '(^|[;&|[:space:]])(\./)?tg[[:space:]]+send[[:space:]]+[A-Z][A-Za-z]{2,}([[:space:]]|$)' "$path"; then failures=$((failures + 1)); fi
+	if report_matches telegram-human-selector '(CHAT|FORUM_CHAT|TARGET_CHAT|SELF_CHAT|TG_(CHAT|TARGET)_SELECTOR)[[:space:]]*=[[:space:]]*[^A-Z[:space:]]*[A-Z][A-Za-z]{2,}([[:space:]]|$)' "$path"; then failures=$((failures + 1)); fi
 done <"$tracked_file_list"
 
 if [ "$failures" -ne 0 ]; then

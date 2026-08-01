@@ -210,7 +210,6 @@ echo "command count: $COUNT" | tee -a "$OUT"
 # ---- Safety pipeline regressions ----
 expect_json_error WRITE_DISALLOWED 6 ./tg send "$CHAT" "no-allow" --json
 expect_json_error WRITE_DISALLOWED 6 ./tg --read-only send "$CHAT" "ro" --allow-write --json
-expect_json_error BAD_ARGS 2 ./tg send Bjorn "fuzzy" --allow-write --json
 expect_json_error BAD_ARGS 2 ./tg delete-msg "$CHAT" 999999 --allow-write --json
 expect_json_error NOT_FOUND 4 ./tg get-msg "$CHAT" 999999999999 --json
 

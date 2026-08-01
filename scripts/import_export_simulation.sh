@@ -3,12 +3,43 @@ set -euo pipefail
 
 CHAT="${TGCTL_LIVE_CHAT:?Set TGCTL_LIVE_CHAT to an isolated test chat or Saved Messages ID}"
 export TG_ACCOUNT="${TGCTL_LIVE_ACCOUNT:?Set TGCTL_LIVE_ACCOUNT to a dedicated authenticated test account}"
+FOLDER_TARGETS_RAW="${TGCTL_LIVE_FOLDER_TARGETS:?Set TGCTL_LIVE_FOLDER_TARGETS to four comma-separated dedicated test chat IDs}"
+FORUM_CHAT="${TGCTL_LIVE_FORUM_CHAT:?Set TGCTL_LIVE_FORUM_CHAT to a dedicated forum test chat ID}"
 RUN_ID="ie-sim-$(date +%Y%m%d%H%M%S)"
 RUN_SHORT="$(date +%H%M)"
 TMP_DIR="${TMPDIR:-/tmp}/tgctl-${RUN_ID}"
 OUT="${TGCTL_LIVE_OUTPUT:-${TMP_DIR}/import-export.transcript.txt}"
 REPORT="${TGCTL_LIVE_REPORT:-${TMP_DIR}/import-export-report.json}"
 DB="${TGCTL_LIVE_DB:?Set TGCTL_LIVE_DB to the selected test account database path}"
+
+is_numeric_selector() {
+  [[ "$1" =~ ^-?[1-9][0-9]{0,14}$ ]]
+}
+
+if ! is_numeric_selector "$CHAT" || ! is_numeric_selector "$FORUM_CHAT"; then
+  printf 'TGCTL_LIVE_CHAT and TGCTL_LIVE_FORUM_CHAT must be numeric test chat IDs\n' >&2
+  exit 2
+fi
+
+IFS=',' read -r -a FOLDER_CHAT_IDS <<<"$FOLDER_TARGETS_RAW"
+if [ "${#FOLDER_CHAT_IDS[@]}" -ne 4 ]; then
+  printf 'TGCTL_LIVE_FOLDER_TARGETS must contain exactly four distinct numeric test chat IDs\n' >&2
+  exit 2
+fi
+for idx in "${!FOLDER_CHAT_IDS[@]}"; do
+  target="${FOLDER_CHAT_IDS[$idx]}"
+  if ! is_numeric_selector "$target" || [ "$target" = "$CHAT" ]; then
+    printf 'TGCTL_LIVE_FOLDER_TARGETS must contain exactly four distinct numeric test chat IDs\n' >&2
+    exit 2
+  fi
+  for previous in "${FOLDER_CHAT_IDS[@]:0:$idx}"; do
+    if [ "$target" = "$previous" ]; then
+      printf 'TGCTL_LIVE_FOLDER_TARGETS must contain exactly four distinct numeric test chat IDs\n' >&2
+      exit 2
+    fi
+  done
+done
+
 mkdir -p "$TMP_DIR"
 > "$OUT"
 
@@ -136,28 +167,6 @@ run_json_capture "$TMP_DIR/unpin.json" ./tg unpin-msg "$CHAT" "$GERMANY_REPLY_ID
 run_json_capture "$TMP_DIR/mark_read.json" ./tg mark-read "$CHAT" --up-to "$GERMANY_REPLY_ID" --allow-write --json
 
 log "=== temporary folders ==="
-FOLDER_CHAT_IDS=()
-while IFS= read -r folder_chat_id; do
-  FOLDER_CHAT_IDS+=("$folder_chat_id")
-done < <(python3 - "$DB" "$CHAT" <<'PY'
-import sqlite3, sys
-db_path, self_chat = sys.argv[1], int(sys.argv[2])
-db = sqlite3.connect(db_path)
-rows = db.execute("""
-    SELECT chat_id
-    FROM tg_chats
-    WHERE chat_id != ?
-      AND type IN ('channel', 'supergroup', 'group')
-    ORDER BY CASE WHEN type = 'supergroup' THEN 0 WHEN type = 'group' THEN 1 ELSE 2 END, title
-    LIMIT 4
-""", (self_chat,)).fetchall()
-for (chat_id,) in rows:
-    print(chat_id)
-PY
-)
-if [ "${#FOLDER_CHAT_IDS[@]}" -lt 4 ]; then
-  log "not enough non-user dialogs for live folder membership; folder commands will use dry-run"
-fi
 idx=0
 for country in Germany Spain Italy UAE; do
   case "$country" in
@@ -166,62 +175,33 @@ for country in Germany Spain Italy UAE; do
     Italy) folder_title="IE IT ${RUN_SHORT}" ;;
     UAE) folder_title="IE AE ${RUN_SHORT}" ;;
   esac
-  if [ "${#FOLDER_CHAT_IDS[@]}" -ge 4 ]; then
-    include_chat="${FOLDER_CHAT_IDS[$idx]}"
-    idx=$((idx + 1))
-    run_json_allow_error "$TMP_DIR/folder-create-${country}.json" '.ok == true or .error.code == "BAD_ARGS" or .error.code == "GENERIC"' \
-      ./tg folder-create "$folder_title" --include-chats "$include_chat" --allow-write --idempotency-key "${RUN_ID}-folder-${country}" --json
-  else
-    run_json_capture "$TMP_DIR/folder-create-${country}.json" \
-      ./tg folder-create "$folder_title" --include-chats "$CHAT" --allow-write --dry-run --idempotency-key "${RUN_ID}-folder-${country}" --json
-  fi
+  include_chat="${FOLDER_CHAT_IDS[$idx]}"
+  idx=$((idx + 1))
+  run_json_allow_error "$TMP_DIR/folder-create-${country}.json" '.ok == true or .error.code == "BAD_ARGS" or .error.code == "GENERIC"' \
+    ./tg folder-create "$folder_title" --include-chats "$include_chat" --allow-write --idempotency-key "${RUN_ID}-folder-${country}" --json
 done
 
 log "=== forum topic mirror ==="
-FORUM_CHAT=$(python3 - "$DB" <<'PY'
-import sqlite3, sys
-db = sqlite3.connect(sys.argv[1])
-rows = db.execute("""
-    SELECT chat_id, title
-    FROM tg_chats
-    WHERE type = 'supergroup'
-    ORDER BY CASE WHEN lower(title) LIKE '%forum%' THEN 0 ELSE 1 END, title
-""").fetchall()
-for chat_id, _title in rows:
-    print(chat_id)
-    break
-PY
-)
-if [ -n "$FORUM_CHAT" ]; then
-  run_json_timeout_allow_error 15 "$TMP_DIR/topics-list.json" '.ok == true or .error.code == "BAD_ARGS" or .error.code == "TIMEOUT" or .error.code == "GENERIC"' \
-    ./tg topics-list "$FORUM_CHAT" --limit 10 --json
-  if jq -e '.ok == true' "$TMP_DIR/topics-list.json" >/dev/null; then
-    for country in Germany Spain Italy UAE; do
-      case "$country" in
-        Germany) topic_title="IE Germany - Status ${RUN_ID}" ;;
-        Spain) topic_title="IE Spain - Pricing ${RUN_ID}" ;;
-        Italy) topic_title="IE Italy - Shipping ${RUN_ID}" ;;
-        UAE) topic_title="IE UAE - Documents ${RUN_ID}" ;;
-      esac
-      run_json_timeout_allow_error 15 "$TMP_DIR/topic-create-${country}.json" '.ok == true or .error.code == "BAD_ARGS" or .error.code == "TIMEOUT" or .error.code == "GENERIC"' \
-        ./tg topic-create "$FORUM_CHAT" "$topic_title" --allow-write --idempotency-key "${RUN_ID}-topic-${country}" --json
-      if jq -e '.ok == true' "$TMP_DIR/topic-create-${country}.json" >/dev/null; then
-        topic_id=$(jq -r '.data.topic_id' "$TMP_DIR/topic-create-${country}.json")
-        run_json_timeout_allow_error 15 "$TMP_DIR/topic-summary-${country}.json" '.ok == true or .error.code == "BAD_ARGS" or .error.code == "TIMEOUT" or .error.code == "GENERIC"' \
-          ./tg send "$FORUM_CHAT" "SIM-IE summary | run=${RUN_ID} | country=${country} | inquiries=5 | source_chat=${CHAT}" --topic "$topic_id" --allow-write --idempotency-key "${RUN_ID}-topic-summary-${country}" --json
-      fi
-    done
-  else
-    log "forum target ${FORUM_CHAT} did not support live topic listing; topic mirror recorded as unavailable"
-    for country in Germany Spain Italy UAE; do
-      run_json_capture "$TMP_DIR/topic-dry-run-${country}.json" ./tg topic-create "$CHAT" "IE ${country} dry-run ${RUN_ID}" --allow-write --dry-run --json
-    done
-  fi
-else
-  log "no cached supergroup candidate; topic mirror recorded as unavailable"
+run_json_timeout_allow_error 15 "$TMP_DIR/topics-list.json" '.ok == true or .error.code == "BAD_ARGS" or .error.code == "TIMEOUT" or .error.code == "GENERIC"' \
+  ./tg topics-list "$FORUM_CHAT" --limit 10 --json
+if jq -e '.ok == true' "$TMP_DIR/topics-list.json" >/dev/null; then
   for country in Germany Spain Italy UAE; do
-    run_json_capture "$TMP_DIR/topic-dry-run-${country}.json" ./tg topic-create "$CHAT" "IE ${country} dry-run ${RUN_ID}" --allow-write --dry-run --json
+    case "$country" in
+      Germany) topic_title="IE Germany - Status ${RUN_ID}" ;;
+      Spain) topic_title="IE Spain - Pricing ${RUN_ID}" ;;
+      Italy) topic_title="IE Italy - Shipping ${RUN_ID}" ;;
+      UAE) topic_title="IE UAE - Documents ${RUN_ID}" ;;
+    esac
+    run_json_timeout_allow_error 15 "$TMP_DIR/topic-create-${country}.json" '.ok == true or .error.code == "BAD_ARGS" or .error.code == "TIMEOUT" or .error.code == "GENERIC"' \
+      ./tg topic-create "$FORUM_CHAT" "$topic_title" --allow-write --idempotency-key "${RUN_ID}-topic-${country}" --json
+    if jq -e '.ok == true' "$TMP_DIR/topic-create-${country}.json" >/dev/null; then
+      topic_id=$(jq -r '.data.topic_id' "$TMP_DIR/topic-create-${country}.json")
+      run_json_timeout_allow_error 15 "$TMP_DIR/topic-summary-${country}.json" '.ok == true or .error.code == "BAD_ARGS" or .error.code == "TIMEOUT" or .error.code == "GENERIC"' \
+        ./tg send "$FORUM_CHAT" "SIM-IE summary | run=${RUN_ID} | country=${country} | inquiries=5 | source_chat=${CHAT}" --topic "$topic_id" --allow-write --idempotency-key "${RUN_ID}-topic-summary-${country}" --json
+    fi
   done
+else
+  log "explicit forum test target did not support topic listing; no topic writes attempted"
 fi
 
 log "=== folder cleanup ==="
