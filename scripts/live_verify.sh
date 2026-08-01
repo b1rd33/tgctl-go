@@ -4,7 +4,6 @@ set -euo pipefail
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
 source "$SCRIPT_DIR/live_test_common.sh"
-live_workspace_init live-verify
 
 CHAT="${TGCTL_LIVE_CHAT:?Set TGCTL_LIVE_CHAT to an isolated test chat or Saved Messages ID}"
 SELF_USERNAME="${TGCTL_LIVE_SELF_USERNAME:?Set TGCTL_LIVE_SELF_USERNAME to the authenticated test account username}"
@@ -15,10 +14,9 @@ if [ -n "${TGCTL_LIVE_OUTPUT:-}" ]; then
 fi
 live_require_numeric_selector TGCTL_LIVE_CHAT "$CHAT"
 live_require_username TGCTL_LIVE_SELF_USERNAME "$SELF_USERNAME"
-if [[ ! "$TG_ACCOUNT" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$ ]]; then
-  printf 'TGCTL_LIVE_ACCOUNT must name an explicit test account\n' >&2
-  exit 2
-fi
+live_require_account_name "$TG_ACCOUNT"
+live_validate_tg_bin_config
+live_workspace_init live-verify
 OUT="$LIVE_WORKSPACE/transcript.txt"
 MEDIA_DIR="$LIVE_WORKSPACE/media"
 mkdir -m 700 "$MEDIA_DIR"

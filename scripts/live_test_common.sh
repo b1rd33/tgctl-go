@@ -55,6 +55,29 @@ live_require_username() {
   fi
 }
 
+live_require_account_name() {
+  local value="$1"
+  if [[ ! "$value" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$ ]]; then
+    printf 'TGCTL_LIVE_ACCOUNT must name an explicit test account\n' >&2
+    return 2
+  fi
+}
+
+live_require_readable_file() {
+  local name="$1" value="$2"
+  if [ ! -f "$value" ] || [ ! -r "$value" ]; then
+    printf '%s must point to a readable regular test file\n' "$name" >&2
+    return 2
+  fi
+}
+
+live_validate_tg_bin_config() {
+  if [ -n "${TGCTL_LIVE_TG_BIN:-}" ] && [ ! -x "$TGCTL_LIVE_TG_BIN" ]; then
+    printf 'TGCTL_LIVE_TG_BIN must be an executable test binary\n' >&2
+    return 2
+  fi
+}
+
 live_prepare_tg() {
   local project_root="$1"
   LIVE_TG_CWD="${2:-$LIVE_WORKSPACE}"

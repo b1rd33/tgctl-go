@@ -32,5 +32,6 @@ docs-commands-check:
 public-hygiene:
 	./scripts/check_public_hygiene_test.sh
 	./scripts/live_target_safety_test.sh
+	./scripts/live_preflight_order_test.sh
 	./scripts/live_workspace_test.sh
 	./scripts/check_public_hygiene.sh

@@ -4,7 +4,6 @@ set -euo pipefail
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
 source "$SCRIPT_DIR/live_test_common.sh"
-live_workspace_init import-export
 
 CHAT="${TGCTL_LIVE_CHAT:?Set TGCTL_LIVE_CHAT to an isolated test chat or Saved Messages ID}"
 export TG_ACCOUNT="${TGCTL_LIVE_ACCOUNT:?Set TGCTL_LIVE_ACCOUNT to a dedicated authenticated test account}"
@@ -12,9 +11,6 @@ FOLDER_TARGETS_RAW="${TGCTL_LIVE_FOLDER_TARGETS:?Set TGCTL_LIVE_FOLDER_TARGETS t
 FORUM_CHAT="${TGCTL_LIVE_FORUM_CHAT:?Set TGCTL_LIVE_FORUM_CHAT to a dedicated forum test chat ID}"
 RUN_ID="ie-sim-$(date +%Y%m%d%H%M%S)"
 RUN_SHORT="$(date +%H%M)"
-TMP_DIR="$LIVE_WORKSPACE"
-OUT="$TMP_DIR/transcript.txt"
-REPORT="$TMP_DIR/report.json"
 DB="${TGCTL_LIVE_DB:?Set TGCTL_LIVE_DB to the selected test account database path}"
 if [ -n "${TGCTL_LIVE_OUTPUT:-}${TGCTL_LIVE_REPORT:-}" ]; then
   printf 'raw live output retention is disabled; output remains ephemeral\n' >&2
@@ -22,6 +18,9 @@ if [ -n "${TGCTL_LIVE_OUTPUT:-}${TGCTL_LIVE_REPORT:-}" ]; then
 fi
 live_require_numeric_selector TGCTL_LIVE_CHAT "$CHAT"
 live_require_numeric_selector TGCTL_LIVE_FORUM_CHAT "$FORUM_CHAT"
+live_require_account_name "$TG_ACCOUNT"
+live_require_readable_file TGCTL_LIVE_DB "$DB"
+live_validate_tg_bin_config
 
 IFS=',' read -r -a FOLDER_CHAT_IDS <<<"$FOLDER_TARGETS_RAW"
 if [ "${#FOLDER_CHAT_IDS[@]}" -ne 4 ]; then
@@ -42,6 +41,10 @@ for idx in "${!FOLDER_CHAT_IDS[@]}"; do
   done
 done
 
+live_workspace_init import-export
+TMP_DIR="$LIVE_WORKSPACE"
+OUT="$TMP_DIR/transcript.txt"
+REPORT="$TMP_DIR/report.json"
 mkdir -p "$TMP_DIR"
 > "$OUT"
 chmod 600 "$OUT"

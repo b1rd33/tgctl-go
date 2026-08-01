@@ -4,7 +4,6 @@ set -euo pipefail
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
 source "$SCRIPT_DIR/live_test_common.sh"
-live_workspace_init admin-topic
 
 RUN_ID="admin-verify-$(date +%Y%m%d%H%M%S)"
 CHAT="${TGCTL_LIVE_CHAT:?Set TGCTL_LIVE_CHAT to an isolated test chat or Saved Messages ID}"
@@ -15,13 +14,17 @@ if [ -n "${TGCTL_LIVE_OUTPUT:-}" ]; then
 fi
 live_require_numeric_selector TGCTL_LIVE_CHAT "$CHAT"
 live_require_numeric_selector TGCTL_LIVE_FORUM_CHAT "$FORUM_CHAT"
-TMP_DIR="$LIVE_WORKSPACE"
-OUT="$TMP_DIR/transcript.txt"
 ACCOUNT="adminverify-${RUN_ID}"
-ACCOUNT_ROOT="$LIVE_WORKSPACE/accounts"
-ACCOUNT_DIR="${ACCOUNT_ROOT}/${ACCOUNT}"
 DEFAULT_SESSION="${TGCTL_SOURCE_SESSION:?Set TGCTL_SOURCE_SESSION to the authenticated test session path}"
 DEFAULT_DB="${TGCTL_SOURCE_DB:?Set TGCTL_SOURCE_DB to the matching test database path}"
+live_require_readable_file TGCTL_SOURCE_SESSION "$DEFAULT_SESSION"
+live_require_readable_file TGCTL_SOURCE_DB "$DEFAULT_DB"
+live_validate_tg_bin_config
+live_workspace_init admin-topic
+TMP_DIR="$LIVE_WORKSPACE"
+OUT="$TMP_DIR/transcript.txt"
+ACCOUNT_ROOT="$LIVE_WORKSPACE/accounts"
+ACCOUNT_DIR="${ACCOUNT_ROOT}/${ACCOUNT}"
 SESSION="${ACCOUNT_DIR}/tg.session"
 DB="${ACCOUNT_DIR}/telegram.sqlite"
 export GOCACHE="$LIVE_WORKSPACE/go-cache"
