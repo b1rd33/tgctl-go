@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime/debug"
 	"strings"
@@ -9,7 +10,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/b1rd33/tgctl-go/internal/accounts"
+	"github.com/b1rd33/tgctl-go/internal/dispatch"
 	"github.com/b1rd33/tgctl-go/internal/output"
+	"github.com/b1rd33/tgctl-go/internal/safety"
 )
 
 type RootConfig struct {
@@ -28,11 +31,12 @@ type rootConfigKey struct{}
 func NewRootCommand() *cobra.Command {
 	cfg := &RootConfig{}
 	cmd := &cobra.Command{
-		Use:          "tg",
-		Short:        "Telegram agent CLI",
-		Long:         "Telegram agent CLI — read/write/listen against your own Telegram account.",
-		Version:      semverVersion(),
-		SilenceUsage: true,
+		Use:           "tg",
+		Short:         "Telegram agent CLI",
+		Long:          "Telegram agent CLI — read/write/listen against your own Telegram account.",
+		Version:       semverVersion(),
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		Run: func(c *cobra.Command, _ []string) {
 			fmt.Fprintln(c.ErrOrStderr(), c.Long)
 		},
@@ -261,16 +265,53 @@ func isASCIIAlpha(char byte) bool {
 }
 
 func ExecuteRoot(root *cobra.Command) int {
-	err := root.Execute()
+	classifyCobraSyntaxErrors(root)
+	executed, err := root.ExecuteC()
 	cfg := rootConfigPtr(root)
 	if cfg != nil && cfg.ExitCode != 0 {
 		return cfg.ExitCode
 	}
 	if err != nil {
-		_, _ = fmt.Fprintln(root.ErrOrStderr(), err)
-		return 1
+		if executed == nil {
+			executed = root
+		}
+		code := dispatch.Run(executed.Name(), dispatch.Options{
+			JSON:   jsonMode(executed),
+			Stdout: root.OutOrStdout(),
+			Stderr: root.ErrOrStderr(),
+		}, func(context.Context) (any, error) { return nil, err })
+		return code
 	}
 	return 0
+}
+
+// classifyCobraSyntaxErrors brings parser- and arity-level failures into the
+// same typed error contract used by command validation. RunE errors retain
+// their original classification and are handled by ExecuteRoot's fallback.
+func classifyCobraSyntaxErrors(root *cobra.Command) {
+	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		return safety.NewBadArgs("%s", err)
+	})
+	var wrapArgs func(*cobra.Command)
+	wrapArgs = func(cmd *cobra.Command) {
+		if validate := cmd.Args; validate != nil {
+			cmd.Args = func(cmd *cobra.Command, args []string) error {
+				err := validate(cmd, args)
+				if err == nil {
+					return nil
+				}
+				var badArgs *safety.BadArgs
+				if errors.As(err, &badArgs) {
+					return err
+				}
+				return safety.NewBadArgs("%s", err)
+			}
+		}
+		for _, child := range cmd.Commands() {
+			wrapArgs(child)
+		}
+	}
+	wrapArgs(root)
 }
 
 // rootConfigPtr exposes the live *RootConfig so command runners can write

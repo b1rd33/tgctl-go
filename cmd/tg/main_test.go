@@ -106,6 +106,95 @@ func runTGProcessResult(t *testing.T, binary, root string, env []string, args ..
 	return string(out), exitErr.ExitCode()
 }
 
+func runTGProcessStreams(t *testing.T, binary, root string, env []string, args ...string) (string, string, int) {
+	t.Helper()
+	cmd := exec.Command(binary, args...)
+	cmd.Dir = root
+	cmd.Env = env
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err == nil {
+		return stdout.String(), stderr.String(), 0
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("tg %v: %v\nstdout:\n%s\nstderr:\n%s", args, err, stdout.String(), stderr.String())
+	}
+	return stdout.String(), stderr.String(), exitErr.ExitCode()
+}
+
+func TestProcessMalformedArgumentsUseOneDispatchedFailureWithoutArtifacts(t *testing.T) {
+	binary := buildTGProcess(t)
+	env := withoutStartupSafetyEnv(os.Environ())
+	tests := []struct {
+		name              string
+		command           string
+		args              []string
+		modeBeforeBadFlag bool
+	}{
+		{name: "get message id", command: "get-msg", args: []string{"get-msg", "1", "nope"}},
+		{name: "edit message id", command: "edit-msg", args: []string{"edit-msg", "1", "nope", "text"}},
+		{name: "pin message id", command: "pin-msg", args: []string{"pin-msg", "1", "nope"}},
+		{name: "unpin message id", command: "unpin-msg", args: []string{"unpin-msg", "1", "nope"}},
+		{name: "reaction message id", command: "react", args: []string{"react", "1", "nope", "thumbs-up"}},
+		{name: "forward message ids", command: "forward", args: []string{"forward", "1", "2", "nope"}},
+		{name: "empty send text", command: "send", args: []string{"send", "1", ""}},
+		{name: "wrong arity", command: "get-msg", args: []string{"get-msg", "1"}},
+		{name: "malformed flag", command: "download-media", args: []string{"download-media", "1", "2", "--max-size-mb=nope"}, modeBeforeBadFlag: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, mode := range []string{"json", "human"} {
+				t.Run(mode, func(t *testing.T) {
+					root := t.TempDir()
+					args := append(append([]string(nil), tt.args...), "--"+mode)
+					if tt.modeBeforeBadFlag {
+						args = append([]string{tt.args[0], "--" + mode}, tt.args[1:]...)
+					}
+					stdout, stderr, code := runTGProcessStreams(t, binary, root, env, args...)
+					if code != 2 {
+						t.Fatalf("exit code=%d, want BAD_ARGS=2\nstdout:\n%s\nstderr:\n%s", code, stdout, stderr)
+					}
+					if mode == "json" {
+						if stderr != "" {
+							t.Fatalf("JSON stderr=%q, want empty", stderr)
+						}
+						var envelope struct {
+							OK      bool   `json:"ok"`
+							Command string `json:"command"`
+							Error   struct {
+								Code string `json:"code"`
+							} `json:"error"`
+						}
+						if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+							t.Fatalf("decode JSON stdout: %v\n%s", err, stdout)
+						}
+						if envelope.OK || envelope.Command != tt.command || envelope.Error.Code != "BAD_ARGS" {
+							t.Fatalf("envelope=%+v, want command=%q BAD_ARGS", envelope, tt.command)
+						}
+					} else {
+						if stdout != "" {
+							t.Fatalf("human stdout=%q, want empty", stdout)
+						}
+						if strings.Count(stderr, "ERROR [BAD_ARGS]:") != 1 || strings.Count(strings.TrimSpace(stderr), "\n") != 0 {
+							t.Fatalf("human stderr must contain one diagnostic line, got %q", stderr)
+						}
+					}
+					entries, err := os.ReadDir(root)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if len(entries) != 0 {
+						t.Fatalf("malformed invocation created cwd artifacts: %v", entries)
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestProcessLinkerInjectedPrereleaseVersion(t *testing.T) {
 	const want = "v0.0.0-rc.offline+build.7"
 	binary := buildTGProcessWithVersion(t, want)
