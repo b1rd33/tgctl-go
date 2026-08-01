@@ -354,9 +354,9 @@ func editMsgCommand(cfg CommandsConfig) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selector := args[0]
-			var msgID int64
-			if _, err := fmt.Sscan(args[1], &msgID); err != nil {
-				return safety.NewBadArgs("message-id must be an integer (got %q)", args[1])
+			msgID, err := parsePositiveDecimal(args[1], "message-id")
+			if err != nil {
+				return err
 			}
 			text, err := readTextArg(args[2], os.Stdin)
 			if err != nil {
@@ -472,9 +472,9 @@ func pinMsgCommand(cfg CommandsConfig, unpin bool) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selector := args[0]
-			var msgID int64
-			if _, err := fmt.Sscan(args[1], &msgID); err != nil {
-				return safety.NewBadArgs("message-id must be an integer (got %q)", args[1])
+			msgID, err := parsePositiveDecimal(args[1], "message-id")
+			if err != nil {
+				return err
 			}
 			silent, _ := cmd.Flags().GetBool("silent")
 			payload := map[string]any{"message_id": msgID, "silent": silent, "unpin": unpin}
@@ -503,9 +503,9 @@ func reactCommand(cfg CommandsConfig) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selector := args[0]
-			var msgID int64
-			if _, err := fmt.Sscan(args[1], &msgID); err != nil {
-				return safety.NewBadArgs("message-id must be an integer (got %q)", args[1])
+			msgID, err := parsePositiveDecimal(args[1], "message-id")
+			if err != nil {
+				return err
 			}
 			emoji := args[2]
 			big, _ := cmd.Flags().GetBool("big")
@@ -558,16 +558,15 @@ func markReadCommand(cfg CommandsConfig) *cobra.Command {
 }
 
 func parseIntCSV(s string) ([]int64, error) {
-	if strings.TrimSpace(s) == "" {
+	if s == "" {
 		return nil, safety.NewBadArgs("message-ids cannot be empty")
 	}
 	parts := strings.Split(s, ",")
 	out := make([]int64, 0, len(parts))
 	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		var v int64
-		if _, err := fmt.Sscan(p, &v); err != nil {
-			return nil, safety.NewBadArgs("message-id must be an integer (got %q)", p)
+		v, err := parsePositiveDecimal(p, "message-id")
+		if err != nil {
+			return nil, err
 		}
 		out = append(out, v)
 	}

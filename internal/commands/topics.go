@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -105,9 +104,9 @@ func topicEditCommand(cfg CommandsConfig) *cobra.Command {
 		Args:         cobra.ExactArgs(2),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var topicID int64
-			if _, err := fmt.Sscan(args[1], &topicID); err != nil {
-				return emitDispatchedFailure(cmd, "topic-edit", safety.NewBadArgs("topic-id must be an integer"))
+			topicID, err := parsePositiveDecimal(args[1], "topic-id")
+			if err != nil {
+				return emitDispatchedFailure(cmd, "topic-edit", err)
 			}
 			title, _ := cmd.Flags().GetString("title")
 			iconEmojiID, _ := cmd.Flags().GetInt64("icon-emoji-id")
@@ -144,9 +143,9 @@ func topicPinCommand(cfg CommandsConfig, pinned bool) *cobra.Command {
 		Args:         cobra.ExactArgs(2),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var topicID int64
-			if _, err := fmt.Sscan(args[1], &topicID); err != nil {
-				return emitDispatchedFailure(cmd, name, safety.NewBadArgs("topic-id must be an integer"))
+			topicID, err := parsePositiveDecimal(args[1], "topic-id")
+			if err != nil {
+				return emitDispatchedFailure(cmd, name, err)
 			}
 			payload := map[string]any{"topic_id": topicID, "pinned": pinned}
 			return runWrite(cmd, name, method, args[0], cfg, payload,

@@ -3,7 +3,6 @@ package commands
 import (
 	"context"
 	"database/sql"
-	"fmt"
 
 	"github.com/spf13/cobra"
 
@@ -285,10 +284,9 @@ func terminateSessionCommand(cfg CommandsConfig) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rawHash := args[0]
-			var hash int64
-			if _, err := fmt.Sscan(rawHash, &hash); err != nil {
-				return emitDispatchedFailure(cmd, "terminate-session",
-					safety.NewBadArgs("session-hash must be an integer (got %q)", rawHash))
+			hash, err := parseSignedInt64(rawHash, "session-hash")
+			if err != nil {
+				return emitDispatchedFailure(cmd, "terminate-session", err)
 			}
 			payload := map[string]any{"session_hash": hash}
 			if err := requireTypedWriteConfirm(cmd, hash, "session_hash"); err != nil {

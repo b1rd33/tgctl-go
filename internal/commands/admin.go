@@ -117,7 +117,7 @@ func adminUserCommand(cfg CommandsConfig, name, method, confirmSlot string) *cob
 		Args:         cobra.ExactArgs(2),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			userID, err := parseOneInt(args[1], "user id")
+			userID, err := parsePositiveDecimal(args[1], "user id")
 			if err != nil {
 				return emitDispatchedFailure(cmd, name, err)
 			}
@@ -171,7 +171,7 @@ func chatsInfoCommand(cfg CommandsConfig) *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ids, err := parseIntCSV(args[0])
+			ids, err := parseSignedNonZeroCSV(args[0], "chat-id")
 			if err != nil {
 				return emitDispatchedFailure(cmd, "chats-info", err)
 			}

@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -67,7 +66,7 @@ func folderShowCommand(cfg CommandsConfig) *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id, err := parseOneInt(args[0], "folder id")
+			id, err := parseNonNegativeDecimal(args[0], "folder id")
 			if err != nil {
 				return emitDispatchedFailure(cmd, "folder-show", err)
 			}
@@ -146,7 +145,7 @@ func folderEditCommand(cfg CommandsConfig) *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id, err := parseOneInt(args[0], "folder id")
+			id, err := parseNonNegativeDecimal(args[0], "folder id")
 			if err != nil {
 				return emitDispatchedFailure(cmd, "folder-edit", err)
 			}
@@ -194,7 +193,7 @@ func folderDeleteCommand(cfg CommandsConfig) *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id, err := parseOneInt(args[0], "folder id")
+			id, err := parseNonNegativeDecimal(args[0], "folder id")
 			if err != nil {
 				return emitDispatchedFailure(cmd, "folder-delete", err)
 			}
@@ -227,13 +226,16 @@ func folderMembershipCommand(cfg CommandsConfig, add bool) *cobra.Command {
 		Args:         cobra.ExactArgs(2),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id, err := parseOneInt(args[0], "folder id")
+			id, err := parseNonNegativeDecimal(args[0], "folder id")
 			if err != nil {
 				return emitDispatchedFailure(cmd, name, err)
 			}
-			chatID, err := parseOneInt(args[1], "chat id")
+			chatID, err := parseSignedInt64(args[1], "chat id")
 			if err != nil {
 				return emitDispatchedFailure(cmd, name, err)
+			}
+			if chatID == 0 {
+				return emitDispatchedFailure(cmd, name, safety.NewBadArgs("chat id must not be zero"))
 			}
 			if id == 0 {
 				return emitDispatchedFailure(cmd, name, safety.NewBadArgs("folder id 0 is reserved and cannot be edited"))
@@ -430,13 +432,5 @@ func optionalIntCSV(value string) ([]int64, error) {
 	if strings.TrimSpace(value) == "" {
 		return nil, nil
 	}
-	return parseIntCSV(value)
-}
-
-func parseOneInt(value, label string) (int64, error) {
-	var id int64
-	if _, err := fmt.Sscan(value, &id); err != nil {
-		return 0, safety.NewBadArgs("%s must be an integer", label)
-	}
-	return id, nil
+	return parseSignedNonZeroCSV(value, "chat-id")
 }

@@ -408,9 +408,9 @@ func getMsgCommand(paths AccountPathProvider) *cobra.Command {
 		Args:         cobra.ExactArgs(2),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var msgID int64
-			if _, err := fmt.Sscan(args[1], &msgID); err != nil {
-				return safety.NewBadArgs("message-id must be an integer (got %q)", args[1])
+			msgID, err := parsePositiveDecimal(args[1], "message-id")
+			if err != nil {
+				return err
 			}
 			includeDeleted, _ := cmd.Flags().GetBool("include-deleted")
 			return runDispatchedRead(cmd, "get-msg", map[string]any{

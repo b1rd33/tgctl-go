@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/b1rd33/tgctl-go/internal/accounts"
 )
 
@@ -39,6 +41,22 @@ func TestRootCommandGlobalFlags(t *testing.T) {
 		if root.PersistentFlags().Lookup(name) == nil {
 			t.Fatalf("missing persistent flag --%s", name)
 		}
+	}
+}
+
+func TestExecuteRootUnknownCommandDefaultsToHumanBadArgs(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	root := NewRootCommand()
+	root.AddCommand(&cobra.Command{Use: "known", Run: func(*cobra.Command, []string) {}})
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs([]string{"unknown"})
+
+	if code := ExecuteRoot(root); code != 2 {
+		t.Fatalf("exit code=%d, want BAD_ARGS=2", code)
+	}
+	if stdout.Len() != 0 || strings.Count(stderr.String(), "ERROR [BAD_ARGS]:") != 1 {
+		t.Fatalf("stdout=%q stderr=%q", stdout.String(), stderr.String())
 	}
 }
 

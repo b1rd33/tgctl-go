@@ -24,6 +24,9 @@ type RootConfig struct {
 	// process exit matches the dispatch classification rather than cobra's
 	// default exit-1-on-RunE-error.
 	ExitCode int
+	// InvocationArgs retains the caller-provided argv for structural command
+	// resolution before Cobra runs hooks or a non-runnable command group.
+	InvocationArgs []string
 }
 
 type rootConfigKey struct{}
@@ -46,6 +49,8 @@ func NewRootCommand() *cobra.Command {
 	cmd.PersistentFlags().Float64Var(&cfg.LockWaitSeconds, "lock-wait", 0, "Seconds to wait for the Telegram session lock (default 0 = fail-fast).")
 	cmd.PersistentFlags().BoolVar(&cfg.Full, "full", false, "Disable column truncation in human-mode output.")
 	cmd.PersistentFlags().StringVar(&cfg.Account, "account", "", "Account name (uses accounts/<NAME>/). Default selected via accounts-use or TG_ACCOUNT env.")
+	cmd.Flags().Bool("json", false, "emit a JSON error envelope")
+	_ = cmd.Flags().MarkHidden("json")
 	cmd.SetContext(context.WithValue(context.Background(), rootConfigKey{}, cfg))
 	registerVersion(cmd)
 	return cmd
@@ -266,6 +271,11 @@ func isASCIIAlpha(char byte) bool {
 
 func ExecuteRoot(root *cobra.Command) int {
 	classifyCobraSyntaxErrors(root)
+	if cfg := rootConfigPtr(root); cfg != nil && cfg.InvocationArgs != nil {
+		if command, err := findUnknownSubcommand(root, cfg.InvocationArgs); err != nil {
+			return dispatchUnhandledFailure(root, command, err, invocationJSONMode(cfg.InvocationArgs))
+		}
+	}
 	executed, err := root.ExecuteC()
 	cfg := rootConfigPtr(root)
 	if cfg != nil && cfg.ExitCode != 0 {
@@ -275,14 +285,71 @@ func ExecuteRoot(root *cobra.Command) int {
 		if executed == nil {
 			executed = root
 		}
-		code := dispatch.Run(executed.Name(), dispatch.Options{
-			JSON:   jsonMode(executed),
-			Stdout: root.OutOrStdout(),
-			Stderr: root.ErrOrStderr(),
-		}, func(context.Context) (any, error) { return nil, err })
-		return code
+		json := jsonMode(executed)
+		if executed == root {
+			json, _ = root.Flags().GetBool("json")
+		}
+		return dispatchUnhandledFailure(root, executed, err, json)
 	}
 	return 0
+}
+
+func ExecuteRootArgs(root *cobra.Command, args []string) int {
+	root.SetArgs(args)
+	if cfg := rootConfigPtr(root); cfg != nil {
+		cfg.InvocationArgs = append([]string(nil), args...)
+	}
+	return ExecuteRoot(root)
+}
+
+func dispatchUnhandledFailure(root, command *cobra.Command, err error, json bool) int {
+	if command == nil {
+		command = root
+	}
+	return dispatch.Run(command.Name(), dispatch.Options{
+		JSON:   json,
+		Stdout: root.OutOrStdout(),
+		Stderr: root.ErrOrStderr(),
+	}, func(context.Context) (any, error) { return nil, err })
+}
+
+func invocationJSONMode(args []string) bool {
+	for _, arg := range args {
+		if arg == "--json" || arg == "--json=true" {
+			return true
+		}
+	}
+	return false
+}
+
+func findUnknownSubcommand(root *cobra.Command, args []string) (*cobra.Command, error) {
+	root.InitDefaultHelpCmd()
+	root.InitDefaultCompletionCmd(args...)
+	command, remaining, err := root.Find(args)
+	if err != nil {
+		return command, safety.NewBadArgs("%s", err)
+	}
+	if command == nil || !command.HasSubCommands() {
+		return command, nil
+	}
+	for _, arg := range remaining {
+		if arg == "--" || strings.HasPrefix(arg, "-") {
+			continue
+		}
+		return command, unknownSubcommandError(command, arg)
+	}
+	return command, nil
+}
+
+func unknownSubcommandError(command *cobra.Command, arg string) error {
+	message := fmt.Sprintf("unknown command %q for %q", arg, command.CommandPath())
+	if command.SuggestionsMinimumDistance <= 0 {
+		command.SuggestionsMinimumDistance = 2
+	}
+	if suggestions := command.SuggestionsFor(arg); len(suggestions) > 0 {
+		message += "\n\nDid you mean this?\n\t" + strings.Join(suggestions, "\n\t") + "\n"
+	}
+	return safety.NewBadArgs("%s", message)
 }
 
 // classifyCobraSyntaxErrors brings parser- and arity-level failures into the
@@ -305,6 +372,13 @@ func classifyCobraSyntaxErrors(root *cobra.Command) {
 					return err
 				}
 				return safety.NewBadArgs("%s", err)
+			}
+		} else if cmd.HasSubCommands() {
+			cmd.Args = func(cmd *cobra.Command, args []string) error {
+				if len(args) == 0 {
+					return nil
+				}
+				return unknownSubcommandError(cmd, args[0])
 			}
 		}
 		for _, child := range cmd.Commands() {

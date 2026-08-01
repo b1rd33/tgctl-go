@@ -140,6 +140,24 @@ func TestProcessMalformedArgumentsUseOneDispatchedFailureWithoutArtifacts(t *tes
 		{name: "unpin message id", command: "unpin-msg", args: []string{"unpin-msg", "1", "nope"}},
 		{name: "reaction message id", command: "react", args: []string{"react", "1", "nope", "thumbs-up"}},
 		{name: "forward message ids", command: "forward", args: []string{"forward", "1", "2", "nope"}},
+		{name: "get message id with trailing junk", command: "get-msg", args: []string{"get-msg", "1", "2x"}},
+		{name: "get message id with separated junk", command: "get-msg", args: []string{"get-msg", "1", "2 x"}},
+		{name: "get zero message id", command: "get-msg", args: []string{"get-msg", "1", "0"}},
+		{name: "get negative message id", command: "get-msg", args: []string{"get-msg", "1", "--", "-2"}, modeBeforeBadFlag: true},
+		{name: "get overflowing message id", command: "get-msg", args: []string{"get-msg", "1", "9223372036854775808"}},
+		{name: "edit message id with trailing junk", command: "edit-msg", args: []string{"edit-msg", "1", "2x", "text"}},
+		{name: "pin message id with trailing junk", command: "pin-msg", args: []string{"pin-msg", "1", "2x"}},
+		{name: "unpin message id with trailing junk", command: "unpin-msg", args: []string{"unpin-msg", "1", "2x"}},
+		{name: "reaction message id with trailing junk", command: "react", args: []string{"react", "1", "2x", "thumbs-up"}},
+		{name: "forward CSV trailing junk", command: "forward", args: []string{"forward", "1", "2", "1,2x"}},
+		{name: "forward CSV empty segment", command: "forward", args: []string{"forward", "1", "2", "1,,2"}},
+		{name: "forward CSV whitespace", command: "forward", args: []string{"forward", "1", "2", "1, 2"}},
+		{name: "forward CSV zero", command: "forward", args: []string{"forward", "1", "2", "1,0"}},
+		{name: "forward CSV negative", command: "forward", args: []string{"forward", "1", "2", "1,-2"}},
+		{name: "forward CSV overflow", command: "forward", args: []string{"forward", "1", "2", "1,9223372036854775808"}},
+		{name: "folder id with trailing junk", command: "folder-show", args: []string{"folder-show", "2x"}},
+		{name: "topic id with trailing junk", command: "topic-edit", args: []string{"topic-edit", "1", "2x"}},
+		{name: "session hash with trailing junk", command: "terminate-session", args: []string{"terminate-session", "2x"}},
 		{name: "empty send text", command: "send", args: []string{"send", "1", ""}},
 		{name: "wrong arity", command: "get-msg", args: []string{"get-msg", "1"}},
 		{name: "malformed flag", command: "download-media", args: []string{"download-media", "1", "2", "--max-size-mb=nope"}, modeBeforeBadFlag: true},
@@ -190,6 +208,65 @@ func TestProcessMalformedArgumentsUseOneDispatchedFailureWithoutArtifacts(t *tes
 						t.Fatalf("malformed invocation created cwd artifacts: %v", entries)
 					}
 				})
+			}
+		})
+	}
+}
+
+func TestProcessUnknownCommandsUseBadArgsWithoutArtifacts(t *testing.T) {
+	binary := buildTGProcess(t)
+	env := withoutStartupSafetyEnv(os.Environ())
+	tests := []struct {
+		name        string
+		args        []string
+		wantCommand string
+		jsonMode    bool
+		wantText    string
+	}{
+		{name: "root default human", args: []string{"unknown-command"}, wantCommand: "tg", wantText: `unknown command "unknown-command"`},
+		{name: "root JSON", args: []string{"unknown-command", "--json"}, wantCommand: "tg", jsonMode: true, wantText: `unknown command "unknown-command"`},
+		{name: "root suggestion", args: []string{"shwo"}, wantCommand: "tg", wantText: "Did you mean this?"},
+		{name: "nested completion command", args: []string{"completion", "unknown-shell"}, wantCommand: "completion", wantText: `unknown command "unknown-shell"`},
+		{name: "unsupported root human flag", args: []string{"--human"}, wantCommand: "tg", wantText: "unknown flag: --human"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			stdout, stderr, code := runTGProcessStreams(t, binary, root, env, tt.args...)
+			if code != 2 {
+				t.Fatalf("exit code=%d, want BAD_ARGS=2\nstdout:\n%s\nstderr:\n%s", code, stdout, stderr)
+			}
+			if tt.jsonMode {
+				if stderr != "" {
+					t.Fatalf("JSON stderr=%q, want empty", stderr)
+				}
+				var envelope struct {
+					Command string `json:"command"`
+					Error   struct {
+						Code    string `json:"code"`
+						Message string `json:"message"`
+					} `json:"error"`
+				}
+				if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+					t.Fatalf("decode JSON stdout: %v\n%s", err, stdout)
+				}
+				if envelope.Command != tt.wantCommand || envelope.Error.Code != "BAD_ARGS" || !strings.Contains(envelope.Error.Message, tt.wantText) {
+					t.Fatalf("envelope=%+v, want command=%q BAD_ARGS containing %q", envelope, tt.wantCommand, tt.wantText)
+				}
+			} else {
+				if stdout != "" {
+					t.Fatalf("human stdout=%q, want empty", stdout)
+				}
+				if strings.Count(stderr, "ERROR [BAD_ARGS]:") != 1 || !strings.Contains(stderr, tt.wantText) {
+					t.Fatalf("human stderr=%q, want one BAD_ARGS containing %q", stderr, tt.wantText)
+				}
+			}
+			entries, err := os.ReadDir(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(entries) != 0 {
+				t.Fatalf("malformed invocation created cwd artifacts: %v", entries)
 			}
 		})
 	}

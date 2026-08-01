@@ -24,7 +24,7 @@ func main() {
 
 	cmd := commands.NewRootCommand()
 	commands.RegisterAll(cmd, mgr, cfg)
-	os.Exit(commands.ExecuteRoot(cmd))
+	os.Exit(commands.ExecuteRootArgs(cmd, os.Args[1:]))
 }
 
 func projectRoot() string {
