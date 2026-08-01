@@ -2,8 +2,10 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
+	"mime"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -13,6 +15,7 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/accounts"
 	"github.com/b1rd33/tgctl-go/internal/client"
 	"github.com/b1rd33/tgctl-go/internal/dispatch"
+	"github.com/b1rd33/tgctl-go/internal/media"
 	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
@@ -82,19 +85,20 @@ func downloadMediaCommand(cfg CommandsConfig) *cobra.Command {
 				"output_policy": outputPolicy,
 				"overwrite":     overwrite,
 			}
+			recoveryExtras := map[string]any{}
 			code := dispatch.Run(name, dispatch.Options{
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
-				AuditPath: paths.auditPath, Args: auditArgs,
+				AuditPath: paths.auditPath, Args: auditArgs, DurableAudit: true,
+				CommittedExtras: recoveryExtras,
 			}, func(ctx context.Context) (any, error) {
 				db, err := store.Connect(paths.dbPath)
 				if err != nil {
 					return nil, err
 				}
-				defer db.Close()
-
-				chatID, _, err := resolveWriteTarget(cfg.Paths, db, args[0])
-				if err != nil {
-					return nil, err
+				chatID, _, resolveErr := resolveWriteTarget(cfg.Paths, db, args[0])
+				resolveCloseErr := db.Close()
+				if resolveErr != nil || resolveCloseErr != nil {
+					return nil, errors.Join(resolveErr, resolveCloseErr)
 				}
 				auditArgs["resolved_chat_id"] = chatID
 				requestedOutput := outputDir
@@ -113,22 +117,52 @@ func downloadMediaCommand(cfg CommandsConfig) *cobra.Command {
 				if err != nil {
 					return nil, err
 				}
-				defer telegramClient.Close()
-				resp, err := telegramClient.DownloadMedia(ctx, client.DownloadMediaReq{
+				resp, downloadErr := telegramClient.DownloadMedia(ctx, client.DownloadMediaReq{
 					ChatID: chatID, MessageID: messageID, OutputDir: requestedOutput,
 					MaxBytes: maxBytes, Overwrite: overwrite,
 				})
-				if err != nil {
-					return nil, err
+				clientCloseErr := telegramClient.Close()
+				if downloadErr != nil {
+					return nil, errors.Join(downloadErr, clientCloseErr)
 				}
-				if err := validateDownloadMediaResponse(resp, chatID, messageID, validationRoot); err != nil {
-					return nil, err
-				}
-				if err := store.StoreMessageMediaPath(db, chatID, messageID, resp.MediaType, resp.Path); err != nil {
+				artifact, validationErr := validateDownloadMediaResponse(resp, chatID, messageID, validationRoot, overwrite)
+				if validationErr != nil {
+					validationErr = errors.Join(validationErr, clientCloseErr)
 					if !resp.Skipped {
-						return nil, safety.NewCommittedWrite("media download committed but cache persistence failed; do not retry blindly", err)
+						return nil, safety.NewCommittedWrite("media download may have committed but returned an invalid response; do not retry blindly", validationErr)
 					}
-					return nil, fmt.Errorf("persist skipped media cache entry: %w", err)
+					return nil, validationErr
+				}
+				artifactMetadata := downloadArtifactMetadata(resp, artifact)
+				for key, value := range artifactMetadata {
+					auditArgs[key] = value
+					recoveryExtras[key] = value
+				}
+				if clientCloseErr != nil {
+					if !resp.Skipped {
+						return nil, safety.NewCommittedWriteWithExtras("media download committed but client finalization failed; do not retry blindly", clientCloseErr, recoveryExtras)
+					}
+					return nil, fmt.Errorf("finalize skipped media client: %w", clientCloseErr)
+				}
+
+				persistDB, persistOpenErr := store.Connect(paths.dbPath)
+				if persistOpenErr != nil {
+					if !resp.Skipped {
+						return nil, safety.NewCommittedWriteWithExtras("media download committed but cache open failed; do not retry blindly", persistOpenErr, recoveryExtras)
+					}
+					return nil, persistOpenErr
+				}
+				persistErr := store.StoreMessageMediaPath(persistDB, chatID, messageID, resp.MessageDate, resp.MediaType, artifact.Path)
+				persistCloseErr := persistDB.Close()
+				if persistErr != nil {
+					joined := errors.Join(persistErr, persistCloseErr)
+					if !resp.Skipped {
+						return nil, safety.NewCommittedWriteWithExtras("media download committed but cache persistence failed; do not retry blindly", joined, recoveryExtras)
+					}
+					return nil, fmt.Errorf("persist skipped media cache entry: %w", joined)
+				}
+				if persistCloseErr != nil {
+					return nil, safety.NewCommittedWriteWithExtras("media artifact and cache committed but database finalization failed; do not retry blindly", persistCloseErr, recoveryExtras)
 				}
 				return resp, nil
 			})
@@ -143,6 +177,14 @@ func downloadMediaCommand(cfg CommandsConfig) *cobra.Command {
 	cmd.Flags().Bool("overwrite", false, "Overwrite an existing media file")
 	AddOutputFlags(cmd)
 	return cmd
+}
+
+func downloadArtifactMetadata(resp client.DownloadMediaResp, artifact media.DownloadedArtifact) map[string]any {
+	return map[string]any{
+		"artifact_path": artifact.Path, "artifact_bytes": artifact.Size,
+		"media_type": resp.MediaType, "mime_type": resp.MIMEType,
+		"filename": artifact.Filename, "skipped": resp.Skipped,
+	}
 }
 
 func resolveDownloadMediaPaths(paths AccountPathProvider, account string) (downloadMediaPaths, error) {
@@ -184,23 +226,43 @@ func downloadMaxBytes(maxSizeMB int64) (int64, error) {
 	return maxSizeMB * bytesPerMiB, nil
 }
 
-func validateDownloadMediaResponse(resp client.DownloadMediaResp, chatID, messageID int64, outputRoot string) error {
+func validateDownloadMediaResponse(resp client.DownloadMediaResp, chatID, messageID int64, outputRoot string, overwrite bool) (media.DownloadedArtifact, error) {
 	if resp.ChatID != chatID || resp.MessageID != messageID {
-		return fmt.Errorf("download-media client returned mismatched identity: got chat_id=%d message_id=%d, want chat_id=%d message_id=%d", resp.ChatID, resp.MessageID, chatID, messageID)
+		return media.DownloadedArtifact{}, fmt.Errorf("download-media client returned mismatched identity: got chat_id=%d message_id=%d, want chat_id=%d message_id=%d", resp.ChatID, resp.MessageID, chatID, messageID)
 	}
-	if strings.TrimSpace(resp.MediaType) == "" {
-		return fmt.Errorf("download-media client returned a blank media type")
+	allowedMediaTypes := map[string]bool{
+		"photo": true, "video": true, "video_note": true, "voice": true,
+		"audio": true, "sticker": true, "animation": true, "document": true,
+	}
+	if !allowedMediaTypes[resp.MediaType] {
+		return media.DownloadedArtifact{}, fmt.Errorf("download-media client returned an invalid media type")
+	}
+	parsedMIME, _, err := mime.ParseMediaType(strings.TrimSpace(resp.MIMEType))
+	if err != nil || parsedMIME == "" {
+		return media.DownloadedArtifact{}, fmt.Errorf("download-media client returned an invalid MIME type")
+	}
+	if strings.TrimSpace(resp.Filename) == "" || resp.Filename != filepath.Base(resp.Filename) || media.SanitizeDownloadName(resp.Filename) != resp.Filename {
+		return media.DownloadedArtifact{}, fmt.Errorf("download-media client returned an unsafe filename")
+	}
+	if resp.Bytes < 0 {
+		return media.DownloadedArtifact{}, fmt.Errorf("download-media client returned a negative byte count")
+	}
+	if resp.Skipped && overwrite {
+		return media.DownloadedArtifact{}, fmt.Errorf("download-media client returned skipped=true for an overwrite request")
 	}
 	if strings.TrimSpace(resp.Path) == "" || !filepath.IsAbs(resp.Path) {
-		return fmt.Errorf("download-media client returned a non-absolute media path")
+		return media.DownloadedArtifact{}, fmt.Errorf("download-media client returned a non-absolute media path")
 	}
 	cleanPath := filepath.Clean(resp.Path)
-	rel, err := filepath.Rel(outputRoot, cleanPath)
+	if filepath.Base(cleanPath) != resp.Filename {
+		return media.DownloadedArtifact{}, fmt.Errorf("download-media client returned filename/path mismatch")
+	}
+	artifact, err := media.InspectDownloadedArtifact(outputRoot, cleanPath)
 	if err != nil {
-		return fmt.Errorf("validate downloaded media path: %w", err)
+		return media.DownloadedArtifact{}, fmt.Errorf("validate downloaded media artifact: %w", err)
 	}
-	if rel == "." || rel == ".." || filepath.IsAbs(rel) || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return fmt.Errorf("download-media client returned a path outside the requested output directory")
+	if artifact.Filename != resp.Filename || artifact.Size != resp.Bytes {
+		return media.DownloadedArtifact{}, fmt.Errorf("download-media client returned artifact metadata inconsistent with the filesystem")
 	}
-	return nil
+	return artifact, nil
 }

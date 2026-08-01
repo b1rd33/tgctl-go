@@ -31,6 +31,10 @@ func (d *anchoredDir) lstat(string) (anchoredEntry, error) {
 	return anchoredEntry{}, ErrAtomicOverwriteUnsupported
 }
 
+func (d *anchoredDir) identity() (fileIdentity, error) {
+	return fileIdentity{}, ErrAtomicOverwriteUnsupported
+}
+
 func snapshotOpenFile(file *os.File) (anchoredEntry, error) {
 	info, err := file.Stat()
 	if err != nil {

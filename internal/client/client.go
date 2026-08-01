@@ -62,14 +62,15 @@ type DownloadMediaReq struct {
 }
 
 type DownloadMediaResp struct {
-	ChatID    int64  `json:"chat_id"`
-	MessageID int64  `json:"message_id"`
-	MediaType string `json:"media_type"`
-	MIMEType  string `json:"mime_type"`
-	Filename  string `json:"filename"`
-	Path      string `json:"media_path"`
-	Bytes     int64  `json:"bytes"`
-	Skipped   bool   `json:"skipped"`
+	ChatID      int64     `json:"chat_id"`
+	MessageID   int64     `json:"message_id"`
+	MediaType   string    `json:"media_type"`
+	MIMEType    string    `json:"mime_type"`
+	Filename    string    `json:"filename"`
+	Path        string    `json:"media_path"`
+	Bytes       int64     `json:"bytes"`
+	Skipped     bool      `json:"skipped"`
+	MessageDate time.Time `json:"-"`
 }
 
 // EditMessageReq mirrors messages.EditMessage.

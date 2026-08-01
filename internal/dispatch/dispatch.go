@@ -32,6 +32,10 @@ type Options struct {
 	HumanFormatter func(any)
 	AuditPath      string
 	Args           map[string]any
+	// DurableAudit makes the audit append part of command finalization. It is
+	// opt-in so existing read commands retain best-effort audit behavior.
+	DurableAudit    bool
+	CommittedExtras map[string]any
 }
 
 // Classify maps a known error to (exit code, message, envelope-extra fields).
@@ -40,10 +44,16 @@ func Classify(err error) (output.ExitCode, string, map[string]any) {
 	// cause it wraps so callers are explicitly warned not to retry blindly.
 	var committed *safety.CommittedWrite
 	if errors.As(err, &committed) {
-		return output.Generic, committed.Error(), map[string]any{
+		extra := map[string]any{
 			"committed": true,
 			"partial":   true,
 		}
+		for key, value := range committed.ClassificationExtras() {
+			if !reservedClassificationExtra(key) {
+				extra[key] = value
+			}
+		}
+		return output.Generic, committed.Error(), extra
 	}
 	var ambiguous *resolve.Ambiguous
 	if errors.As(err, &ambiguous) {
@@ -98,6 +108,15 @@ func Classify(err error) (output.ExitCode, string, map[string]any) {
 	return output.Generic, err.Error(), nil
 }
 
+func reservedClassificationExtra(key string) bool {
+	switch key {
+	case "ts", "cmd", "request_id", "args", "result", "error_code", "code", "message", "committed", "partial":
+		return true
+	default:
+		return false
+	}
+}
+
 // Run executes runner under a dispatch chokepoint: generates a request id,
 // classifies known errors, builds the output envelope, audits, and emits.
 // Returns the process exit code.
@@ -132,7 +151,23 @@ func Run(name string, opts Options, runner Runner) int {
 	}
 
 	if opts.AuditPath != "" {
-		_ = audit.Write(opts.AuditPath, name, requestID, opts.Args, result, auditExtra)
+		auditErr := audit.Write(opts.AuditPath, name, requestID, opts.Args, result, auditExtra)
+		if auditErr != nil && opts.DurableAudit {
+			if err == nil {
+				committedErr := safety.NewCommittedWriteWithExtras(
+					"operation committed but durable audit finalization failed; do not retry blindly",
+					auditErr,
+					opts.CommittedExtras,
+				)
+				code, msg, extra := Classify(committedErr)
+				envelope = output.Fail(name, code, msg, requestID, extra)
+			} else if envelope.Error != nil {
+				if envelope.Error.Extra == nil {
+					envelope.Error.Extra = map[string]any{}
+				}
+				envelope.Error.Extra["audit_failed"] = true
+			}
+		}
 	}
 
 	emit := output.EmitOptions{

@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -287,7 +288,15 @@ func UpdateMessageMediaPath(db *sql.DB, chatID, messageID int64, mediaType, medi
 // message was already cached. The single UPSERT is race-safe: if another
 // writer inserts a richer row first, the conflict arm changes only the media
 // fields and preserves all other message data.
-func StoreMessageMediaPath(db *sql.DB, chatID, messageID int64, mediaType, mediaPath string) error {
+func StoreMessageMediaPath(db *sql.DB, chatID, messageID int64, messageDate time.Time, mediaType, mediaPath string) error {
+	if err := UpdateMessageMediaPath(db, chatID, messageID, mediaType, mediaPath); err == nil {
+		return nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if messageDate.IsZero() {
+		return fmt.Errorf("cannot cache uncached message without authoritative message date")
+	}
 	_, err := db.Exec(`
 		INSERT INTO tg_messages(
 			chat_id, message_id, date, has_media, media_type, media_path, deleted
@@ -296,7 +305,7 @@ func StoreMessageMediaPath(db *sql.DB, chatID, messageID int64, mediaType, media
 			has_media = 1,
 			media_type = excluded.media_type,
 			media_path = excluded.media_path`,
-		chatID, messageID, time.Now().UTC().Format(time.RFC3339), mediaType, mediaPath,
+		chatID, messageID, messageDate.UTC().Format(time.RFC3339), mediaType, mediaPath,
 	)
 	return err
 }

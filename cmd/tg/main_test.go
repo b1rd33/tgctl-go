@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -225,6 +227,107 @@ func TestProcessMigrationErrorWarnsAndContinues(t *testing.T) {
 	}
 	if !strings.Contains(out, "WARN: account migration failed:") || !strings.Contains(out, `"command":"version"`) {
 		t.Fatalf("warning or successful command output missing:\n%s", out)
+	}
+}
+
+func TestProcessConcurrentAccountSelectionSnapshotsNeverFallBackDefault(t *testing.T) {
+	binary := buildTGProcess(t)
+	root := t.TempDir()
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := withoutStartupSafetyEnv(os.Environ())
+	for _, args := range [][]string{{"accounts-add", "a", "--json"}, {"accounts-add", "b", "--json"}, {"accounts-use", "a", "--json"}} {
+		if out, code := runTGProcessResult(t, binary, root, env, args...); code != 0 {
+			t.Fatalf("setup %v code=%d out=%s", args, code, out)
+		}
+	}
+
+	start := make(chan struct{})
+	errCh := make(chan error, 16)
+	var wg sync.WaitGroup
+	for writer := 0; writer < 2; writer++ {
+		wg.Add(1)
+		go func(offset int) {
+			defer wg.Done()
+			<-start
+			for i := 0; i < 12; i++ {
+				name := []string{"a", "b"}[(i+offset)%2]
+				cmd := exec.Command(binary, "accounts-use", name, "--json")
+				cmd.Dir, cmd.Env = root, env
+				if out, err := cmd.CombinedOutput(); err != nil {
+					errCh <- fmt.Errorf("accounts-use %s: %w: %s", name, err, out)
+					return
+				}
+			}
+		}(writer)
+	}
+	for reader := 0; reader < 3; reader++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			for i := 0; i < 20; i++ {
+				cmd := exec.Command(binary, "accounts-show", "--json")
+				cmd.Dir, cmd.Env = root, env
+				out, err := cmd.CombinedOutput()
+				if err != nil {
+					errCh <- fmt.Errorf("accounts-show: %w: %s", err, out)
+					return
+				}
+				var envelope struct {
+					Data struct {
+						Name        string `json:"name"`
+						DBPath      string `json:"db_path"`
+						SessionPath string `json:"session_path"`
+						AuditPath   string `json:"audit_path"`
+						MediaDir    string `json:"media_dir"`
+					} `json:"data"`
+				}
+				if err := json.Unmarshal(out, &envelope); err != nil {
+					errCh <- fmt.Errorf("decode accounts-show: %w: %s", err, out)
+					return
+				}
+				name := envelope.Data.Name
+				if name != "a" && name != "b" {
+					errCh <- fmt.Errorf("observed invalid current account %q", name)
+					return
+				}
+				wantDir := filepath.Join(realRoot, "accounts", name)
+				for label, got := range map[string]string{
+					"db": envelope.Data.DBPath, "session": envelope.Data.SessionPath,
+					"audit": envelope.Data.AuditPath, "media": envelope.Data.MediaDir,
+				} {
+					if filepath.Dir(got) != wantDir && !(label == "media" && got == filepath.Join(wantDir, "media")) {
+						errCh <- fmt.Errorf("%s path %q inconsistent with account %q", label, got, name)
+						return
+					}
+				}
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestProcessInformationalHelpAndBuiltinVersionDoNotMigrate(t *testing.T) {
+	binary := buildTGProcess(t)
+	for _, args := range [][]string{{"--help"}, {"--version"}, {"download-media", "--help"}} {
+		t.Run(strings.Join(args, "_"), func(t *testing.T) {
+			root := t.TempDir()
+			state := seedLegacyState(t, root)
+			if out, code := runTGProcessResult(t, binary, root, withoutStartupSafetyEnv(os.Environ()), args...); code != 0 {
+				t.Fatalf("code=%d out=%s", code, out)
+			}
+			assertLegacyUnchanged(t, root, state)
+		})
 	}
 }
 

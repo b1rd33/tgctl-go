@@ -173,6 +173,75 @@ func TestRunClassifiesCommittedCleanupFailure(t *testing.T) {
 	}
 }
 
+func TestClassifyCommittedWriteMergesExtrasWithoutReservedOverrides(t *testing.T) {
+	err := safety.NewCommittedWriteWithExtras("artifact committed", errors.New("finalization failed"), map[string]any{
+		"artifact_path":  "/safe/media.bin",
+		"artifact_bytes": int64(12),
+		"committed":      false,
+		"partial":        false,
+		"cmd":            "forged",
+		"request_id":     "forged",
+		"error_code":     "BAD_ARGS",
+	})
+	code, _, extra := Classify(err)
+	if code != output.Generic || extra["committed"] != true || extra["partial"] != true {
+		t.Fatalf("classification=%v extras=%#v", code, extra)
+	}
+	if extra["artifact_path"] != "/safe/media.bin" || extra["artifact_bytes"] != int64(12) {
+		t.Fatalf("artifact extras missing: %#v", extra)
+	}
+	for _, reserved := range []string{"cmd", "request_id", "error_code"} {
+		if _, ok := extra[reserved]; ok {
+			t.Fatalf("reserved extra %q survived: %#v", reserved, extra)
+		}
+	}
+}
+
+func TestRunDurableAuditFailureAfterSuccessReturnsCommittedFailure(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "not-a-directory")
+	if err := os.WriteFile(blocker, []byte("block"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout bytes.Buffer
+	code := Run("download-media", Options{
+		JSON: true, Stdout: &stdout, AuditPath: filepath.Join(blocker, "audit.log"), DurableAudit: true,
+		CommittedExtras: map[string]any{"artifact_path": "/safe/media.bin", "artifact_bytes": int64(12)},
+	}, func(context.Context) (any, error) { return map[string]any{"ok": true}, nil })
+	if code != int(output.Generic) || !bytes.Contains(stdout.Bytes(), []byte(`"committed":true`)) || !bytes.Contains(stdout.Bytes(), []byte(`"artifact_path":"/safe/media.bin"`)) {
+		t.Fatalf("code=%d output=%s", code, stdout.Bytes())
+	}
+}
+
+func TestRunDurableAuditFailurePreservesPrecommitClassification(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "not-a-directory")
+	if err := os.WriteFile(blocker, []byte("block"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout bytes.Buffer
+	code := Run("download-media", Options{
+		JSON: true, Stdout: &stdout, AuditPath: filepath.Join(blocker, "audit.log"), DurableAudit: true,
+	}, func(context.Context) (any, error) { return nil, resolve.NewNotFound("message missing") })
+	if code != int(output.NotFound) || !bytes.Contains(stdout.Bytes(), []byte(`"code":"NOT_FOUND"`)) || !bytes.Contains(stdout.Bytes(), []byte(`"audit_failed":true`)) || bytes.Contains(stdout.Bytes(), []byte(`"committed":true`)) {
+		t.Fatalf("code=%d output=%s", code, stdout.Bytes())
+	}
+}
+
+func TestRunNonDurableAuditFailureDoesNotChangeSuccess(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "not-a-directory")
+	if err := os.WriteFile(blocker, []byte("block"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout bytes.Buffer
+	code := Run("stats", Options{JSON: true, Stdout: &stdout, AuditPath: filepath.Join(blocker, "audit.log")},
+		func(context.Context) (any, error) { return map[string]any{"ok": true}, nil })
+	if code != 0 || !bytes.Contains(stdout.Bytes(), []byte(`"ok":true`)) {
+		t.Fatalf("code=%d output=%s", code, stdout.Bytes())
+	}
+}
+
 func TestRunHumanFailureGoesToStderr(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := Run("show", Options{JSON: false, Stdout: &stdout, Stderr: &stderr},

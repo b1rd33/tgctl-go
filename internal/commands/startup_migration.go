@@ -12,7 +12,9 @@ import (
 
 // installLegacyMigrationPreflight defers legacy layout migration until Cobra
 // has parsed the selected leaf and its flags. This keeps rejected write and
-// read-only invocations free of local filesystem mutations.
+// read-only invocations free of local filesystem mutations. Cobra intentionally
+// does not execute run hooks for help or its built-in --version path, so those
+// informational invocations are non-mutating too.
 func installLegacyMigrationPreflight(root *cobra.Command, mgr *accounts.Manager) {
 	previousE := root.PersistentPreRunE
 	previous := root.PersistentPreRun

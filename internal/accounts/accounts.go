@@ -124,14 +124,63 @@ func (m *Manager) Use(name string) error {
 		}
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(m.currentPath()), 0o700); err != nil {
-		return err
-	}
-	return os.WriteFile(m.currentPath(), []byte(name), 0o600)
+	return m.writeCurrent(name)
 }
 
-// Remove deletes the account directory; if it was the current account, the
-// `.current` selector is cleared too.
+// writeCurrent durably replaces .current without exposing a truncated or
+// partially written selector to concurrent readers. The temporary file lives
+// beside .current so rename is atomic on the same filesystem.
+func (m *Manager) writeCurrent(name string) (retErr error) {
+	root := filepath.Dir(m.currentPath())
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		return err
+	}
+	temp, err := os.CreateTemp(root, ".current.tmp-*")
+	if err != nil {
+		return err
+	}
+	tempPath := temp.Name()
+	closed := false
+	published := false
+	defer func() {
+		if !closed {
+			retErr = errors.Join(retErr, temp.Close())
+		}
+		if !published {
+			if cleanupErr := os.Remove(tempPath); cleanupErr != nil && !errors.Is(cleanupErr, os.ErrNotExist) {
+				retErr = errors.Join(retErr, cleanupErr)
+			}
+		}
+	}()
+	if err := temp.Chmod(0o600); err != nil {
+		return err
+	}
+	if _, err := temp.WriteString(name); err != nil {
+		return err
+	}
+	if err := temp.Sync(); err != nil {
+		return err
+	}
+	if err := temp.Close(); err != nil {
+		closed = true
+		return err
+	}
+	closed = true
+	if err := os.Rename(tempPath, m.currentPath()); err != nil {
+		return err
+	}
+	published = true
+	dir, err := os.Open(root)
+	if err != nil {
+		return err
+	}
+	syncErr := dir.Sync()
+	closeErr := dir.Close()
+	return errors.Join(syncErr, closeErr)
+}
+
+// Remove deletes the account directory; if it was current, selection is
+// durably reset to the default account first.
 func (m *Manager) Remove(name string) error {
 	if err := ValidateName(name); err != nil {
 		return err
@@ -144,7 +193,9 @@ func (m *Manager) Remove(name string) error {
 		return err
 	}
 	if name == m.Current() {
-		_ = os.Remove(m.currentPath())
+		if err := m.writeCurrent(DefaultAccount); err != nil {
+			return err
+		}
 	}
 	return os.RemoveAll(d)
 }

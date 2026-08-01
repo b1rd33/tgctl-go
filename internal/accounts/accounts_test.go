@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -74,6 +75,74 @@ func TestUseAndCurrent(t *testing.T) {
 	}
 }
 
+func TestConcurrentUseReadersNeverObserveDefaultOrMalformedSelector(t *testing.T) {
+	dir := t.TempDir()
+	m := New(dir)
+	for _, name := range []string{"a", "b"} {
+		if _, err := m.Add(name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := m.Use("a"); err != nil {
+		t.Fatal(err)
+	}
+
+	start := make(chan struct{})
+	errCh := make(chan error, 16)
+	var wg sync.WaitGroup
+	for writer := 0; writer < 4; writer++ {
+		wg.Add(1)
+		go func(offset int) {
+			defer wg.Done()
+			<-start
+			for i := 0; i < 250; i++ {
+				name := []string{"a", "b"}[(i+offset)%2]
+				if err := m.Use(name); err != nil {
+					errCh <- err
+					return
+				}
+			}
+		}(writer)
+	}
+	for reader := 0; reader < 8; reader++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			for i := 0; i < 4000; i++ {
+				got := m.Current()
+				if got != "a" && got != "b" {
+					errCh <- errors.New("observed torn selector: " + got)
+					return
+				}
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	info, err := os.Stat(filepath.Join(dir, AccountsDirName, CurrentFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("current selector mode=%#o want 0600", got)
+	}
+	matches, err := filepath.Glob(filepath.Join(dir, AccountsDirName, ".current.tmp-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("temporary selectors leaked: %v", matches)
+	}
+}
+
 func TestUseUnknownReturnsAccountNotFound(t *testing.T) {
 	dir := t.TempDir()
 	m := New(dir)
@@ -94,6 +163,13 @@ func TestRemoveCurrentResetsSelector(t *testing.T) {
 	}
 	if got := m.Current(); got != "default" {
 		t.Fatalf("Current after remove = %q, want default", got)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, AccountsDirName, CurrentFile))
+	if err != nil {
+		t.Fatalf("read reset selector: %v", err)
+	}
+	if string(b) != DefaultAccount {
+		t.Fatalf("reset selector=%q want %q", b, DefaultAccount)
 	}
 }
 

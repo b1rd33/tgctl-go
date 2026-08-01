@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/b1rd33/tgctl-go/internal/media"
 	"github.com/b1rd33/tgctl-go/internal/resolve"
@@ -124,6 +125,9 @@ func (g *GotdClient) DownloadMedia(ctx context.Context, req DownloadMediaReq) (D
 	resp := DownloadMediaResp{
 		ChatID: req.ChatID, MessageID: req.MessageID,
 		MediaType: extracted.MediaType, MIMEType: extracted.MIMEType, Filename: safeName,
+	}
+	if message.Date > 0 {
+		resp.MessageDate = time.Unix(int64(message.Date), 0).UTC()
 	}
 	if extracted.SizeKnown && req.MaxBytes > 0 && extracted.Size > req.MaxBytes {
 		return DownloadMediaResp{}, errors.Join(

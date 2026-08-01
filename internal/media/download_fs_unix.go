@@ -52,6 +52,14 @@ func (d *anchoredDir) lstat(name string) (anchoredEntry, error) {
 	}, nil
 }
 
+func (d *anchoredDir) identity() (fileIdentity, error) {
+	var stat unix.Stat_t
+	if err := unix.Fstat(d.fd, &stat); err != nil {
+		return fileIdentity{}, err
+	}
+	return fileIdentity{device: uint64(stat.Dev), inode: stat.Ino}, nil
+}
+
 func snapshotOpenFile(file *os.File) (anchoredEntry, error) {
 	var stat unix.Stat_t
 	if err := unix.Fstat(int(file.Fd()), &stat); err != nil {

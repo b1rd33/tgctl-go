@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/b1rd33/tgctl-go/internal/media"
 	"github.com/b1rd33/tgctl-go/internal/resolve"
@@ -31,6 +32,7 @@ func TestDownloadMediaContractAndFake(t *testing.T) {
 	wantResp := DownloadMediaResp{
 		ChatID: 42, MessageID: 99, MediaType: "video", MIMEType: "video/mp4",
 		Filename: "clip.mp4", Path: "/tmp/clip.mp4", Bytes: 123, Skipped: true,
+		MessageDate: time.Date(2026, 8, 1, 10, 11, 12, 0, time.UTC),
 	}
 	fake := &FakeClient{DownloadResp: wantResp}
 
@@ -400,6 +402,7 @@ func TestGotdDownloadMediaStreamsAtomicallyAndReturnsSafeMetadata(t *testing.T) 
 		&tg.DocumentAttributeFilename{FileName: "telegram-name.mp4"},
 	)
 	message.ID = 77
+	message.Date = 1_700_000_123
 	message.Media.(*tg.MessageMediaDocument).Document.(*tg.Document).Size = int64(len(data))
 	api := &fakeMediaDownloadAPI{resp: &tg.MessagesMessages{Messages: []tg.MessageClass{message}}}
 	outputDir := filepath.Join(t.TempDir(), "downloads")
@@ -415,7 +418,7 @@ func TestGotdDownloadMediaStreamsAtomicallyAndReturnsSafeMetadata(t *testing.T) 
 	wantPath := filepath.Join(outputDir, "telegram-name.mp4")
 	want := DownloadMediaResp{
 		ChatID: 321, MessageID: 77, MediaType: "video", MIMEType: "video/mp4", Filename: "telegram-name.mp4",
-		Path: wantPath, Bytes: int64(len(data)),
+		Path: wantPath, Bytes: int64(len(data)), MessageDate: time.Unix(1_700_000_123, 0).UTC(),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("response = %#v, want %#v", got, want)

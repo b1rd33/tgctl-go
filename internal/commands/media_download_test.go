@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/b1rd33/tgctl-go/internal/client"
 	"github.com/b1rd33/tgctl-go/internal/store"
@@ -138,9 +140,16 @@ func configureDownload(t *testing.T, cfg CommandsConfig, fake *client.FakeClient
 		t.Fatal(err)
 	}
 	mediaPath := filepath.Join(absOutput, "asset.bin")
+	if err := os.MkdirAll(absOutput, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mediaPath, []byte("hello world!"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	fake.DownloadResp = client.DownloadMediaResp{
 		ChatID: chatID, MessageID: messageID, MediaType: "document", MIMEType: "application/octet-stream",
 		Filename: "asset.bin", Path: mediaPath, Bytes: 12, Skipped: skipped,
+		MessageDate: time.Date(2026, 7, 31, 15, 4, 5, 0, time.UTC),
 	}
 	return mediaPath
 }
@@ -181,7 +190,10 @@ func TestDownloadMediaNumericSelectorDefaultDirectoryAndEnvelope(t *testing.T) {
 	if msg.MediaPath == nil || *msg.MediaPath != wantPath || msg.MediaType == nil || *msg.MediaType != "document" {
 		t.Fatalf("cached message=%#v", msg)
 	}
-	assertAuditContains(t, filepath.Join(dir, "audit.log"), `"chat":"1"`, `"message_id":9`, `"max_size_mb":100`, `"overwrite":false`, `"output_policy":"default"`)
+	assertAuditContains(t, filepath.Join(dir, "audit.log"),
+		`"chat":"1"`, `"message_id":9`, `"max_size_mb":100`, `"overwrite":false`, `"output_policy":"default"`,
+		`"artifact_path":"`+strings.ReplaceAll(wantPath, `\`, `\\`)+`"`, `"artifact_bytes":12`,
+		`"media_type":"document"`, `"mime_type":"application/octet-stream"`, `"filename":"asset.bin"`, `"skipped":false`)
 }
 
 func TestDownloadMediaFuzzySelectorRequiresFlagAndResolvesOnce(t *testing.T) {
@@ -207,8 +219,16 @@ func TestDownloadMediaUnknownSelectorDoesNotCallClient(t *testing.T) {
 
 func TestDownloadMediaExplicitRelativeOutputAndUnlimitedSize(t *testing.T) {
 	cfg, fake, _ := setupWriteEnv(t)
-	relative := filepath.Join("downloads", "chosen")
-	configureDownload(t, cfg, fake, 1, 9, relative, true)
+	absoluteOutput := filepath.Join(t.TempDir(), "chosen")
+	workingDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	relative, err := filepath.Rel(workingDir, absoluteOutput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configureDownload(t, cfg, fake, 1, 9, relative, false)
 	out, code := runRoot(t, cfg, "download-media", "1", "9", "--output", relative, "--max-size-mb", "0", "--overwrite", "--allow-write", "--human")
 	if code != 0 {
 		t.Fatalf("code=%d\nout:%s", code, out)
@@ -216,7 +236,7 @@ func TestDownloadMediaExplicitRelativeOutputAndUnlimitedSize(t *testing.T) {
 	if len(fake.Downloads) != 1 || fake.Downloads[0].OutputDir != relative || fake.Downloads[0].MaxBytes != 0 || !fake.Downloads[0].Overwrite {
 		t.Fatalf("request=%#v", fake.Downloads)
 	}
-	if !strings.Contains(out, `"media_path"`) || !strings.Contains(out, `"skipped": true`) {
+	if !strings.Contains(out, `"media_path"`) || !strings.Contains(out, `"skipped": false`) {
 		t.Fatalf("human output=%s", out)
 	}
 }
@@ -258,9 +278,32 @@ func TestDownloadMediaRejectsFaultyResponsesWithoutCacheMutation(t *testing.T) {
 		{name: "mismatched chat", edit: func(r *client.DownloadMediaResp, _ string) { r.ChatID = 2 }},
 		{name: "mismatched message", edit: func(r *client.DownloadMediaResp, _ string) { r.MessageID = 10 }},
 		{name: "blank media type", edit: func(r *client.DownloadMediaResp, _ string) { r.MediaType = " " }},
+		{name: "unknown media type", edit: func(r *client.DownloadMediaResp, _ string) { r.MediaType = "executable" }},
+		{name: "blank mime", edit: func(r *client.DownloadMediaResp, _ string) { r.MIMEType = " " }},
+		{name: "malformed mime", edit: func(r *client.DownloadMediaResp, _ string) { r.MIMEType = "not a mime" }},
+		{name: "blank filename", edit: func(r *client.DownloadMediaResp, _ string) { r.Filename = " " }},
+		{name: "filename mismatch", edit: func(r *client.DownloadMediaResp, _ string) { r.Filename = "other.bin" }},
+		{name: "unsanitized filename", edit: func(r *client.DownloadMediaResp, output string) {
+			r.Filename = "bad?.bin"
+			r.Path = filepath.Join(output, r.Filename)
+			_ = os.WriteFile(r.Path, bytes.Repeat([]byte{'x'}, int(r.Bytes)), 0o600)
+		}},
+		{name: "negative bytes", edit: func(r *client.DownloadMediaResp, _ string) { r.Bytes = -1 }},
+		{name: "size mismatch", edit: func(r *client.DownloadMediaResp, _ string) { r.Bytes++ }},
 		{name: "relative path", edit: func(r *client.DownloadMediaResp, _ string) { r.Path = "asset.bin" }},
 		{name: "outside output", edit: func(r *client.DownloadMediaResp, output string) {
 			r.Path = filepath.Join(filepath.Dir(output), "escape.bin")
+		}},
+		{name: "missing entry", edit: func(r *client.DownloadMediaResp, _ string) { _ = os.Remove(r.Path) }},
+		{name: "directory entry", edit: func(r *client.DownloadMediaResp, _ string) {
+			_ = os.Remove(r.Path)
+			_ = os.Mkdir(r.Path, 0o700)
+		}},
+		{name: "symlink entry", edit: func(r *client.DownloadMediaResp, output string) {
+			_ = os.Remove(r.Path)
+			victim := filepath.Join(filepath.Dir(output), "victim.bin")
+			_ = os.WriteFile(victim, []byte("hello world!"), 0o600)
+			_ = os.Symlink(victim, r.Path)
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -272,10 +315,36 @@ func TestDownloadMediaRejectsFaultyResponsesWithoutCacheMutation(t *testing.T) {
 			if code != 1 {
 				t.Fatalf("code=%d want GENERIC=1 out=%s", code, out)
 			}
+			if !strings.Contains(out, `"committed":true`) || strings.Contains(out, fake.DownloadResp.Path) {
+				t.Fatalf("invalid non-skipped response lacks conservative classification or leaked path: %s", out)
+			}
 			if _, err := loadMessage(cfg.Paths.(stubPaths).db, 1, 9); !errors.Is(err, sql.ErrNoRows) {
 				t.Fatalf("cache mutated, err=%v", err)
 			}
 		})
+	}
+}
+
+func TestDownloadMediaRejectsInvalidSkippedResponseWithoutCommittedClassification(t *testing.T) {
+	cfg, fake, dir := setupWriteEnv(t)
+	output := filepath.Join(dir, "media", "1")
+	configureDownload(t, cfg, fake, 1, 9, output, true)
+	fake.DownloadResp.MIMEType = "not a mime"
+	out, code := runRoot(t, cfg, "download-media", "1", "9", "--allow-write", "--json")
+	if code != 1 || strings.Contains(out, `"committed":true`) {
+		t.Fatalf("code=%d out=%s", code, out)
+	}
+	if _, err := loadMessage(cfg.Paths.(stubPaths).db, 1, 9); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("cache mutated: %v", err)
+	}
+}
+
+func TestDownloadMediaRejectsSkippedOverwriteAsIncoherent(t *testing.T) {
+	cfg, fake, dir := setupWriteEnv(t)
+	configureDownload(t, cfg, fake, 1, 9, filepath.Join(dir, "media", "1"), true)
+	out, code := runRoot(t, cfg, "download-media", "1", "9", "--overwrite", "--allow-write", "--json")
+	if code != 1 || strings.Contains(out, `"committed":true`) {
+		t.Fatalf("code=%d out=%s", code, out)
 	}
 }
 
@@ -314,9 +383,82 @@ func TestDownloadMediaPersistenceFailureMarksCommittedOnlyForNewDownload(t *test
 			}
 			auditPath := filepath.Join(dir, "audit.log")
 			if !skipped {
-				assertAuditContains(t, auditPath, `"committed":true`, `"partial":true`, `"error_code":"GENERIC"`)
+				for _, fragment := range []string{
+					`"committed":true`, `"partial":true`,
+					`"artifact_path":"` + strings.ReplaceAll(fake.DownloadResp.Path, `\`, `\\`) + `"`,
+					`"artifact_bytes":12`, `"media_type":"document"`, `"mime_type":"application/octet-stream"`,
+					`"filename":"asset.bin"`, `"skipped":false`,
+				} {
+					if !strings.Contains(out, fragment) {
+						t.Fatalf("output missing %s: %s", fragment, out)
+					}
+				}
+				assertAuditContains(t, auditPath,
+					`"committed":true`, `"partial":true`, `"error_code":"GENERIC"`,
+					`"artifact_path":"`+strings.ReplaceAll(fake.DownloadResp.Path, `\`, `\\`)+`"`,
+					`"artifact_bytes":12`, `"media_type":"document"`, `"mime_type":"application/octet-stream"`,
+					`"filename":"asset.bin"`, `"skipped":false`)
+			} else {
+				assertAuditContains(t, auditPath, `"artifact_bytes":12`, `"skipped":true`)
 			}
 		})
+	}
+}
+
+func TestDownloadMediaClientCloseFailureUsesValidatedRecoveryMetadata(t *testing.T) {
+	for _, skipped := range []bool{false, true} {
+		t.Run(fmt.Sprintf("skipped_%v", skipped), func(t *testing.T) {
+			cfg, fake, dir := setupWriteEnv(t)
+			configureDownload(t, cfg, fake, 1, 9, filepath.Join(dir, "media", "1"), skipped)
+			fake.CloseErr = errors.New("client close failed")
+			out, code := runRoot(t, cfg, "download-media", "1", "9", "--allow-write", "--json")
+			if code != 1 {
+				t.Fatalf("code=%d out=%s", code, out)
+			}
+			if got := strings.Contains(out, `"committed":true`); got != !skipped {
+				t.Fatalf("committed=%v want %v out=%s", got, !skipped, out)
+			}
+			if !skipped && (!strings.Contains(out, `"artifact_bytes":12`) || !strings.Contains(out, `"filename":"asset.bin"`)) {
+				t.Fatalf("recovery metadata missing: %s", out)
+			}
+			if _, err := loadMessage(cfg.Paths.(stubPaths).db, 1, 9); !errors.Is(err, sql.ErrNoRows) {
+				t.Fatalf("cache persisted despite client finalization failure: %v", err)
+			}
+		})
+	}
+}
+
+func TestDownloadMediaDurableAuditFailureAfterSuccessIsCommitted(t *testing.T) {
+	cfg, fake, dir := setupWriteEnv(t)
+	paths := cfg.Paths.(stubPaths)
+	blocker := filepath.Join(dir, "audit-blocker")
+	if err := os.WriteFile(blocker, []byte("block"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	paths.audit = filepath.Join(blocker, "audit.log")
+	cfg.Paths = paths
+	configureDownload(t, cfg, fake, 1, 9, filepath.Join(dir, "media", "1"), false)
+	out, code := runRoot(t, cfg, "download-media", "1", "9", "--allow-write", "--json")
+	if code != 1 || !strings.Contains(out, `"committed":true`) || !strings.Contains(out, `"artifact_bytes":12`) || !strings.Contains(out, `"filename":"asset.bin"`) {
+		t.Fatalf("code=%d out=%s", code, out)
+	}
+	if _, err := loadMessage(paths.db, 1, 9); err != nil {
+		t.Fatalf("cache was not committed before audit failure: %v", err)
+	}
+}
+
+func TestDownloadMediaDurableAuditFailurePreservesPrecommitError(t *testing.T) {
+	cfg, _, dir := setupWriteEnv(t)
+	paths := cfg.Paths.(stubPaths)
+	blocker := filepath.Join(dir, "audit-blocker")
+	if err := os.WriteFile(blocker, []byte("block"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	paths.audit = filepath.Join(blocker, "audit.log")
+	cfg.Paths = paths
+	out, code := runRoot(t, cfg, "download-media", "404", "9", "--allow-write", "--json")
+	if code != 4 || !strings.Contains(out, `"code":"NOT_FOUND"`) || !strings.Contains(out, `"audit_failed":true`) || strings.Contains(out, `"committed":true`) {
+		t.Fatalf("code=%d out=%s", code, out)
 	}
 }
 

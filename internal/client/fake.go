@@ -23,6 +23,7 @@ type FakeClient struct {
 	Downloads    []DownloadMediaReq
 	DownloadResp DownloadMediaResp
 	DownloadErr  error
+	CloseErr     error
 	Edited       []EditMessageReq
 	Forwards     []ForwardReq
 	Pins         []PinReq
@@ -419,5 +420,5 @@ func (f *FakeClient) Close() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.Closed = true
-	return nil
+	return f.CloseErr
 }

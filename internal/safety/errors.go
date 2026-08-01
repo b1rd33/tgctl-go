@@ -69,8 +69,9 @@ func (e *PremiumRequired) Error() string {
 // CommittedWrite marks an error discovered after a write was durably
 // committed. Callers must not retry it as if the operation were rolled back.
 type CommittedWrite struct {
-	Msg string
-	Err error
+	Msg    string
+	Err    error
+	extras map[string]any
 }
 
 func (e *CommittedWrite) Error() string {
@@ -84,4 +85,25 @@ func (e *CommittedWrite) Unwrap() error { return e.Err }
 
 func NewCommittedWrite(msg string, err error) *CommittedWrite {
 	return &CommittedWrite{Msg: msg, Err: err}
+}
+
+// NewCommittedWriteWithExtras attaches recovery metadata for dispatch
+// classification. The map is copied; dispatch also filters reserved keys.
+func NewCommittedWriteWithExtras(msg string, err error, extras map[string]any) *CommittedWrite {
+	copyExtras := make(map[string]any, len(extras))
+	for key, value := range extras {
+		copyExtras[key] = value
+	}
+	return &CommittedWrite{Msg: msg, Err: err, extras: copyExtras}
+}
+
+func (e *CommittedWrite) ClassificationExtras() map[string]any {
+	if e == nil {
+		return nil
+	}
+	out := make(map[string]any, len(e.extras))
+	for key, value := range e.extras {
+		out[key] = value
+	}
+	return out
 }
