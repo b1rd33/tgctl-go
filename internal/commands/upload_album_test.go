@@ -146,6 +146,20 @@ func TestUploadAlbumUploadErrorRedactsSourcePath(t *testing.T) {
 	}
 }
 
+func TestUploadAlbumDurableAuditPreflightBlocksTelegram(t *testing.T) {
+	cfg, fake, dir := albumFakeConfig(t)
+	auditPath := filepath.Join(dir, "audit.log")
+	if err := os.Mkdir(auditPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	first := writeAlbumFixture(t, "first.jpg", []byte("\xff\xd8\xffphoto"))
+	second := writeAlbumFixture(t, "second.jpg", []byte("\xff\xd8\xffphoto2"))
+	out, code := runRoot(t, cfg, "upload-album", "1", first, second, "--allow-write", "--json")
+	if code == 0 || len(fake.Albums) != 0 || strings.Contains(out, auditPath) || strings.Contains(out, first) {
+		t.Fatalf("code=%d calls=%d unsafe output=%s", code, len(fake.Albums), out)
+	}
+}
+
 func TestUploadAlbumRequiresWriteGate(t *testing.T) {
 	cfg, fake, _ := albumFakeConfig(t)
 	first := writeAlbumFixture(t, "first.jpg", []byte("\xff\xd8\xffphoto"))
