@@ -249,15 +249,17 @@ messages do not yet expose `grouped_id`. The planned first version is:
   after all items are ready, make one final `messages.sendMultiMedia` call;
 - return every resulting message ID, preserve Telegram's shared `grouped_id`
   during history/backfill, and offer album-aware grouping/downloads;
-- make the planned album dry-run perform zero network calls, zero database,
-  audit, or session writes, and create no local files or directories; test
-  ordering, captions, failures, idempotency, and live carousel rendering.
+- make the planned album dry-run perform zero Telegram or other network calls;
+  test ordering, captions, failures, idempotency, and live carousel rendering.
 
 The upload phase is not transactional: if a later temporary upload fails,
 earlier temporary uploads may already exist on Telegram even though no album
 message was sent. Hashes, resumable downloads, disk-space preflight, manifests,
 thumbnails, concurrency controls, all-or-nothing orchestration, and audio or
-document albums are later hardening rather than album-v1 requirements. See the
+document albums are later hardening rather than album-v1 requirements.
+Recommended later dry-run hardening would additionally guarantee zero database,
+audit, or session writes and no local file or directory creation; those local
+side-effect guarantees are not core album-v1 acceptance criteria. See the
 [Telegram method contract](https://core.telegram.org/method/messages.sendMultiMedia),
 [file documentation](https://core.telegram.org/api/files), and
 [message schema](https://core.telegram.org/constructor/message).

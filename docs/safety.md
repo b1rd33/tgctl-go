@@ -6,31 +6,47 @@ consequences — friends DM'd in error, messages permanently gone,
 chats abandoned. The safety model is designed for that threat:
 *the operator is a script that may be wrong*.
 
-## The pipeline
+## Telegram-side write pipeline
 
-Every write command passes through these gates in order:
+Ordinary Telegram-side write commands use the shared `writes.Run` pipeline in
+this order:
 
 ```
 parse args
    ↓
 write gate: --read-only rejection, then --allow-write requirement
    ↓
-selector gate: --fuzzy required for title selectors; resolve from the cache read-only
+idempotency lookup: a committed replay returns before resolution
    ↓
-destructive gate (if applicable): typed --confirm <resolved-id>
+selector gate: --fuzzy if needed, then resolve from the local cache
    ↓
 dry-run short-circuit: print would-do envelope, exit 0
    ↓
-local rate limiter (token bucket: 20 outbound / 60s default)
+local sliding-window limiter: 20 outbound writes / 60s default
    ↓
 audit_pre: NDJSON entry with shared request_id
    ↓
 Telegram call
    ↓
-audit_post: NDJSON entry with same request_id + result
+idempotency record
    ↓
-emit success / fail envelope
+final dispatch audit + success / fail envelope
 ```
+
+Typed destructive commands add an earlier read-only preflight: enforce the
+write and fuzzy gates, select the account, resolve the target once from the
+cache, and validate `--confirm`. The pipeline then consumes that immutable
+target rather than resolving again. Confirmation therefore precedes dry-run,
+idempotency replay, audit writes, writable database or session access, and
+Telegram client construction.
+
+Local mutation commands such as `backfill` and `download-media` do **not** use
+this full Telegram-write pipeline. They select an account, enforce
+`--read-only` and `--allow-write`, and perform command-specific validation.
+Operations that reach dispatch finalize through a durable outcome audit, so an
+append failure is surfaced rather than ignored. These commands do not inherit
+the pipeline's idempotency lookup, dry-run,
+outbound-write limiter, or Telegram pre-call audit.
 
 ## Write gate (`--allow-write`)
 
@@ -153,7 +169,7 @@ File permissions are 0600 (owner-only read/write).
 
 ## Local rate limiter
 
-A token bucket caps outbound Telegram writes at 20 per 60 seconds
+A sliding window caps outbound Telegram writes at 20 per 60 seconds
 by default. Hitting it raises `LOCAL_RATE_LIMIT` with a
 `retry_after_seconds` field. This is your guard against an agent
 loop that runs away.
