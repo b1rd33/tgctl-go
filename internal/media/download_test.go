@@ -550,6 +550,134 @@ func TestDestinationOverwriteRejectsReplacedPartAndRestoresFinal(t *testing.T) {
 	}
 }
 
+func TestDestinationNoReplaceRollsBackPartSwapDuringPublish(t *testing.T) {
+	for _, kind := range []string{"symlink", "regular"} {
+		t.Run(kind, func(t *testing.T) {
+			dir := t.TempDir()
+			d, err := OpenDestination(dir, "result.bin", false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			openFile := d.File
+			if _, err := openFile.Write([]byte("download")); err != nil {
+				t.Fatal(err)
+			}
+
+			originalHook := beforeNoReplacePublish
+			var orphan string
+			beforeNoReplacePublish = func() {
+				orphan = replacePartEntry(t, d, kind)
+			}
+			t.Cleanup(func() { beforeNoReplacePublish = originalHook })
+
+			commitErr := d.Commit()
+			wantErr := ErrDestinationChanged
+			if kind == "symlink" {
+				wantErr = ErrUnsafeDestination
+			}
+			if !errors.Is(commitErr, wantErr) {
+				t.Fatalf("Commit error = %v, want %v", commitErr, wantErr)
+			}
+			assertFileClosed(t, openFile)
+			if _, err := os.Lstat(d.FinalPath); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("final was left published after rollback: %v", err)
+			}
+			assertReplacementUnchanged(t, d.PartPath, kind)
+			if got, err := os.ReadFile(orphan); err != nil || string(got) != "download" {
+				t.Fatalf("renamed original part changed: content=%q err=%v", got, err)
+			}
+			assertNoQuarantines(t, dir)
+		})
+	}
+}
+
+func TestDestinationAbortQuarantineDoesNotDeleteNewPublicReplacement(t *testing.T) {
+	dir := t.TempDir()
+	d, err := OpenDestination(dir, "cancel.bin", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	openFile := d.File
+	originalHook := beforeQuarantineDelete
+	beforeQuarantineDelete = func() {
+		if err := os.WriteFile(d.PartPath, []byte("replacement"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() { beforeQuarantineDelete = originalHook })
+
+	if err := d.Abort(); err != nil {
+		t.Fatalf("Abort: %v", err)
+	}
+	assertFileClosed(t, openFile)
+	if got, err := os.ReadFile(d.PartPath); err != nil || string(got) != "replacement" {
+		t.Fatalf("new public replacement changed: content=%q err=%v", got, err)
+	}
+	assertNoQuarantines(t, dir)
+}
+
+func TestDestinationDisplacedCleanupDoesNotDeleteNewPartReplacement(t *testing.T) {
+	dir := t.TempDir()
+	final := filepath.Join(dir, "result.bin")
+	if err := os.WriteFile(final, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d, err := OpenDestination(dir, "result.bin", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.File.Write([]byte("download")); err != nil {
+		t.Fatal(err)
+	}
+	originalHook := beforeQuarantineDelete
+	beforeQuarantineDelete = func() {
+		if err := os.WriteFile(d.PartPath, []byte("replacement"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() { beforeQuarantineDelete = originalHook })
+
+	if err := d.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+	if got, err := os.ReadFile(final); err != nil || string(got) != "download" {
+		t.Fatalf("final content=%q err=%v", got, err)
+	}
+	if got, err := os.ReadFile(d.PartPath); err != nil || string(got) != "replacement" {
+		t.Fatalf("new part replacement changed: content=%q err=%v", got, err)
+	}
+	assertNoQuarantines(t, dir)
+}
+
+func TestDestinationRollbackCleanupDoesNotDeleteNewFinalReplacement(t *testing.T) {
+	dir := t.TempDir()
+	d, err := OpenDestination(dir, "result.bin", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalPublishHook := beforeNoReplacePublish
+	beforeNoReplacePublish = func() {
+		_ = replacePartEntry(t, d, "symlink")
+	}
+	t.Cleanup(func() { beforeNoReplacePublish = originalPublishHook })
+	originalCleanupHook := beforeQuarantineDelete
+	beforeQuarantineDelete = func() {
+		if err := os.WriteFile(d.FinalPath, []byte("replacement"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() { beforeQuarantineDelete = originalCleanupHook })
+
+	if err := d.Commit(); !errors.Is(err, ErrUnsafeDestination) {
+		t.Fatalf("Commit error = %v, want ErrUnsafeDestination", err)
+	}
+	if got, err := os.ReadFile(d.FinalPath); err != nil || string(got) != "replacement" {
+		t.Fatalf("new final replacement changed: content=%q err=%v", got, err)
+	}
+	assertReplacementUnchanged(t, d.PartPath, "symlink")
+	assertNoQuarantines(t, dir)
+}
+
 func replacePartEntry(t *testing.T, d *Destination, kind string) string {
 	t.Helper()
 	orphan := d.PartPath + ".renamed"
@@ -738,5 +866,16 @@ func assertNoParts(t *testing.T, dir string) {
 	matches = append(matches, hidden...)
 	if len(matches) != 0 {
 		t.Fatalf("part files remain: %v", matches)
+	}
+}
+
+func assertNoQuarantines(t *testing.T, dir string) {
+	t.Helper()
+	matches, err := filepath.Glob(filepath.Join(dir, ".tgctl-quarantine-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("quarantine entries remain: %v", matches)
 	}
 }
