@@ -62,6 +62,37 @@ func TestSanitizeDownloadNameLongUnicodeReservedStemPreservesExtension(t *testin
 	}
 }
 
+func TestSanitizeDownloadNameReservedBoundaryNeverExceedsLimit(t *testing.T) {
+	inputs := []string{
+		"CON." + strings.Repeat("x", 176),
+		"COM1." + strings.Repeat("x", 175),
+		"NUL." + strings.Repeat("界", 58) + "ab",
+	}
+	for _, input := range inputs {
+		if len(input) != maxDownloadNameSize {
+			t.Fatalf("test input length = %d, want %d", len(input), maxDownloadNameSize)
+		}
+		got := SanitizeDownloadName(input)
+		if len(got) > maxDownloadNameSize {
+			t.Fatalf("SanitizeDownloadName produced %d bytes: %q", len(got), got)
+		}
+		if !utf8.ValidString(got) {
+			t.Fatalf("SanitizeDownloadName produced invalid UTF-8: %q", got)
+		}
+		if reservedDeviceStemForTest(got) {
+			t.Fatalf("SanitizeDownloadName left reserved device stem: %q", got)
+		}
+	}
+}
+
+func reservedDeviceStemForTest(name string) bool {
+	stem := strings.ToUpper(strings.TrimSuffix(name, filepath.Ext(name)))
+	if stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL" {
+		return true
+	}
+	return len(stem) == 4 && (strings.HasPrefix(stem, "COM") || strings.HasPrefix(stem, "LPT")) && stem[3] >= '1' && stem[3] <= '9'
+}
+
 func TestOpenDestinationPortableSanitizerCollisionUsesNoReplace(t *testing.T) {
 	dir := t.TempDir()
 	d, err := OpenDestination(dir, "a:b.txt", false)

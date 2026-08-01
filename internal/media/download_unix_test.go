@@ -4,6 +4,7 @@ package media
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -222,6 +223,84 @@ func TestOpenDestinationProbeCloseFailureIsCleanupIncomplete(t *testing.T) {
 	}
 	assertNoAtomicProbes(t, dir)
 	assertNoParts(t, dir)
+}
+
+func TestOpenDestinationProbeCleanupDoesNotDeleteReplacements(t *testing.T) {
+	for _, overwrite := range []bool{false, true} {
+		for _, kind := range []string{"regular", "symlink", "fifo"} {
+			t.Run(fmt.Sprintf("overwrite=%t/%s", overwrite, kind), func(t *testing.T) {
+				dir := t.TempDir()
+				if overwrite {
+					if err := os.WriteFile(filepath.Join(dir, "result.bin"), []byte("old"), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				ops := defaultDestinationOps()
+				var replacements []string
+				var referents []string
+				ops.beforeProbeDelete = func(name string) {
+					path := filepath.Join(dir, name)
+					if err := os.Remove(path); err != nil {
+						t.Fatal(err)
+					}
+					switch kind {
+					case "regular":
+						if err := os.WriteFile(path, []byte("replacement"), 0o600); err != nil {
+							t.Fatal(err)
+						}
+					case "symlink":
+						referent := path + ".victim"
+						if err := os.WriteFile(referent, []byte("safe"), 0o600); err != nil {
+							t.Fatal(err)
+						}
+						if err := os.Symlink(referent, path); err != nil {
+							t.Skipf("symlink unsupported: %v", err)
+						}
+						referents = append(referents, referent)
+					case "fifo":
+						if err := unix.Mkfifo(path, 0o600); err != nil {
+							t.Fatal(err)
+						}
+					}
+					replacements = append(replacements, path)
+				}
+
+				_, err := openDestinationWithOps(dir, "result.bin", overwrite, ops)
+				if !errors.Is(err, ErrCleanupIncomplete) {
+					t.Fatalf("OpenDestination error = %v, want ErrCleanupIncomplete", err)
+				}
+				if len(replacements) != 2 {
+					t.Fatalf("probe cleanup seams called for %d entries, want 2", len(replacements))
+				}
+				for _, path := range replacements {
+					info, statErr := os.Lstat(path)
+					if statErr != nil {
+						t.Fatalf("replacement removed: %s: %v", path, statErr)
+					}
+					switch kind {
+					case "regular":
+						if got, readErr := os.ReadFile(path); readErr != nil || string(got) != "replacement" {
+							t.Fatalf("regular replacement changed: content=%q err=%v", got, readErr)
+						}
+					case "symlink":
+						if info.Mode()&os.ModeSymlink == 0 {
+							t.Fatalf("replacement is not symlink: %s mode=%v", path, info.Mode())
+						}
+					case "fifo":
+						if info.Mode()&os.ModeNamedPipe == 0 {
+							t.Fatalf("replacement is not FIFO: %s mode=%v", path, info.Mode())
+						}
+					}
+				}
+				for _, referent := range referents {
+					if got, readErr := os.ReadFile(referent); readErr != nil || string(got) != "safe" {
+						t.Fatalf("symlink referent changed: content=%q err=%v", got, readErr)
+					}
+				}
+				assertNoParts(t, dir)
+			})
+		}
+	}
 }
 
 func TestDestinationCommitClassifiesCapabilityLoss(t *testing.T) {

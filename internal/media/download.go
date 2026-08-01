@@ -85,6 +85,7 @@ type destinationOps struct {
 	beforeNoReplace        func()
 	beforeAbsentPublish    func()
 	beforeQuarantineDelete func()
+	beforeProbeDelete      func(string)
 }
 
 func defaultDestinationOps() destinationOps {
@@ -103,6 +104,7 @@ func defaultDestinationOps() destinationOps {
 		beforeNoReplace:        func() {},
 		beforeAbsentPublish:    func() {},
 		beforeQuarantineDelete: func() {},
+		beforeProbeDelete:      func(string) {},
 	}
 }
 
@@ -127,36 +129,39 @@ func SanitizeDownloadName(name string) string {
 	if unusableDownloadName(name) {
 		return defaultDownloadName
 	}
-	if len(name) <= maxDownloadNameSize {
-		return avoidReservedDeviceName(name)
-	}
-
-	ext := filepath.Ext(name)
-	if ext != "" && ext != "." && len(ext) <= 32 {
-		stem := strings.Trim(strings.TrimSuffix(name, ext), ". ")
-		stem = strings.Trim(truncateUTF8(stem, maxDownloadNameSize-len(ext)), ". ")
-		if stem != "" {
-			return avoidReservedDeviceName(stem + ext)
-		}
-	}
-	name = strings.Trim(truncateUTF8(name, maxDownloadNameSize), ". ")
+	name = truncateDownloadName(name, maxDownloadNameSize)
 	if unusableDownloadName(name) {
 		return defaultDownloadName
 	}
-	return avoidReservedDeviceName(name)
+	if reservedDeviceName(name) {
+		name = "_" + truncateDownloadName(name, maxDownloadNameSize-1)
+	}
+	return name
 }
 
-func avoidReservedDeviceName(name string) string {
+func truncateDownloadName(name string, max int) string {
+	if len(name) <= max {
+		return name
+	}
+	ext := filepath.Ext(name)
+	if ext != "" && ext != "." && len(ext) <= 32 {
+		stem := strings.Trim(strings.TrimSuffix(name, ext), ". ")
+		stem = strings.Trim(truncateUTF8(stem, max-len(ext)), ". ")
+		if stem != "" {
+			return stem + ext
+		}
+	}
+	return strings.Trim(truncateUTF8(name, max), ". ")
+}
+
+func reservedDeviceName(name string) bool {
 	stem := strings.TrimSuffix(name, filepath.Ext(name))
 	upper := strings.ToUpper(stem)
 	reserved := upper == "CON" || upper == "PRN" || upper == "AUX" || upper == "NUL"
 	if len(upper) == 4 && (strings.HasPrefix(upper, "COM") || strings.HasPrefix(upper, "LPT")) {
 		reserved = upper[3] >= '1' && upper[3] <= '9'
 	}
-	if reserved {
-		return "_" + name
-	}
-	return name
+	return reserved
 }
 
 func unusableDownloadName(name string) bool {
@@ -321,28 +326,27 @@ func validAtomicRenameComponent(name string) bool {
 	return name != "" && name != "." && name != ".." && !strings.ContainsAny(name, `/\`)
 }
 
+type atomicProbeEntry struct {
+	name     string
+	identity fileIdentity
+}
+
 func probeAtomicCapabilities(ops destinationOps, dir *anchoredDir, displayDir string, needExchange bool) error {
-	names := make([]string, 0, 2)
+	entries := make([]atomicProbeEntry, 0, 2)
 	cleanup := func(primary error) error {
-		var cleanupErr error
-		for _, name := range names {
-			if err := ops.remove(dir, name); err != nil && !errors.Is(err, os.ErrNotExist) {
-				cleanupErr = errors.Join(cleanupErr, ErrCleanupIncomplete, fmt.Errorf("remove atomic capability probe %s: %w", name, err))
-			}
-		}
-		return errors.Join(primary, cleanupErr)
+		return errors.Join(primary, cleanupAtomicProbeEntries(ops, dir, displayDir, entries))
 	}
 
 	firstName, firstID, err := createAtomicProbeEntry(ops, dir, displayDir)
 	if firstName != "" {
-		names = append(names, firstName)
+		entries = append(entries, atomicProbeEntry{name: firstName, identity: firstID})
 	}
 	if err != nil {
 		return cleanup(err)
 	}
 	secondName, secondID, err := createAtomicProbeEntry(ops, dir, displayDir)
 	if secondName != "" {
-		names = append(names, secondName)
+		entries = append(entries, atomicProbeEntry{name: secondName, identity: secondID})
 	}
 	if err != nil {
 		return cleanup(err)
@@ -352,6 +356,7 @@ func probeAtomicCapabilities(ops destinationOps, dir *anchoredDir, displayDir st
 	if !errors.Is(renameErr, os.ErrExist) {
 		if renameErr == nil {
 			renameErr = errors.Join(ErrAtomicOverwriteUnsupported, errors.New("no-replace rename replaced an existing probe entry"))
+			entries = []atomicProbeEntry{{name: secondName, identity: firstID}}
 		}
 		return cleanup(renameErr)
 	}
@@ -363,8 +368,9 @@ func probeAtomicCapabilities(ops destinationOps, dir *anchoredDir, displayDir st
 	if exchangeErr != nil {
 		return cleanup(exchangeErr)
 	}
-	firstErr := validateNamedRegular(dir, firstName, filepath.Join(displayDir, firstName), secondID)
-	secondErr := validateNamedRegular(dir, secondName, filepath.Join(displayDir, secondName), firstID)
+	entries[0].identity, entries[1].identity = entries[1].identity, entries[0].identity
+	firstErr := validateNamedRegular(dir, entries[0].name, filepath.Join(displayDir, entries[0].name), entries[0].identity)
+	secondErr := validateNamedRegular(dir, entries[1].name, filepath.Join(displayDir, entries[1].name), entries[1].identity)
 	if firstErr != nil || secondErr != nil {
 		return cleanup(errors.Join(
 			ErrAtomicOverwriteUnsupported,
@@ -374,6 +380,22 @@ func probeAtomicCapabilities(ops destinationOps, dir *anchoredDir, displayDir st
 		))
 	}
 	return cleanup(nil)
+}
+
+func cleanupAtomicProbeEntries(ops destinationOps, dir *anchoredDir, displayDir string, entries []atomicProbeEntry) error {
+	var cleanupErr error
+	for _, entry := range entries {
+		displayPath := filepath.Join(displayDir, entry.name)
+		if err := validateNamedRegular(dir, entry.name, displayPath, entry.identity); err != nil {
+			cleanupErr = errors.Join(cleanupErr, ErrCleanupIncomplete, fmt.Errorf("validate atomic capability probe before cleanup: %w", err))
+			continue
+		}
+		ops.beforeProbeDelete(entry.name)
+		if err := deletePrivateRegular(ops, dir, entry.name, displayPath, entry.identity); err != nil {
+			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("remove atomic capability probe: %w", err))
+		}
+	}
+	return cleanupErr
 }
 
 func createAtomicProbeEntry(ops destinationOps, dir *anchoredDir, displayDir string) (string, fileIdentity, error) {
@@ -402,7 +424,7 @@ func createAtomicProbeEntry(ops destinationOps, dir *anchoredDir, displayDir str
 			if !entry.regular && inspectErr == nil {
 				primary = errors.Join(primary, ErrUnsafeDestination, errors.New("atomic capability probe is not regular"))
 			}
-			return name, fileIdentity{}, primary
+			return name, entry.identity, primary
 		}
 		return name, entry.identity, nil
 	}
