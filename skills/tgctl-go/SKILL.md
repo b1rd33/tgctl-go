@@ -108,9 +108,13 @@ For a tagged distribution release, verify the generated Homebrew tap too:
 brew update
 brew info b1rd33/tap/tgctl-go
 brew fetch b1rd33/tap/tgctl-go
-brew upgrade b1rd33/tap/tgctl-go
+if brew list --versions tgctl-go >/dev/null 2>&1; then
+  brew upgrade b1rd33/tap/tgctl-go
+else
+  brew install b1rd33/tap/tgctl-go
+fi
 brew test b1rd33/tap/tgctl-go
-tg --version
+"$(brew --prefix tgctl-go)/bin/tg" --version
 ```
 
 GoReleaser publishes the GitHub archives, checksums, and tap formula from the
