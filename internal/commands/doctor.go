@@ -79,7 +79,7 @@ func doctorReport(m *accounts.Manager, currentName string) (map[string]any, erro
 	}
 
 	return map[string]any{
-		"version":           Version,
+		"version":           semverVersion(),
 		"go_runtime":        runtime.Version(),
 		"os":                runtime.GOOS,
 		"arch":              runtime.GOARCH,

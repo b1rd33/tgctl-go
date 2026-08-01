@@ -198,6 +198,62 @@ func TestProcessUnmarkedDescribeShapedReleaseIsPreserved(t *testing.T) {
 	}
 }
 
+func TestProcessVersionAndDoctorSurfacesAgree(t *testing.T) {
+	tests := []struct {
+		name    string
+		version string
+		source  string
+		want    string
+	}{
+		{name: "marked git describe", version: "v1.2.3-12-gabcdef0", source: "git-describe", want: "v1.2.3"},
+		{name: "unmarked describe-shaped release", version: "v1.2.3-12-gabcdef0", source: "release", want: "v1.2.3-12-gabcdef0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			binary := buildTGProcessWithBuildInfo(t, tt.version, "1234567890abcdef", tt.source)
+			root := t.TempDir()
+			env := withoutStartupSafetyEnv(os.Environ())
+
+			flagOut, code := runTGProcessResult(t, binary, root, env, "--version")
+			if code != 0 || strings.TrimSpace(flagOut) != tt.want {
+				t.Fatalf("--version code=%d output=%q, want %q", code, flagOut, tt.want)
+			}
+
+			for _, command := range []string{"version", "doctor"} {
+				for _, mode := range []string{"--human", "--json"} {
+					out, code := runTGProcessResult(t, binary, root, env, command, mode)
+					if code != 0 {
+						t.Fatalf("%s %s code=%d\n%s", command, mode, code, out)
+					}
+					var decoded map[string]any
+					if err := json.Unmarshal([]byte(out), &decoded); err != nil {
+						t.Fatalf("decode %s %s: %v\n%s", command, mode, err, out)
+					}
+					data := decoded
+					if mode == "--json" {
+						var ok bool
+						data, ok = decoded["data"].(map[string]any)
+						if !ok {
+							t.Fatalf("%s %s missing data object: %#v", command, mode, decoded)
+						}
+					}
+					if got := data["version"]; got != tt.want {
+						t.Fatalf("%s %s version = %q, want %q", command, mode, got, tt.want)
+					}
+					if command == "doctor" {
+						if _, ok := data["commit"]; ok {
+							t.Fatalf("doctor %s unexpectedly exposes commit", mode)
+						}
+						if _, ok := data["version_source"]; ok {
+							t.Fatalf("doctor %s unexpectedly exposes version source", mode)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
 func withoutEnv(environ []string, key string) []string {
 	prefix := key + "="
 	out := make([]string, 0, len(environ))

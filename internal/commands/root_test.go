@@ -6,6 +6,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/b1rd33/tgctl-go/internal/accounts"
 )
 
 func TestNewRootCommandHasNameAndNoCommandReturnsOK(t *testing.T) {
@@ -299,5 +301,39 @@ func TestSelectShortCommitPrecedence(t *testing.T) {
 	}
 	if got, want := selectShortCommit(described, "", "git-describe", ""), "abcdef0"; got != want {
 		t.Fatalf("git-describe fallback = %q, want %q", got, want)
+	}
+}
+
+func TestDoctorReportUsesProvenanceAwareDisplayVersion(t *testing.T) {
+	tests := []struct {
+		name    string
+		version string
+		source  string
+		want    string
+	}{
+		{name: "marked git describe", version: "v1.2.3-12-gabcdef0", source: "git-describe", want: "v1.2.3"},
+		{name: "unmarked describe-shaped release", version: "v1.2.3-12-gabcdef0", source: "release", want: "v1.2.3-12-gabcdef0"},
+	}
+
+	oldVersion, oldSource := Version, VersionSource
+	defer func() { Version, VersionSource = oldVersion, oldSource }()
+	manager := accounts.New(t.TempDir())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Version, VersionSource = tt.version, tt.source
+			report, err := doctorReport(manager, "default")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := report["version"]; got != tt.want {
+				t.Fatalf("doctor version = %q, want %q", got, tt.want)
+			}
+			if _, ok := report["commit"]; ok {
+				t.Fatal("doctor unexpectedly exposes commit")
+			}
+			if _, ok := report["version_source"]; ok {
+				t.Fatal("doctor unexpectedly exposes version source")
+			}
+		})
 	}
 }
