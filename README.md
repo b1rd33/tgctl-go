@@ -244,12 +244,14 @@ messages do not yet expose `grouped_id`. The planned first version is:
 
 - upload 2–10 ordered photo/video items, including mixed photo/video albums;
 - put the CLI's single album caption on the first item;
-- upload each file, convert it with `messages.uploadMedia`, assign a unique
-  random ID per item, then send the group with `messages.sendMultiMedia`;
+- prepare items in CLI order, sequentially uploading each file, converting it
+  with `messages.uploadMedia`, and assigning its own unique random ID; only
+  after all items are ready, make one final `messages.sendMultiMedia` call;
 - return every resulting message ID, preserve Telegram's shared `grouped_id`
   during history/backfill, and offer album-aware grouping/downloads;
-- make dry-run perform zero network calls, and test ordering, captions,
-  failures, idempotency, and live carousel rendering.
+- make the planned album dry-run perform zero network calls, zero database,
+  audit, or session writes, and create no local files or directories; test
+  ordering, captions, failures, idempotency, and live carousel rendering.
 
 The upload phase is not transactional: if a later temporary upload fails,
 earlier temporary uploads may already exist on Telegram even though no album
