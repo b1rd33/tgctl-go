@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+Future changes will be listed here.
+
+## v0.1.5 — 2026-08-01
+
 ### Added
 
 - `download-media` downloads one message's supported file media to an
@@ -11,6 +15,13 @@
 - `backfill --download-media` streams supported media while paginating history,
   records stable Telegram media identity, and reports exact downloaded,
   skipped, and failed counters with bounded warnings and recovery metadata.
+- `upload-album` sends 2–10 ordered photo/video items through Telegram's
+  `messages.uploadMedia` and `messages.sendMultiMedia` flow, with captions,
+  per-item IDs, durable idempotency, dry-run previews, and safe recovery
+  metadata.
+- `download-album` downloads cached Telegram media groups with stable ordering,
+  partial-result reporting, overwrite controls, cancellation handling, and
+  durable finalization/audit failures.
 
 ### Changed
 
@@ -24,12 +35,9 @@
   (`NEEDS_CONFIRM`, exit 7) from mismatches (`BAD_ARGS`, exit 2).
 - The generated command reference is checked against live Cobra help to prevent
   documented flags and command output from drifting.
-
-### Planned (not implemented)
-
-- Album v1 is roadmap work: ordered 2–10 item photo/video upload,
-  `grouped_id` preservation, album-aware download/grouping, and extraction of
-  all resulting message IDs. No album command is available in this release.
+- `grouped_id` is persisted on message rows, preserved during backfill with
+  overlapping-page de-duplication, exposed in message JSON, and kept readable
+  on legacy databases before writable migration/backfill.
 
 ## v0.1.4 — 2026-05-11
 

@@ -167,8 +167,19 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 	cmd.Flags().Bool("supports-streaming", false, "Mark video items as streamable")
 	cmd.Flags().String("idempotency-fingerprint", "", "internal album request fingerprint")
 	_ = cmd.Flags().MarkHidden("idempotency-fingerprint")
-	addWriteFlags(cmd)
+	addAlbumUploadWriteFlags(cmd)
 	return cmd
+}
+
+// addAlbumUploadWriteFlags keeps the ordinary album write contract explicit.
+// In particular, upload-album has no typed confirmation target, so it must
+// not advertise the shared --confirm flag that it cannot enforce.
+func addAlbumUploadWriteFlags(cmd *cobra.Command) {
+	cmd.Flags().Bool("allow-write", false, "Required for any Telegram-side write")
+	cmd.Flags().Bool("dry-run", false, "Print payload preview without contacting Telegram")
+	cmd.Flags().Bool("fuzzy", false, "Allow title-based selectors for write commands")
+	cmd.Flags().String("idempotency-key", "", "Per-account replay-safe key")
+	AddOutputFlags(cmd)
 }
 
 type albumTarget struct{ target writes.ConfirmedTarget }

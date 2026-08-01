@@ -382,3 +382,10 @@ func TestUploadAlbumRequiresExplicitOrFuzzySelector(t *testing.T) {
 		t.Fatalf("code=%d albums=%d out=%s", code, len(fake.Albums), out)
 	}
 }
+
+func TestUploadAlbumDoesNotAdvertiseIgnoredConfirmFlag(t *testing.T) {
+	cfg, _, _ := albumFakeConfig(t)
+	if flag := uploadAlbumCommand(cfg).Flags().Lookup("confirm"); flag != nil {
+		t.Fatalf("upload-album advertises an ignored confirmation flag")
+	}
+}

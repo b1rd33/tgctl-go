@@ -1896,7 +1896,6 @@ tg upload-album <chat> <file>... [flags] --json
 |---|---|
 | `--allow-write` | Required for any Telegram-side write |
 | `--caption string` | Album caption (placed on the first item) |
-| `--confirm string` | Typed confirm against the resolved id |
 | `--dry-run` | Print payload preview without contacting Telegram |
 | `--fuzzy` | Allow title-based selectors for write commands |
 | `-h, --help` | help for upload-album |
