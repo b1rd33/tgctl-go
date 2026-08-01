@@ -70,6 +70,32 @@ func TestSessionStorageForModeReadOnlyUsesInMemorySnapshot(t *testing.T) {
 	}
 }
 
+func TestBackfillMediaContractAndFake(t *testing.T) {
+	wantReq := BackfillReq{
+		ChatID: 42, Limit: 25, Throttle: time.Second,
+		DownloadMedia: true, MediaDir: "/tmp/media", MaxMediaBytes: 1024, OverwriteMedia: true,
+	}
+	wantResult := BackfillResult{
+		Messages:        []BackfillMessage{{ChatID: 42, MessageID: 9, MediaType: "photo", MediaPath: "/tmp/media/9_photo.jpg"}},
+		MediaDownloaded: 1,
+		MediaSkipped:    2,
+		MediaFailed:     3,
+		Warnings:        []string{"chat_id=42 message_id=8 media=failed code=TRANSFER"},
+	}
+	fake := &FakeClient{BackfillResult: wantResult}
+
+	got, err := fake.BackfillMessages(context.Background(), wantReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, wantResult) {
+		t.Fatalf("result = %#v, want %#v", got, wantResult)
+	}
+	if !reflect.DeepEqual(fake.Backfills, []BackfillReq{wantReq}) {
+		t.Fatalf("backfills = %#v, want request recorded", fake.Backfills)
+	}
+}
+
 func TestSessionStorageForModeReadOnlyMissingDoesNotCreateFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "missing", "tg.session")
 	_, err := sessionStorageForMode(context.Background(), path, true)

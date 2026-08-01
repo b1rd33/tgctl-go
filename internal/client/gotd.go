@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 
+	"github.com/b1rd33/tgctl-go/internal/media"
 	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
@@ -27,6 +29,7 @@ import (
 // session file flushes cleanly.
 type GotdClient struct {
 	api               *tg.Client
+	backfillAPI       backfillHistoryAPI
 	mediaAPI          mediaDownloadAPI
 	fileDownloader    fileDownloader
 	destinationOpener destinationOpener
@@ -35,6 +38,10 @@ type GotdClient struct {
 	done              chan error
 	db                *sql.DB // per-account entity cache; may be nil for ephemeral clients
 	events            chan ListenEvent
+}
+
+type backfillHistoryAPI interface {
+	MessagesGetHistory(context.Context, *tg.MessagesGetHistoryRequest) (tg.MessagesMessagesClass, error)
 }
 
 // AuthPrompt is the interactive callback set used during `tg login`. Each
@@ -798,21 +805,45 @@ func historyPageFromResp(resp tg.MessagesMessagesClass) historyPage {
 // paginate by OffsetID.
 const backfillPageSize = 100
 
-func (g *GotdClient) BackfillMessages(ctx context.Context, req BackfillReq) ([]BackfillMessage, error) {
+func (g *GotdClient) BackfillMessages(ctx context.Context, req BackfillReq) (BackfillResult, error) {
 	limit := req.Limit
 	if limit <= 0 {
 		limit = backfillPageSize
 	}
+	req.Limit = limit
 	if limit > MaxBackfillMessages {
-		return nil, safety.NewBadArgs("backfill limit %d exceeds maximum %d", limit, MaxBackfillMessages)
+		return BackfillResult{}, safety.NewBadArgs("backfill limit %d exceeds maximum %d", limit, MaxBackfillMessages)
+	}
+	if req.MaxMediaBytes < 0 {
+		return BackfillResult{}, safety.NewBadArgs("max_media_bytes cannot be negative")
+	}
+	if req.DownloadMedia {
+		if strings.TrimSpace(req.MediaDir) == "" {
+			return BackfillResult{}, safety.NewBadArgs("media_dir cannot be blank when download_media is enabled")
+		}
+		absMediaDir, err := filepath.Abs(filepath.Clean(req.MediaDir))
+		if err != nil {
+			return BackfillResult{}, fmt.Errorf("resolve media directory: %w", err)
+		}
+		req.MediaDir = absMediaDir
+	}
+	if err := ctx.Err(); err != nil {
+		return BackfillResult{}, err
 	}
 	peer, err := g.peerFromChatID(ctx, req.ChatID)
 	if err != nil {
-		return nil, err
+		return BackfillResult{}, err
 	}
-	return paginateHistory(ctx, req.ChatID, limit, req.Throttle,
+	historyAPI := g.backfillAPI
+	if historyAPI == nil {
+		historyAPI = g.api
+	}
+	if historyAPI == nil {
+		return BackfillResult{}, errors.New("Telegram history API is not initialized")
+	}
+	return g.paginateBackfillHistory(ctx, req,
 		func(ctx context.Context, offsetID, pageLimit int) (historyPage, error) {
-			resp, err := g.api.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
+			resp, err := historyAPI.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
 				Peer:     peer,
 				Limit:    pageLimit,
 				OffsetID: offsetID,
@@ -836,24 +867,43 @@ func paginateHistory(
 	fetch func(context.Context, int, int) (historyPage, error),
 	wait func(context.Context, time.Duration) error,
 ) ([]BackfillMessage, error) {
+	result, err := (&GotdClient{}).paginateBackfillHistory(ctx, BackfillReq{
+		ChatID: chatID, Limit: limit, Throttle: throttle,
+	}, fetch, wait)
+	return result.Messages, err
+}
+
+func (g *GotdClient) paginateBackfillHistory(
+	ctx context.Context,
+	req BackfillReq,
+	fetch func(context.Context, int, int) (historyPage, error),
+	wait func(context.Context, time.Duration) error,
+) (BackfillResult, error) {
+	limit := req.Limit
 	if limit > MaxBackfillMessages {
-		return nil, safety.NewBadArgs("backfill limit %d exceeds maximum %d", limit, MaxBackfillMessages)
+		return BackfillResult{Warnings: []string{}}, safety.NewBadArgs("backfill limit %d exceeds maximum %d", limit, MaxBackfillMessages)
 	}
 	initialCapacity := limit
 	if initialCapacity > backfillPageSize {
 		initialCapacity = backfillPageSize
 	}
-	out := make([]BackfillMessage, 0, initialCapacity)
+	result := BackfillResult{
+		Messages: make([]BackfillMessage, 0, initialCapacity),
+		Warnings: []string{},
+	}
 	offsetID := 0
 	serverItemsSeen := 0
-	for len(out) < limit {
-		want := limit - len(out)
+	for len(result.Messages) < limit {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
+		want := limit - len(result.Messages)
 		if want > backfillPageSize {
 			want = backfillPageSize
 		}
 		page, err := fetch(ctx, offsetID, want)
 		if err != nil {
-			return out, err
+			return result, err
 		}
 		msgs := page.Messages
 		if len(msgs) == 0 {
@@ -862,6 +912,9 @@ func paginateHistory(
 		serverItemsSeen += len(msgs)
 		minID := 0
 		for _, mc := range msgs {
+			if err := ctx.Err(); err != nil {
+				return result, err
+			}
 			m, ok := mc.(*tg.Message)
 			if !ok {
 				// Other concrete types: MessageEmpty, MessageService.
@@ -879,18 +932,22 @@ func paginateHistory(
 				continue
 			}
 			row := BackfillMessage{
-				ChatID: chatID, MessageID: int64(m.ID), Date: timeFromUnix(m.Date),
+				ChatID: req.ChatID, MessageID: int64(m.ID), Date: timeFromUnix(m.Date),
 				Text: m.Message, IsOutgoing: m.Out, HasMedia: m.Media != nil,
 			}
 			row.SenderID = peerID(m.FromID)
-			if m.Media != nil {
+			if req.DownloadMedia {
+				if err := g.backfillMessageMedia(ctx, req, m, &row, &result); err != nil {
+					return result, err
+				}
+			} else if m.Media != nil {
 				row.MediaType = fmt.Sprintf("%T", m.Media)
 			}
-			out = append(out, row)
+			result.Messages = append(result.Messages, row)
 			if minID == 0 || m.ID < minID {
 				minID = m.ID
 			}
-			if len(out) >= limit {
+			if len(result.Messages) >= limit {
 				break
 			}
 		}
@@ -907,13 +964,76 @@ func paginateHistory(
 		if !more {
 			break
 		}
-		if len(out) < limit && throttle > 0 {
-			if err := wait(ctx, throttle); err != nil {
-				return out, err
+		if len(result.Messages) < limit && req.Throttle > 0 {
+			if err := wait(ctx, req.Throttle); err != nil {
+				return result, err
 			}
 		}
 	}
-	return out, nil
+	return result, nil
+}
+
+func (g *GotdClient) backfillMessageMedia(ctx context.Context, req BackfillReq, message *tg.Message, row *BackfillMessage, result *BackfillResult) error {
+	if message.Media == nil {
+		return nil
+	}
+	switch message.Media.(type) {
+	case *tg.MessageMediaPhoto, *tg.MessageMediaDocument:
+		// Continue below: these are Telegram's downloadable file media classes.
+	default:
+		result.MediaSkipped++
+		result.Warnings = append(result.Warnings, backfillMediaWarning(req.ChatID, int64(message.ID), "skipped", "UNSUPPORTED"))
+		return nil
+	}
+	extracted, err := extractDownloadMedia(message)
+	if err != nil {
+		result.MediaFailed++
+		result.Warnings = append(result.Warnings, backfillMediaWarning(req.ChatID, int64(message.ID), "failed", mediaFailureCode(err)))
+		return nil
+	}
+	uniqueName := fmt.Sprintf("%d_%s", message.ID, media.SanitizeDownloadName(extracted.Filename))
+	resp, err := g.downloadExtractedMessageMedia(ctx, DownloadMediaReq{
+		ChatID: req.ChatID, MessageID: int64(message.ID), OutputDir: req.MediaDir,
+		MaxBytes: req.MaxMediaBytes, Overwrite: req.OverwriteMedia,
+	}, message, extracted, uniqueName)
+	if err != nil {
+		result.MediaFailed++
+		result.Warnings = append(result.Warnings, backfillMediaWarning(req.ChatID, int64(message.ID), "failed", mediaFailureCode(err)))
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		return nil
+	}
+	row.MediaType = resp.MediaType
+	row.MediaPath = resp.Path
+	if resp.Skipped {
+		result.MediaSkipped++
+	} else {
+		result.MediaDownloaded++
+	}
+	return nil
+}
+
+func backfillMediaWarning(chatID, messageID int64, outcome, code string) string {
+	return fmt.Sprintf("chat_id=%d message_id=%d media=%s code=%s", chatID, messageID, outcome, code)
+}
+
+func mediaFailureCode(err error) string {
+	var badArgs *safety.BadArgs
+	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return "CANCELED"
+	case errors.Is(err, media.ErrDestinationCommitted):
+		return "COMMITTED"
+	case errors.Is(err, media.ErrCleanupIncomplete):
+		return "CLEANUP_INCOMPLETE"
+	case errors.Is(err, media.ErrLimitExceeded):
+		return "LIMIT"
+	case errors.As(err, &badArgs):
+		return "BAD_ARGS"
+	default:
+		return "TRANSFER"
+	}
 }
 
 func waitForThrottle(ctx context.Context, d time.Duration) error {

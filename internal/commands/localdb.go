@@ -49,21 +49,31 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 			maxDBSizeMB, _ := cmd.Flags().GetInt("max-db-size-mb")
 			throttleSeconds, _ := cmd.Flags().GetFloat64("throttle-seconds")
 			downloadMedia, _ := cmd.Flags().GetBool("download-media")
+			maxMediaSizeMB, _ := cmd.Flags().GetInt("max-media-size-mb")
+			overwriteMedia, _ := cmd.Flags().GetBool("overwrite-media")
 			if err := safety.RequireWriteAllowed(localWriteArgs(cmd)); err != nil {
 				return emitDispatchedFailure(cmd, "backfill", err)
 			}
-			if err := validateBackfillLimits(maxMessages, maxDBSizeMB); err != nil {
+			if err := validateBackfillLimits(maxMessages, maxDBSizeMB, maxMediaSizeMB); err != nil {
 				return emitDispatchedFailure(cmd, "backfill", err)
 			}
 			throttle, err := backfillThrottleDuration(throttleSeconds)
 			if err != nil {
 				return emitDispatchedFailure(cmd, "backfill", err)
 			}
-			paths, err := resolveWritePathSet(cmd, cfg.Paths)
+			account, err := selectedAccount(cmd, cfg.Paths)
 			if err != nil {
 				return emitDispatchedFailure(cmd, "backfill", err)
 			}
+			mediaPaths, err := resolveDownloadMediaPaths(cfg.Paths, account)
+			if err != nil {
+				return emitDispatchedFailure(cmd, "backfill", err)
+			}
+			paths := resolvedWritePaths{
+				dbPath: mediaPaths.dbPath, sessionPath: mediaPaths.sessionPath, auditPath: mediaPaths.auditPath,
+			}
 			dbCapBytes := int64(maxDBSizeMB) * 1024 * 1024
+			maxMediaBytes := int64(maxMediaSizeMB) * 1024 * 1024
 
 			// The cap preflight is deliberately schema-agnostic and read-only. It
 			// runs before migrations, client construction, audit, or session I/O.
@@ -91,11 +101,20 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 				return emitDispatchedFailure(cmd, "backfill", safety.NewBadArgs(
 					"backfill cap reached: current message count %d >= --max-messages %d", current, maxMessages))
 			}
+			mediaDir := ""
+			if downloadMedia {
+				mediaDir, err = filepath.Abs(filepath.Clean(filepath.Join(mediaPaths.mediaDir, fmt.Sprint(chatID))))
+				if err != nil {
+					return emitDispatchedFailure(cmd, "backfill", fmt.Errorf("resolve backfill media directory: %w", err))
+				}
+			}
 			code := dispatch.Run("backfill", dispatch.Options{
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				AuditPath: paths.auditPath, Args: map[string]any{
 					"chat": args[0], "max_messages": maxMessages, "max_db_size_mb": maxDBSizeMB,
 					"throttle_seconds": throttleSeconds, "download_media": downloadMedia,
+					"max_media_size_mb": maxMediaSizeMB, "overwrite_media": overwriteMedia,
+					"media_dir_policy": "account-chat",
 				},
 			}, func(ctx context.Context) (any, error) {
 				c, err := cfg.ClientFactory(ctx, paths.sessionPath, paths.dbPath)
@@ -103,8 +122,10 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 					return nil, err
 				}
 				defer c.Close()
-				rows, err := c.BackfillMessages(ctx, client.BackfillReq{
+				result, err := c.BackfillMessages(ctx, client.BackfillReq{
 					ChatID: chatID, Limit: maxMessages - current, Throttle: throttle,
+					DownloadMedia: downloadMedia, MediaDir: mediaDir, MaxMediaBytes: maxMediaBytes,
+					OverwriteMedia: overwriteMedia,
 				})
 				if err != nil {
 					return nil, err
@@ -120,25 +141,30 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 				}
 				defer db.Close()
 				inserted, dbCapReached, dbSize, finalCount, err := insertBackfillRowsAtomic(
-					ctx, db, chatID, maxMessages, dbCapBytes, rows,
+					ctx, db, chatID, maxMessages, dbCapBytes, result.Messages,
 				)
 				if err != nil {
 					return nil, err
 				}
-				skipped := len(rows) - inserted
-				warnings := capWarnings(finalCount, maxMessages)
+				skipped := len(result.Messages) - inserted
+				capOnlyWarnings := capWarnings(finalCount, maxMessages)
+				if dbCapReached && skipped > 0 && result.MediaDownloaded+result.MediaSkipped > 0 {
+					capOnlyWarnings = append(capOnlyWarnings, "media files for messages skipped by the database cap were preserved")
+				}
+				warnings := append([]string{}, result.Warnings...)
+				warnings = append(warnings, capOnlyWarnings...)
 				return map[string]any{
 					"chats_processed":   1,
 					"messages_inserted": inserted,
 					"messages_skipped":  skipped,
 					"db_size_bytes":     dbSize,
 					"db_cap_reached":    dbCapReached,
-					"media_downloaded":  0,
-					"media_skipped":     0,
-					"media_failed":      0,
+					"media_downloaded":  result.MediaDownloaded,
+					"media_skipped":     result.MediaSkipped,
+					"media_failed":      result.MediaFailed,
 					"warnings":          warnings,
 					"skipped":           skipped,
-					"cap_warnings":      warnings,
+					"cap_warnings":      capOnlyWarnings,
 					"download_media":    downloadMedia,
 					"per_chat":          []map[string]any{{"chat_id": chatID, "title": title, "messages_inserted": inserted}},
 				}, nil
@@ -150,12 +176,14 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 	cmd.Flags().Int("max-messages", 100, "Maximum cached messages per chat (maximum 10000)")
 	cmd.Flags().Int("max-db-size-mb", 0, "Maximum main database plus WAL allocation in MiB (0 disables the cap)")
 	cmd.Flags().Bool("download-media", false, "Download media during backfill")
+	cmd.Flags().Int("max-media-size-mb", 100, "Maximum size per downloaded media file in MiB (0 disables the limit)")
+	cmd.Flags().Bool("overwrite-media", false, "Overwrite existing backfill media files")
 	cmd.Flags().Float64("throttle-seconds", 0, "Seconds to sleep between Telegram history pages")
 	addLocalWriteFlags(cmd)
 	return cmd
 }
 
-func validateBackfillLimits(maxMessages, maxDBSizeMB int) error {
+func validateBackfillLimits(maxMessages, maxDBSizeMB, maxMediaSizeMB int) error {
 	if maxMessages <= 0 {
 		return safety.NewBadArgs("--max-messages must be greater than zero")
 	}
@@ -167,6 +195,12 @@ func validateBackfillLimits(maxMessages, maxDBSizeMB int) error {
 	}
 	if int64(maxDBSizeMB) > math.MaxInt64/(1024*1024) {
 		return safety.NewBadArgs("--max-db-size-mb is too large")
+	}
+	if maxMediaSizeMB < 0 {
+		return safety.NewBadArgs("--max-media-size-mb must be zero or greater")
+	}
+	if int64(maxMediaSizeMB) > math.MaxInt64/(1024*1024) {
+		return safety.NewBadArgs("--max-media-size-mb is too large")
 	}
 	return nil
 }
@@ -711,8 +745,12 @@ func insertBackfillMessageContext(ctx context.Context, db sqliteContextExecer, r
 		ON CONFLICT(chat_id, message_id) DO UPDATE SET
 			sender_id=excluded.sender_id, date=excluded.date, text=excluded.text,
 			is_outgoing=excluded.is_outgoing, reply_to_msg_id=excluded.reply_to_msg_id,
-			has_media=excluded.has_media, media_type=excluded.media_type,
-			media_path=excluded.media_path, raw_json=excluded.raw_json, deleted=0`,
+			has_media=excluded.has_media,
+			media_type=CASE WHEN excluded.has_media=1 AND excluded.media_type IS NULL
+				THEN tg_messages.media_type ELSE excluded.media_type END,
+			media_path=CASE WHEN excluded.has_media=1 AND excluded.media_path IS NULL
+				THEN tg_messages.media_path ELSE excluded.media_path END,
+			raw_json=excluded.raw_json, deleted=0`,
 		row.ChatID, row.MessageID, sender, date, nullIfEmpty(row.Text), localDBBoolInt(row.IsOutgoing),
 		reply, localDBBoolInt(row.HasMedia), nullIfEmpty(row.MediaType), nullIfEmpty(row.MediaPath), nullIfEmpty(row.RawJSON))
 	return err

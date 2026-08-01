@@ -67,6 +67,192 @@ func TestDownloadMediaContractAndFake(t *testing.T) {
 	}
 }
 
+func TestBackfillHistoryDownloadsRawPageMediaAndContinuesAfterItemFailures(t *testing.T) {
+	outputDir := t.TempDir()
+	data := []byte("data")
+	photo := photoMessageWithSizes(700, &tg.PhotoSize{Type: "x", W: 10, H: 10, Size: len(data)})
+	photo.ID, photo.Date, photo.Message = 4, 1_700_000_004, "photo secret\nline"
+	document := documentMessageWithSize(800, int64(len(data)), "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "same.bin"})
+	document.ID, document.Date = 1, 1_700_000_001
+	malformed := &tg.Message{ID: 2, Date: 1_700_000_002, Media: &tg.MessageMediaDocument{Document: &tg.Document{
+		ID: 900, Size: int64(len(data)), Attributes: []tg.DocumentAttributeClass{(*tg.DocumentAttributeFilename)(nil)},
+	}}}
+	unsupported := &tg.Message{ID: 3, Date: 1_700_000_003, Media: &tg.MessageMediaGeo{Geo: &tg.GeoPointEmpty{}}}
+	textMessage := &tg.Message{ID: 5, Date: 1_700_000_005, Message: "text survives"}
+	page := historyPage{Messages: []tg.MessageClass{textMessage, photo, unsupported, malformed, document}, Total: 5, TotalKnown: true}
+	downloader := &recordingFileDownloader{chunks: [][]byte{data}}
+	lookupSpy := &fakeMediaDownloadAPI{}
+	g := &GotdClient{fileDownloader: downloader, mediaAPI: lookupSpy}
+
+	result, err := g.paginateBackfillHistory(context.Background(), BackfillReq{
+		ChatID: 42, Limit: 10, DownloadMedia: true, MediaDir: outputDir, MaxMediaBytes: 4,
+	}, func(context.Context, int, int) (historyPage, error) { return page, nil }, waitForThrottle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.MediaDownloaded != 2 || result.MediaSkipped != 1 || result.MediaFailed != 1 {
+		t.Fatalf("media counters = downloaded:%d skipped:%d failed:%d", result.MediaDownloaded, result.MediaSkipped, result.MediaFailed)
+	}
+	wantWarnings := []string{
+		"chat_id=42 message_id=3 media=skipped code=UNSUPPORTED",
+		"chat_id=42 message_id=2 media=failed code=BAD_ARGS",
+	}
+	if !reflect.DeepEqual(result.Warnings, wantWarnings) {
+		t.Fatalf("warnings = %#v, want %#v", result.Warnings, wantWarnings)
+	}
+	if len(result.Messages) != 5 || result.Messages[0].Text != "text survives" {
+		t.Fatalf("messages = %#v", result.Messages)
+	}
+	byID := make(map[int64]BackfillMessage, len(result.Messages))
+	for _, row := range result.Messages {
+		byID[row.MessageID] = row
+	}
+	for _, id := range []int64{4, 1} {
+		if byID[id].MediaPath == "" || !filepath.IsAbs(byID[id].MediaPath) {
+			t.Fatalf("message %d path = %q, want downloaded absolute path", id, byID[id].MediaPath)
+		}
+	}
+	if filepath.Base(byID[4].MediaPath) != "4_photo_700.jpg" || filepath.Base(byID[1].MediaPath) != "1_same.bin" {
+		t.Fatalf("unique paths = photo:%q document:%q", byID[4].MediaPath, byID[1].MediaPath)
+	}
+	if byID[3].MediaPath != "" || byID[2].MediaPath != "" {
+		t.Fatalf("failed/unsupported rows gained paths: %#v %#v", byID[3], byID[2])
+	}
+	if downloader.Calls() != 2 || lookupSpy.messagesCalled != 0 || lookupSpy.channelReq != nil {
+		t.Fatalf("downloader calls=%d exact lookups=(messages:%d channel:%v), want 2 and zero", downloader.Calls(), lookupSpy.messagesCalled, lookupSpy.channelReq)
+	}
+	for _, warning := range result.Warnings {
+		if strings.Contains(warning, "secret") || strings.Contains(warning, "\n") || strings.Contains(warning, outputDir) {
+			t.Fatalf("unsafe warning = %q", warning)
+		}
+	}
+}
+
+func TestGotdBackfillMediaUsesHistoryRPCWithoutExactMessageRefetch(t *testing.T) {
+	db, err := store.Connect(filepath.Join(t.TempDir(), "account.sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := store.UpsertEntity(db, 42, store.EntityChannel, 654); err != nil {
+		t.Fatal(err)
+	}
+	message := documentMessageWithSize(77, 4, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "asset.bin"})
+	message.ID = 9
+	historySpy := &fakeBackfillHistoryAPI{resp: &tg.MessagesMessages{Messages: []tg.MessageClass{message}}}
+	exactSpy := &fakeMediaDownloadAPI{}
+	g := &GotdClient{
+		db: db, backfillAPI: historySpy, mediaAPI: exactSpy,
+		fileDownloader: &recordingFileDownloader{chunks: [][]byte{[]byte("data")}},
+	}
+
+	result, err := g.BackfillMessages(context.Background(), BackfillReq{
+		ChatID: 42, Limit: 10, DownloadMedia: true, MediaDir: t.TempDir(), MaxMediaBytes: 4,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if historySpy.calls != 1 || exactSpy.messagesCalled != 0 || exactSpy.channelReq != nil {
+		t.Fatalf("RPC calls history=%d messages.getMessages=%d channels.getMessages=%v", historySpy.calls, exactSpy.messagesCalled, exactSpy.channelReq)
+	}
+	if result.MediaDownloaded != 1 || len(result.Messages) != 1 || result.Messages[0].MediaPath == "" {
+		t.Fatalf("result=%#v", result)
+	}
+}
+
+func TestBackfillMediaTransferFailureDoesNotStopLaterMessages(t *testing.T) {
+	dir := t.TempDir()
+	first := documentMessageWithSize(20, 4, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "same.bin"})
+	first.ID = 20
+	second := documentMessageWithSize(10, 4, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "same.bin"})
+	second.ID = 10
+	downloader := &scriptedFileDownloader{steps: []downloadStep{
+		{err: errors.New("session=/secret/session access_hash=123\ntransfer failed")},
+		{data: []byte("data")},
+	}}
+	g := &GotdClient{fileDownloader: downloader}
+	result, err := g.paginateBackfillHistory(context.Background(), BackfillReq{
+		ChatID: 42, Limit: 2, DownloadMedia: true, MediaDir: dir,
+	}, func(context.Context, int, int) (historyPage, error) {
+		return historyPage{Messages: []tg.MessageClass{first, second}, Total: 2, TotalKnown: true}, nil
+	}, waitForThrottle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.MediaFailed != 1 || result.MediaDownloaded != 1 || len(result.Messages) != 2 {
+		t.Fatalf("result=%#v", result)
+	}
+	if got := result.Warnings; !reflect.DeepEqual(got, []string{"chat_id=42 message_id=20 media=failed code=TRANSFER"}) {
+		t.Fatalf("warnings=%#v", got)
+	}
+	if result.Messages[0].MediaPath != "" || filepath.Base(result.Messages[1].MediaPath) != "10_same.bin" {
+		t.Fatalf("message paths=%#v", result.Messages)
+	}
+	if strings.Contains(strings.Join(result.Warnings, ""), "secret") || strings.Contains(strings.Join(result.Warnings, ""), "access_hash") {
+		t.Fatalf("warnings leaked downloader error: %#v", result.Warnings)
+	}
+}
+
+func TestBackfillDuplicateTelegramFilenamesUseDistinctMessagePaths(t *testing.T) {
+	dir := t.TempDir()
+	a := documentMessageWithSize(2, 4, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "duplicate.bin"})
+	a.ID = 2
+	b := documentMessageWithSize(1, 4, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "duplicate.bin"})
+	b.ID = 1
+	g := &GotdClient{fileDownloader: &recordingFileDownloader{chunks: [][]byte{[]byte("data")}}}
+	result, err := g.paginateBackfillHistory(context.Background(), BackfillReq{
+		ChatID: 42, Limit: 2, DownloadMedia: true, MediaDir: dir,
+	}, func(context.Context, int, int) (historyPage, error) {
+		return historyPage{Messages: []tg.MessageClass{a, b}, Total: 2, TotalKnown: true}, nil
+	}, waitForThrottle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.MediaDownloaded != 2 || filepath.Base(result.Messages[0].MediaPath) != "2_duplicate.bin" || filepath.Base(result.Messages[1].MediaPath) != "1_duplicate.bin" || result.Messages[0].MediaPath == result.Messages[1].MediaPath {
+		t.Fatalf("result=%#v", result)
+	}
+}
+
+func TestGotdBackfillWithoutDownloadPreservesHistoryBehaviorAndDoesNotCreateMediaDir(t *testing.T) {
+	db, err := store.Connect(filepath.Join(t.TempDir(), "account.sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := store.UpsertEntity(db, 42, store.EntityChannel, 654); err != nil {
+		t.Fatal(err)
+	}
+	message := documentMessage(77, "application/octet-stream")
+	message.ID = 9
+	mediaDir := filepath.Join(t.TempDir(), "must-not-exist")
+	historySpy := &fakeBackfillHistoryAPI{resp: &tg.MessagesMessages{Messages: []tg.MessageClass{message}}}
+	g := &GotdClient{db: db, backfillAPI: historySpy}
+	result, err := g.BackfillMessages(context.Background(), BackfillReq{ChatID: 42, Limit: 1, MediaDir: mediaDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.MediaDownloaded != 0 || result.MediaSkipped != 0 || result.MediaFailed != 0 || len(result.Warnings) != 0 || len(result.Messages) != 1 || result.Messages[0].MediaType == "" {
+		t.Fatalf("result=%#v", result)
+	}
+	if _, err := os.Stat(mediaDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("media directory created with download disabled: %v", err)
+	}
+}
+
+func TestGotdBackfillValidatesMediaOptionsBeforePeerOrHistoryRPC(t *testing.T) {
+	for _, req := range []BackfillReq{
+		{ChatID: 42, Limit: 1, DownloadMedia: true, MediaDir: " "},
+		{ChatID: 42, Limit: 1, MaxMediaBytes: -1},
+	} {
+		spy := &fakeBackfillHistoryAPI{}
+		_, err := (&GotdClient{backfillAPI: spy}).BackfillMessages(context.Background(), req)
+		var badArgs *safety.BadArgs
+		if !errors.As(err, &badArgs) || spy.calls != 0 {
+			t.Fatalf("req=%#v err=%v calls=%d", req, err, spy.calls)
+		}
+	}
+}
+
 func TestFakeClientDownloadMediaConcurrentRecording(t *testing.T) {
 	fake := &FakeClient{Me: User{ID: 1}, ListenEvents: []ListenEvent{{UpdateKind: "message"}}}
 	const calls = 32
@@ -1073,6 +1259,34 @@ type recordingFileDownloader struct {
 	allCalledOnce    sync.Once
 }
 
+type downloadStep struct {
+	data []byte
+	err  error
+}
+
+type scriptedFileDownloader struct {
+	mu    sync.Mutex
+	steps []downloadStep
+	next  int
+}
+
+func (d *scriptedFileDownloader) Download(_ context.Context, _ tg.InputFileLocationClass, out io.Writer) error {
+	d.mu.Lock()
+	if d.next >= len(d.steps) {
+		d.mu.Unlock()
+		return errors.New("unexpected download call")
+	}
+	step := d.steps[d.next]
+	d.next++
+	d.mu.Unlock()
+	if len(step.data) > 0 {
+		if _, err := out.Write(step.data); err != nil {
+			return err
+		}
+	}
+	return step.err
+}
+
 func (d *recordingFileDownloader) Download(ctx context.Context, location tg.InputFileLocationClass, out io.Writer) error {
 	d.mu.Lock()
 	d.calls++
@@ -1244,6 +1458,17 @@ type fakeMediaDownloadAPI struct {
 	channelReq       *tg.ChannelsGetMessagesRequest
 	messageIDs       []tg.InputMessageClass
 	messagesCalled   int
+}
+
+type fakeBackfillHistoryAPI struct {
+	resp  tg.MessagesMessagesClass
+	err   error
+	calls int
+}
+
+func (f *fakeBackfillHistoryAPI) MessagesGetHistory(context.Context, *tg.MessagesGetHistoryRequest) (tg.MessagesMessagesClass, error) {
+	f.calls++
+	return f.resp, f.err
 }
 
 func (f *fakeMediaDownloadAPI) ChannelsGetMessages(ctx context.Context, req *tg.ChannelsGetMessagesRequest) (tg.MessagesMessagesClass, error) {

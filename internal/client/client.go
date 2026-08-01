@@ -187,9 +187,13 @@ type ContactInfo struct {
 }
 
 type BackfillReq struct {
-	ChatID   int64
-	Limit    int
-	Throttle time.Duration
+	ChatID         int64
+	Limit          int
+	Throttle       time.Duration
+	DownloadMedia  bool
+	MediaDir       string
+	MaxMediaBytes  int64
+	OverwriteMedia bool
 }
 
 // MaxBackfillMessages bounds one command's in-memory history result. Telegram
@@ -209,6 +213,14 @@ type BackfillMessage struct {
 	MediaType    string
 	MediaPath    string
 	RawJSON      string
+}
+
+type BackfillResult struct {
+	Messages        []BackfillMessage
+	MediaDownloaded int
+	MediaSkipped    int
+	MediaFailed     int
+	Warnings        []string
 }
 
 type TopicInfo struct {
@@ -316,7 +328,7 @@ type Client interface {
 	TerminateSession(ctx context.Context, req TerminateSessionReq) error
 	DiscoverDialogs(ctx context.Context, limit int) ([]ChatInfo, error)
 	SyncContacts(ctx context.Context) ([]ContactInfo, error)
-	BackfillMessages(ctx context.Context, req BackfillReq) ([]BackfillMessage, error)
+	BackfillMessages(ctx context.Context, req BackfillReq) (BackfillResult, error)
 	ListTopics(ctx context.Context, chatID int64, limit int, query string) ([]TopicInfo, error)
 	CreateTopic(ctx context.Context, req CreateTopicReq) (CreateTopicResp, error)
 	EditTopic(ctx context.Context, req EditTopicReq) error

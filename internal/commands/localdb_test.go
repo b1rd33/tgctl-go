@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -38,10 +39,10 @@ func sqliteJournalMode(t *testing.T, path string) string {
 
 type hookedBackfillClient struct {
 	*client.FakeClient
-	backfill func(context.Context, client.BackfillReq) ([]client.BackfillMessage, error)
+	backfill func(context.Context, client.BackfillReq) (client.BackfillResult, error)
 }
 
-func (c *hookedBackfillClient) BackfillMessages(ctx context.Context, req client.BackfillReq) ([]client.BackfillMessage, error) {
+func (c *hookedBackfillClient) BackfillMessages(ctx context.Context, req client.BackfillReq) (client.BackfillResult, error) {
 	if c.backfill != nil {
 		return c.backfill(ctx, req)
 	}
@@ -296,6 +297,101 @@ func TestBackfillInsertsMessagesAndWarnsNearCap(t *testing.T) {
 	}
 }
 
+func TestBackfillDownloadMediaPassesOptionsPersistsPathsAndReturnsCounters(t *testing.T) {
+	cfg, fc, _ := setupWriteEnv(t)
+	paths := cfg.Paths.(stubPaths)
+	mediaPath := filepath.Join(filepath.Dir(paths.db), "media", "1", "9_report.pdf")
+	fc.BackfillResult = client.BackfillResult{
+		Messages: []client.BackfillMessage{{
+			ChatID: 1, MessageID: 9, Date: "2026-08-01T10:00:00Z", Text: "cached despite other failures",
+			HasMedia: true, MediaType: "document", MediaPath: mediaPath,
+		}},
+		MediaDownloaded: 1,
+		MediaSkipped:    2,
+		MediaFailed:     3,
+		Warnings:        []string{"chat_id=1 message_id=8 media=failed code=TRANSFER"},
+	}
+
+	out, code := runRoot(t, cfg, "backfill", "1", "--max-messages", "10", "--download-media", "--max-media-size-mb", "7", "--overwrite-media", "--allow-write", "--json")
+	if code != 0 {
+		t.Fatalf("code=%d\nout:%s", code, out)
+	}
+	if len(fc.Backfills) != 1 {
+		t.Fatalf("backfills=%#v", fc.Backfills)
+	}
+	req := fc.Backfills[0]
+	wantDir := filepath.Clean(filepath.Join(filepath.Dir(paths.db), "media", "1"))
+	if !req.DownloadMedia || req.MediaDir != wantDir || !filepath.IsAbs(req.MediaDir) || req.MaxMediaBytes != 7*1024*1024 || !req.OverwriteMedia {
+		t.Fatalf("request=%#v, want media dir %q and 7 MiB overwrite", req, wantDir)
+	}
+	var envelope struct {
+		Data struct {
+			MediaDownloaded int      `json:"media_downloaded"`
+			MediaSkipped    int      `json:"media_skipped"`
+			MediaFailed     int      `json:"media_failed"`
+			Warnings        []string `json:"warnings"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data.MediaDownloaded != 1 || envelope.Data.MediaSkipped != 2 || envelope.Data.MediaFailed != 3 ||
+		!reflect.DeepEqual(envelope.Data.Warnings, fc.BackfillResult.Warnings) {
+		t.Fatalf("data=%#v", envelope.Data)
+	}
+	got, err := loadMessage(paths.db, 1, 9)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.MediaType == nil || *got.MediaType != "document" || got.MediaPath == nil || *got.MediaPath != mediaPath {
+		t.Fatalf("cached media=%#v", got)
+	}
+	audit, err := os.ReadFile(paths.audit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"download_media":true`, `"max_media_size_mb":7`, `"overwrite_media":true`, `"media_dir_policy":"account-chat"`} {
+		if !strings.Contains(string(audit), want) {
+			t.Fatalf("audit missing %s: %s", want, audit)
+		}
+	}
+}
+
+func TestBackfillMediaFailurePreservesExistingCachedMediaPath(t *testing.T) {
+	cfg, fc, _ := setupWriteEnv(t)
+	paths := cfg.Paths.(stubPaths)
+	db, err := store.Connect(paths.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldText, oldType, oldPath := "old", "document", "/existing/9_report.pdf"
+	if err := store.InsertMessage(db, store.Message{
+		ChatID: 1, MessageID: 9, Date: "2026-08-01T09:00:00Z", Text: &oldText,
+		HasMedia: true, MediaType: &oldType, MediaPath: &oldPath,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	fc.BackfillResult = client.BackfillResult{
+		Messages:    []client.BackfillMessage{{ChatID: 1, MessageID: 9, Date: "2026-08-01T10:00:00Z", Text: "new text", HasMedia: true}},
+		MediaFailed: 1,
+		Warnings:    []string{"chat_id=1 message_id=9 media=failed code=TRANSFER"},
+	}
+	out, code := runRoot(t, cfg, "backfill", "1", "--max-messages", "10", "--download-media", "--allow-write", "--json")
+	if code != 0 {
+		t.Fatalf("code=%d\nout:%s", code, out)
+	}
+	got, err := loadMessage(paths.db, 1, 9)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Text == nil || *got.Text != "new text" || got.MediaType == nil || *got.MediaType != oldType || got.MediaPath == nil || *got.MediaPath != oldPath {
+		t.Fatalf("cached row=%#v, want updated text and preserved media", got)
+	}
+}
+
 func TestBackfillWarningUsesAuthoritativeCountAfterConcurrentRPCWrite(t *testing.T) {
 	cfg, _, _ := setupWriteEnv(t)
 	path := cfg.Paths.(stubPaths).db
@@ -314,18 +410,18 @@ func TestBackfillWarningUsesAuthoritativeCountAfterConcurrentRPCWrite(t *testing
 	}
 
 	hooked := &hookedBackfillClient{FakeClient: &client.FakeClient{Me: client.User{ID: 99}}}
-	hooked.backfill = func(context.Context, client.BackfillReq) ([]client.BackfillMessage, error) {
+	hooked.backfill = func(context.Context, client.BackfillReq) (client.BackfillResult, error) {
 		concurrentDB, err := store.Connect(path)
 		if err != nil {
-			return nil, err
+			return client.BackfillResult{}, err
 		}
 		defer concurrentDB.Close()
 		if err := insertBackfillMessage(concurrentDB, client.BackfillMessage{
 			ChatID: 1, MessageID: 4, Date: "2026-08-01T10:01:00Z", Text: "concurrent",
 		}); err != nil {
-			return nil, err
+			return client.BackfillResult{}, err
 		}
-		return []client.BackfillMessage{{ChatID: 1, MessageID: 5, Date: "2026-08-01T10:02:00Z", Text: "rpc"}}, nil
+		return client.BackfillResult{Messages: []client.BackfillMessage{{ChatID: 1, MessageID: 5, Date: "2026-08-01T10:02:00Z", Text: "rpc"}}}, nil
 	}
 	cfg.ClientFactory = func(context.Context, string, string) (client.Client, error) { return hooked, nil }
 
@@ -354,6 +450,7 @@ func TestBackfillRejectsNegativeLimitsAndThrottle(t *testing.T) {
 		{name: "messages", args: []string{"--max-messages", "-1"}},
 		{name: "messages too large", args: []string{"--max-messages", "10001"}},
 		{name: "database size", args: []string{"--max-db-size-mb", "-1"}},
+		{name: "media size", args: []string{"--max-media-size-mb", "-1"}},
 		{name: "throttle", args: []string{"--throttle-seconds", "-0.1"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -367,6 +464,45 @@ func TestBackfillRejectsNegativeLimitsAndThrottle(t *testing.T) {
 				t.Fatalf("client called: %#v", fc.Backfills)
 			}
 		})
+	}
+}
+
+func TestBackfillMediaSizeValidationRunsBeforeAccountPathsOrClient(t *testing.T) {
+	paths := &downloadGatePaths{root: t.TempDir()}
+	factoryCalls := 0
+	cfg := CommandsConfig{
+		Paths: paths,
+		ClientFactory: func(context.Context, string, string) (client.Client, error) {
+			factoryCalls++
+			return &client.FakeClient{}, nil
+		},
+	}
+	out, code := runRoot(t, cfg, "backfill", "1", "--max-media-size-mb", "-1", "--allow-write", "--json")
+	if code != 2 {
+		t.Fatalf("code=%d, want BAD_ARGS=2\nout:%s", code, out)
+	}
+	if paths.currentCalls != 0 || paths.pathCalls != 0 || factoryCalls != 0 {
+		t.Fatalf("preflight side effects current=%d paths=%d factory=%d", paths.currentCalls, paths.pathCalls, factoryCalls)
+	}
+}
+
+func TestBackfillCommandHelpIncludesMediaFlags(t *testing.T) {
+	cfg, _, _ := setupWriteEnv(t)
+	root := NewRootCommand()
+	registerLocalDBCommands(root, cfg)
+	cmd, _, err := root.Find([]string{"backfill"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"download-media": "false", "max-media-size-mb": "100", "overwrite-media": "false",
+		"max-db-size-mb": "0", "max-messages": "100", "throttle-seconds": "0",
+	}
+	for name, def := range want {
+		flag := cmd.Flags().Lookup(name)
+		if flag == nil || flag.DefValue != def {
+			t.Fatalf("--%s = %#v, want default %q", name, flag, def)
+		}
 	}
 }
 

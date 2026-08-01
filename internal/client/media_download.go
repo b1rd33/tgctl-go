@@ -104,6 +104,7 @@ func (g *GotdClient) DownloadMedia(ctx context.Context, req DownloadMediaReq) (D
 	if err != nil {
 		return DownloadMediaResp{}, fmt.Errorf("resolve output directory: %w", err)
 	}
+	req.OutputDir = absOutputDir
 
 	peer, err := g.peerFromChatID(ctx, req.ChatID)
 	if err != nil {
@@ -120,12 +121,26 @@ func (g *GotdClient) DownloadMedia(ctx context.Context, req DownloadMediaReq) (D
 	if err != nil {
 		return DownloadMediaResp{}, mapRPCErr(err)
 	}
+	return g.downloadMessageMedia(ctx, req, message, "")
+}
+
+// downloadMessageMedia is the shared post-extraction streaming primitive.
+// Backfill passes a raw history message directly and may override its safe
+// destination name; the single-message command leaves nameOverride blank.
+func (g *GotdClient) downloadMessageMedia(ctx context.Context, req DownloadMediaReq, message *tg.Message, nameOverride string) (DownloadMediaResp, error) {
 	extracted, err := extractDownloadMedia(message)
 	if err != nil {
 		return DownloadMediaResp{}, err
 	}
+	destinationName := extracted.Filename
+	if nameOverride != "" {
+		destinationName = nameOverride
+	}
+	return g.downloadExtractedMessageMedia(ctx, req, message, extracted, destinationName)
+}
 
-	safeName := media.SanitizeDownloadName(extracted.Filename)
+func (g *GotdClient) downloadExtractedMessageMedia(ctx context.Context, req DownloadMediaReq, message *tg.Message, extracted extractedDownloadMedia, destinationName string) (DownloadMediaResp, error) {
+	safeName := media.SanitizeDownloadName(destinationName)
 	resp := DownloadMediaResp{
 		ChatID: req.ChatID, MessageID: req.MessageID,
 		MediaType: extracted.MediaType, MIMEType: extracted.MIMEType, Filename: safeName,
@@ -149,7 +164,11 @@ func (g *GotdClient) DownloadMedia(ctx context.Context, req DownloadMediaReq) (D
 		opener = atomicDestinationOpener{}
 	}
 
-	destination, err := opener.Open(absOutputDir, extracted.Filename, req.Overwrite)
+	absOutputDir, err := filepath.Abs(filepath.Clean(req.OutputDir))
+	if err != nil {
+		return DownloadMediaResp{}, fmt.Errorf("resolve output directory: %w", err)
+	}
+	destination, err := opener.Open(absOutputDir, destinationName, req.Overwrite)
 	if err != nil {
 		var collision *media.DestinationExistsError
 		if !req.Overwrite && errors.As(err, &collision) {

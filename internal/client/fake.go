@@ -39,13 +39,14 @@ type FakeClient struct {
 	Dialogs      []ChatInfo
 	Contacts     []ContactInfo
 
-	Discoveries  []int
-	ContactSyncs []bool
-	Backfills    []BackfillReq
-	BackfillRows []BackfillMessage
-	Topics       []TopicInfo
-	NextTopicID  int64
-	Folders      []FolderInfo
+	Discoveries    []int
+	ContactSyncs   []bool
+	Backfills      []BackfillReq
+	BackfillRows   []BackfillMessage // Legacy test configuration; used when BackfillResult.Messages is nil.
+	BackfillResult BackfillResult
+	Topics         []TopicInfo
+	NextTopicID    int64
+	Folders        []FolderInfo
 
 	TopicCreates   []CreateTopicReq
 	TopicEdits     []EditTopicReq
@@ -261,14 +262,21 @@ func (f *FakeClient) SyncContacts(_ context.Context) ([]ContactInfo, error) {
 	return f.Contacts, nil
 }
 
-func (f *FakeClient) BackfillMessages(_ context.Context, req BackfillReq) ([]BackfillMessage, error) {
+func (f *FakeClient) BackfillMessages(_ context.Context, req BackfillReq) (BackfillResult, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err := f.record("BackfillMessages"); err != nil {
-		return nil, err
+		return BackfillResult{}, err
 	}
 	f.Backfills = append(f.Backfills, req)
-	return f.BackfillRows, nil
+	result := f.BackfillResult
+	if result.Messages == nil && f.BackfillRows != nil {
+		result.Messages = f.BackfillRows
+	}
+	if result.Warnings == nil {
+		result.Warnings = []string{}
+	}
+	return result, nil
 }
 
 func (f *FakeClient) ListTopics(_ context.Context, chatID int64, limit int, query string) ([]TopicInfo, error) {
