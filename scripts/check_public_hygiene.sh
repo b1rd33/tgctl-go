@@ -28,13 +28,6 @@ report_matches() {
   grep -qE "$pattern" 2>/dev/null < <(git -C "$REPO" cat-file blob "$oid" 2>/dev/null)
 }
 
-allowed_binary() {
-  case "$1" in
-    docs/assets/*.png|docs/assets/*.jpg|docs/assets/*.jpeg|docs/assets/*.gif|docs/assets/*.webp|docs/assets/*.ico) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
 while IFS= read -r -d '' entry; do
   header="${entry%%$'\t'*}"
   path="${entry#*$'\t'}"
@@ -59,7 +52,7 @@ while IFS= read -r -d '' entry; do
 
   size="$(git -C "$REPO" cat-file -s "$oid")"
   if [ "$size" -gt 0 ] && ! LC_ALL=C grep -Iq '' < <(git -C "$REPO" cat-file blob "$oid"); then
-    if ! allowed_binary "$path"; then report_path unexpected-binary "$path"; fi
+    report_path unexpected-binary "$path"
     continue
   fi
 

@@ -3,7 +3,15 @@ set -euo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+readonly SCRIPT_DIR PROJECT_ROOT
 source "$SCRIPT_DIR/live_test_common.sh"
+
+if [ -f "$PROJECT_ROOT/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "$PROJECT_ROOT/.env"
+  set +a
+fi
 
 RUN_ID="admin-verify-$(date +%Y%m%d%H%M%S)"
 CHAT="${TGCTL_LIVE_CHAT:?Set TGCTL_LIVE_CHAT to an isolated test chat or Saved Messages ID}"
@@ -230,13 +238,6 @@ log "run_id: $RUN_ID"
 log "self_chat: $CHAT"
 log "forum_chat: $FORUM_CHAT"
 log ""
-
-if [ -f "$PROJECT_ROOT/.env" ]; then
-  set -a
-  # shellcheck disable=SC1091
-  . "$PROJECT_ROOT/.env"
-  set +a
-fi
 
 live_prepare_tg "$PROJECT_ROOT"
 TG=("$LIVE_TG_LAUNCHER" --account "$ACCOUNT")

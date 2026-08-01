@@ -73,11 +73,34 @@ if HYGIENE_REPO="$binary_repo" "$CHECKER" >"$binary_repo/out" 2>&1; then
 fi
 grep -q unexpected-binary "$binary_repo/out" || fail "unexpected binary rule missing"
 
-allowed_binary_repo="$(new_repo allowed-binary)"
-mkdir -p "$allowed_binary_repo/docs/assets"
-printf '\211PNG\r\n\032\n\000' >"$allowed_binary_repo/docs/assets/logo.png"
-git -C "$allowed_binary_repo" add docs/assets/logo.png
-HYGIENE_REPO="$allowed_binary_repo" "$CHECKER" >/dev/null || fail "allowlisted docs image failed"
+named_image_repo="$(new_repo named-image)"
+mkdir -p "$named_image_repo/docs/assets"
+image_bytes="$(printf 'not-an-image-%s' fixture)"
+printf '%s\000' "$image_bytes" >"$named_image_repo/docs/assets/logo.png"
+git -C "$named_image_repo" add docs/assets/logo.png
+if HYGIENE_REPO="$named_image_repo" "$CHECKER" >"$named_image_repo/out" 2>&1; then
+	fail "binary passed based on an image-looking path"
+fi
+grep -q unexpected-binary "$named_image_repo/out" || fail "binary image-name rule missing"
+grep -Fq "$image_bytes" "$named_image_repo/out" && fail "binary content was printed"
+
+changed_image_repo="$(new_repo changed-image)"
+mkdir -p "$changed_image_repo/docs/assets"
+printf '\211PNG\r\n\032\n\000first' >"$changed_image_repo/docs/assets/logo.png"
+git -C "$changed_image_repo" add docs/assets/logo.png
+printf '\211PNG\r\n\032\n\000second' >"$changed_image_repo/docs/assets/logo.png"
+if HYGIENE_REPO="$changed_image_repo" "$CHECKER" >"$changed_image_repo/out" 2>&1; then
+	fail "indexed binary passed after worktree bytes changed"
+fi
+grep -q unexpected-binary "$changed_image_repo/out" || fail "indexed binary finding missing"
+
+renamed_image_repo="$(new_repo renamed-image)"
+mkdir -p "$renamed_image_repo/docs/assets"
+printf '\211PNG\r\n\032\n\000' >"$renamed_image_repo/docs/assets/renamed.png"
+git -C "$renamed_image_repo" add docs/assets/renamed.png
+if HYGIENE_REPO="$renamed_image_repo" "$CHECKER" >"$renamed_image_repo/out" 2>&1; then
+	fail "renamed binary unexpectedly passed"
+fi
 
 index_repo="$(new_repo index-object)"
 printf '%s\n' 'tracked clean text' >"$index_repo/config.txt"

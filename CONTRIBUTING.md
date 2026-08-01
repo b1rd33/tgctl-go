@@ -114,6 +114,12 @@ contents, and downloaded media. Use synthetic placeholders. Report suspected
 vulnerabilities through the private process in [SECURITY.md](SECURITY.md), not a
 public issue.
 
+The public-hygiene gate currently rejects every tracked binary blob, including
+files with image extensions, because this repository has no reviewed binary
+assets. If a binary becomes necessary, first add a narrowly scoped design for an
+exact path-and-Git-blob manifest and independent content review; do not weaken
+the checker to trust a directory or extension.
+
 ## Local Live Verification
 
 Live verification requires credentials in `.env` and an authenticated session in
