@@ -257,6 +257,131 @@ func TestBackfillDatabaseCapRollsBackOnlyOversizedCandidate(t *testing.T) {
 	}
 }
 
+func TestBackfillCapMediaPreservationWarningCountsOnlySkippedRowsWithPaths(t *testing.T) {
+	tests := []struct {
+		name          string
+		rows          []client.BackfillMessage
+		downloaded    int
+		skippedMedia  int
+		wantWarning   string
+		wantPreserved int
+	}{
+		{
+			name: "inserted media followed by skipped text has no preservation warning",
+			rows: []client.BackfillMessage{
+				{ChatID: 1, MessageID: 30, Date: "2026-08-01T10:00:00Z", Text: strings.Repeat("a", 400000), HasMedia: true, MediaType: "document", MediaPath: "/safe/30.bin"},
+				{ChatID: 1, MessageID: 31, Date: "2026-08-01T10:01:00Z", Text: strings.Repeat("b", 900000)},
+			},
+			downloaded: 1,
+		},
+		{
+			name: "skipped media row reports one",
+			rows: []client.BackfillMessage{
+				{ChatID: 1, MessageID: 40, Date: "2026-08-01T10:00:00Z", Text: strings.Repeat("a", 400000)},
+				{ChatID: 1, MessageID: 41, Date: "2026-08-01T10:01:00Z", Text: strings.Repeat("b", 900000), HasMedia: true, MediaType: "document", MediaPath: "/safe/41.bin"},
+			},
+			downloaded: 1, wantPreserved: 1,
+			wantWarning: "media file for 1 message skipped by a backfill cap was preserved",
+		},
+		{
+			name: "oversized media candidate and later media row report two",
+			rows: []client.BackfillMessage{
+				{ChatID: 1, MessageID: 50, Date: "2026-08-01T10:00:00Z", Text: strings.Repeat("a", 400000)},
+				{ChatID: 1, MessageID: 51, Date: "2026-08-01T10:01:00Z", Text: strings.Repeat("b", 900000), HasMedia: true, MediaType: "document", MediaPath: "/safe/51.bin"},
+				{ChatID: 1, MessageID: 52, Date: "2026-08-01T10:02:00Z", Text: "later", HasMedia: true, MediaType: "photo", MediaPath: "/safe/52.jpg"},
+			},
+			downloaded: 2, wantPreserved: 2,
+			wantWarning: "media files for 2 messages skipped by a backfill cap were preserved",
+		},
+		{
+			name: "failed or unsupported media without path is not counted",
+			rows: []client.BackfillMessage{
+				{ChatID: 1, MessageID: 60, Date: "2026-08-01T10:00:00Z", Text: strings.Repeat("a", 400000)},
+				{ChatID: 1, MessageID: 61, Date: "2026-08-01T10:01:00Z", Text: strings.Repeat("b", 900000), HasMedia: true, MediaType: "unsupported"},
+			},
+			skippedMedia: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, fc, _ := setupWriteEnv(t)
+			fc.BackfillResult = client.BackfillResult{
+				Messages: tt.rows, MediaDownloaded: tt.downloaded, MediaSkipped: tt.skippedMedia,
+			}
+			out, code := runRoot(t, cfg, "backfill", "1", "--max-messages", "10", "--max-db-size-mb", "1", "--allow-write", "--json")
+			if code != 0 {
+				t.Fatalf("code=%d\nout:%s", code, out)
+			}
+			var envelope struct {
+				Data struct {
+					MediaDownloaded int      `json:"media_downloaded"`
+					MediaSkipped    int      `json:"media_skipped"`
+					Warnings        []string `json:"warnings"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+				t.Fatal(err)
+			}
+			if envelope.Data.MediaDownloaded != tt.downloaded || envelope.Data.MediaSkipped != tt.skippedMedia || envelope.Data.Warnings == nil {
+				t.Fatalf("data=%#v", envelope.Data)
+			}
+			preservationWarnings := 0
+			for _, warning := range envelope.Data.Warnings {
+				if strings.Contains(warning, "media file") && strings.Contains(warning, "backfill cap") {
+					preservationWarnings++
+					if warning != tt.wantWarning {
+						t.Fatalf("preservation warning=%q, want %q", warning, tt.wantWarning)
+					}
+					if strings.Contains(warning, "/safe/") {
+						t.Fatalf("warning leaked media path: %q", warning)
+					}
+				}
+			}
+			if got := preservationWarnings; got != boolInt(tt.wantPreserved > 0) {
+				t.Fatalf("preservation warnings=%d, want count=%d", got, boolInt(tt.wantPreserved > 0))
+			}
+		})
+	}
+}
+
+func TestAtomicBackfillDuplicateDoesNotConsumeMessageSlotOrCountAsCapSkippedMedia(t *testing.T) {
+	cfg, _, _ := setupWriteEnv(t)
+	db, err := store.Connect(cfg.Paths.(stubPaths).db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := insertBackfillMessage(db, client.BackfillMessage{
+		ChatID: 1, MessageID: 70, Date: "2026-08-01T09:00:00Z", Text: "old",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rows := []client.BackfillMessage{
+		{ChatID: 1, MessageID: 70, Date: "2026-08-01T10:00:00Z", Text: "updated duplicate"},
+		{ChatID: 1, MessageID: 71, Date: "2026-08-01T10:01:00Z", Text: "new within cap", HasMedia: true, MediaType: "document", MediaPath: "/safe/71.bin"},
+		{ChatID: 1, MessageID: 72, Date: "2026-08-01T10:02:00Z", Text: "new beyond cap", HasMedia: true, MediaType: "photo", MediaPath: "/safe/72.jpg"},
+	}
+	inserted, dbCapReached, _, finalCount, capSkippedMedia, err := insertBackfillRowsAtomic(
+		context.Background(), db, 1, 2, 0, rows,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inserted != 2 || dbCapReached || finalCount != 2 || capSkippedMedia != 1 {
+		t.Fatalf("result inserted=%d db_cap=%v final_count=%d cap_skipped_media=%d", inserted, dbCapReached, finalCount, capSkippedMedia)
+	}
+	var ids, duplicateText string
+	if err := db.QueryRow("SELECT group_concat(message_id, ',') FROM tg_messages WHERE chat_id=1 AND message_id IN (70,71,72)").Scan(&ids); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow("SELECT text FROM tg_messages WHERE chat_id=1 AND message_id=70").Scan(&duplicateText); err != nil {
+		t.Fatal(err)
+	}
+	if ids != "70,71" || duplicateText != "updated duplicate" {
+		t.Fatalf("ids=%q duplicate_text=%q", ids, duplicateText)
+	}
+}
+
 func TestBackfillInsertsMessagesAndWarnsNearCap(t *testing.T) {
 	cfg, fc, _ := setupWriteEnv(t)
 	fc.BackfillRows = []client.BackfillMessage{
@@ -591,7 +716,7 @@ func TestCappedBackfillPrecommitFailureRollsBackAndRestoresWAL(t *testing.T) {
 	}
 	defer db.Close()
 	wantErr := errors.New("injected before commit")
-	_, _, _, _, err = insertBackfillRowsAtomicWithHooks(context.Background(), db, 1, 10, 1024*1024,
+	_, _, _, _, _, err = insertBackfillRowsAtomicWithHooks(context.Background(), db, 1, 10, 1024*1024,
 		[]client.BackfillMessage{{ChatID: 1, MessageID: 300, Date: "2026-08-01T12:00:00Z", Text: "not committed"}},
 		backfillAtomicHooks{beforeCommit: func() error { return wantErr }},
 	)
@@ -640,7 +765,7 @@ func TestCappedBackfillActiveReaderFailsBeforeWriteAndKeepsWAL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	defer cancel()
 	started := time.Now()
-	_, _, _, _, err = insertBackfillRowsAtomic(ctx, writerDB, 1, 10, 1024*1024,
+	_, _, _, _, _, err = insertBackfillRowsAtomic(ctx, writerDB, 1, 10, 1024*1024,
 		[]client.BackfillMessage{{ChatID: 1, MessageID: 301, Date: "2026-08-01T12:00:00Z", Text: "blocked"}},
 	)
 	if err == nil {
@@ -691,7 +816,7 @@ func TestCappedBackfillRacingReaderCannotInterruptWALRestore(t *testing.T) {
 		queryErr := readerDB.QueryRow("SELECT COUNT(*) FROM tg_messages WHERE message_id=302").Scan(&count)
 		readerDone <- errors.Join(queryErr, readerDB.Close())
 	}()
-	_, _, _, _, err = insertBackfillRowsAtomicWithHooks(context.Background(), db, 1, 10, 1024*1024,
+	_, _, _, _, _, err = insertBackfillRowsAtomicWithHooks(context.Background(), db, 1, 10, 1024*1024,
 		[]client.BackfillMessage{{ChatID: 1, MessageID: 302, Date: "2026-08-01T12:00:00Z", Text: "committed"}},
 		backfillAtomicHooks{afterCommit: func() error {
 			close(committed)
@@ -730,7 +855,7 @@ func TestCappedBackfillPostcommitFailureIsClassifiedAndRestoresWAL(t *testing.T)
 	}
 	defer db.Close()
 	wantErr := errors.New("injected after commit")
-	_, _, _, _, err = insertBackfillRowsAtomicWithHooks(context.Background(), db, 1, 10, 1024*1024,
+	_, _, _, _, _, err = insertBackfillRowsAtomicWithHooks(context.Background(), db, 1, 10, 1024*1024,
 		[]client.BackfillMessage{{ChatID: 1, MessageID: 303, Date: "2026-08-01T12:00:00Z", Text: "durable"}},
 		backfillAtomicHooks{afterCommit: func() error { return wantErr }},
 	)
@@ -1044,6 +1169,73 @@ func TestConcurrentBackfillsAtomicallyEnforceMessageLimit(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("message count=%d exceeds max 1", count)
+	}
+}
+
+func TestConcurrentBackfillMessageCapWarnsOnlyForTheMediaRowActuallySkipped(t *testing.T) {
+	cfg, _, _ := setupWriteEnv(t)
+	var calls int32
+	ready := make(chan struct{})
+	cfg.ClientFactory = func(context.Context, string, string) (client.Client, error) {
+		n := atomic.AddInt32(&calls, 1)
+		if n == 2 {
+			close(ready)
+		}
+		select {
+		case <-ready:
+		case <-time.After(2 * time.Second):
+			return nil, errors.New("timed out waiting for concurrent media backfill client")
+		}
+		id := int64(200 + n)
+		return &client.FakeClient{BackfillResult: client.BackfillResult{
+			Messages: []client.BackfillMessage{{
+				ChatID: 1, MessageID: id, Date: "2026-08-01T10:00:00Z", Text: "concurrent",
+				HasMedia: true, MediaType: "document", MediaPath: fmt.Sprintf("/safe/%d.bin", id),
+			}},
+			MediaDownloaded: 1,
+		}}, nil
+	}
+	type concurrentEnvelope struct {
+		code int
+		out  string
+	}
+	results := make(chan concurrentEnvelope, 2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			out, code := runRoot(t, cfg, "backfill", "1", "--max-messages", "1", "--download-media", "--allow-write", "--json")
+			results <- concurrentEnvelope{code: code, out: out}
+		}()
+	}
+	totalInserted, totalSkipped, preservationWarnings := 0, 0, 0
+	for i := 0; i < 2; i++ {
+		result := <-results
+		if result.code != 0 {
+			t.Fatalf("code=%d\nout:%s", result.code, result.out)
+		}
+		var envelope struct {
+			Data struct {
+				MessagesInserted int      `json:"messages_inserted"`
+				MessagesSkipped  int      `json:"messages_skipped"`
+				MediaDownloaded  int      `json:"media_downloaded"`
+				Warnings         []string `json:"warnings"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(result.out), &envelope); err != nil {
+			t.Fatal(err)
+		}
+		if envelope.Data.MediaDownloaded != 1 || envelope.Data.Warnings == nil {
+			t.Fatalf("data=%#v", envelope.Data)
+		}
+		totalInserted += envelope.Data.MessagesInserted
+		totalSkipped += envelope.Data.MessagesSkipped
+		for _, warning := range envelope.Data.Warnings {
+			if warning == "media file for 1 message skipped by a backfill cap was preserved" {
+				preservationWarnings++
+			}
+		}
+	}
+	if totalInserted != 1 || totalSkipped != 1 || preservationWarnings != 1 {
+		t.Fatalf("totals inserted=%d skipped=%d preservation_warnings=%d", totalInserted, totalSkipped, preservationWarnings)
 	}
 }
 
