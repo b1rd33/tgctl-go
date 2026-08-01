@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -230,6 +231,18 @@ func runWriteResolved(cmd *cobra.Command, name, telethonMethod, selector string,
 }
 
 func runWriteResolvedTarget(cmd *cobra.Command, name, telethonMethod, selector string, cfg CommandsConfig, paths resolvedWritePaths, payloadPreview map[string]any, target *writes.ConfirmedTarget, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
+	return runWriteResolvedTargetOptions(cmd, name, telethonMethod, selector, cfg, paths, payloadPreview, target, false, nil, action)
+}
+
+// runWriteResolvedTargetDurable is used by writes whose Telegram operation has
+// committed before local/audit finalization. Durable audit failure is surfaced
+// as a committed write, so callers receive safe recovery metadata rather than
+// an ambiguous retry invitation.
+func runWriteResolvedTargetDurable(cmd *cobra.Command, name, telethonMethod, selector string, cfg CommandsConfig, paths resolvedWritePaths, payloadPreview map[string]any, target *writes.ConfirmedTarget, committedExtras map[string]any, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
+	return runWriteResolvedTargetOptions(cmd, name, telethonMethod, selector, cfg, paths, payloadPreview, target, true, committedExtras, action)
+}
+
+func runWriteResolvedTargetOptions(cmd *cobra.Command, name, telethonMethod, selector string, cfg CommandsConfig, paths resolvedWritePaths, payloadPreview map[string]any, target *writes.ConfirmedTarget, durableAudit bool, committedExtras map[string]any, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
 	wargs := writeArgsFrom(cmd)
 	args := map[string]any{"chat": selector, "dry_run": wargs.DryRun}
 	auditPath := paths.auditPath
@@ -239,11 +252,13 @@ func runWriteResolvedTarget(cmd *cobra.Command, name, telethonMethod, selector s
 	}
 
 	code := dispatch.Run(name, dispatch.Options{
-		JSON:      jsonMode(cmd),
-		Stdout:    cmd.OutOrStdout(),
-		Stderr:    cmd.ErrOrStderr(),
-		AuditPath: auditPath,
-		Args:      args,
+		JSON:            jsonMode(cmd),
+		Stdout:          cmd.OutOrStdout(),
+		Stderr:          cmd.ErrOrStderr(),
+		AuditPath:       auditPath,
+		Args:            args,
+		DurableAudit:    durableAudit && !wargs.DryRun,
+		CommittedExtras: committedExtras,
 	}, func(ctx context.Context) (any, error) {
 		var db *sql.DB
 		var err error
@@ -255,8 +270,7 @@ func runWriteResolvedTarget(cmd *cobra.Command, name, telethonMethod, selector s
 		if err != nil {
 			return nil, err
 		}
-		defer db.Close()
-		return writes.Run(ctx, db, writes.PipelineInput{
+		result, runErr := writes.Run(ctx, db, writes.PipelineInput{
 			Cmd:             name,
 			RawSelector:     selector,
 			Args:            wargs,
@@ -265,15 +279,32 @@ func runWriteResolvedTarget(cmd *cobra.Command, name, telethonMethod, selector s
 			TelethonMethod:  telethonMethod,
 			PayloadPreview:  payloadPreview,
 			ConfirmedTarget: target,
+			CommittedExtras: committedExtras,
+			DurableAudit:    durableAudit && !wargs.DryRun,
 			Run: func(ctx context.Context, chatID int64, chatTitle string) (map[string]any, error) {
 				c, err := cfg.ClientFactory(ctx, paths.sessionPath, paths.dbPath)
 				if err != nil {
 					return nil, err
 				}
-				defer c.Close()
-				return action(ctx, c, chatID, chatTitle)
+				data, actionErr := action(ctx, c, chatID, chatTitle)
+				closeErr := c.Close()
+				if actionErr != nil {
+					return nil, actionErr
+				}
+				if closeErr != nil && durableAudit && !wargs.DryRun {
+					return nil, safety.NewCommittedWriteWithExtras("album sent but Telegram client finalization failed; do not retry blindly", errors.New("Telegram client finalization failed"), committedExtras)
+				}
+				return data, nil
 			},
 		})
+		closeErr := db.Close()
+		if runErr != nil {
+			return nil, runErr
+		}
+		if closeErr != nil && durableAudit && !wargs.DryRun {
+			return nil, safety.NewCommittedWriteWithExtras("album sent but local cache finalization failed; do not retry blindly", errors.New("local cache finalization failed"), committedExtras)
+		}
+		return result, nil
 	})
 	storeExitCode(cmd, code)
 	return nil

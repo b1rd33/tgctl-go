@@ -5,10 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -86,7 +87,11 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 				"silent":             silent,
 				"supports_streaming": supportsStreaming,
 			}
-			return runWriteResolvedTarget(cmd, name, "messages.SendMultiMedia", args[0], cfg, paths, payload, &resolved.target,
+			if caption != "" {
+				payload["caption_position"] = 0
+			}
+			recoveryExtras := map[string]any{}
+			return runWriteResolvedTargetDurable(cmd, name, "messages.SendMultiMedia", args[0], cfg, paths, payload, &resolved.target, recoveryExtras,
 				func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error) {
 					resp, err := c.UploadAlbum(ctx, client.UploadAlbumReq{
 						ChatID: chatID, Items: items, Caption: caption, ReplyTo: replyTo,
@@ -94,10 +99,26 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 						MaxSizeMB: maxSizeMB,
 					})
 					if err != nil {
-						return nil, err
+						return nil, redactAlbumUploadError(err, items)
+					}
+					recoveryExtras["chat_id"] = chatID
+					recoveryExtras["item_count"] = len(resp.MessageIDs)
+					recoveryExtras["message_ids"] = append([]int64(nil), resp.MessageIDs...)
+					if resp.GroupedID != 0 {
+						recoveryExtras["grouped_id"] = resp.GroupedID
 					}
 					if len(resp.MessageIDs) != len(items) {
-						return nil, fmt.Errorf("album response returned %d message ids for %d items", len(resp.MessageIDs), len(items))
+						return nil, safety.NewCommittedWriteWithExtras("album sent but Telegram returned an invalid response; do not retry blindly", errors.New("invalid album response"), recoveryExtras)
+					}
+					seenIDs := make(map[int64]struct{}, len(resp.MessageIDs))
+					for _, id := range resp.MessageIDs {
+						if id <= 0 {
+							return nil, safety.NewCommittedWriteWithExtras("album sent but Telegram returned an invalid response; do not retry blindly", errors.New("invalid album response"), recoveryExtras)
+						}
+						if _, exists := seenIDs[id]; exists {
+							return nil, safety.NewCommittedWriteWithExtras("album sent but Telegram returned an invalid response; do not retry blindly", errors.New("invalid album response"), recoveryExtras)
+						}
+						seenIDs[id] = struct{}{}
 					}
 					rows := make([]store.UploadedMedia, len(items))
 					for i, item := range items {
@@ -109,15 +130,15 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 					}
 					db, err := store.Connect(paths.dbPath)
 					if err != nil {
-						return nil, err
+						return nil, safety.NewCommittedWriteWithExtras("album sent but local cache finalization failed; do not retry blindly", errors.New("local cache finalization failed"), recoveryExtras)
 					}
 					recordErr := store.RecordUploadedAlbum(db, chatID, rows)
 					closeErr := db.Close()
 					if recordErr != nil {
-						return nil, recordErr
+						return nil, safety.NewCommittedWriteWithExtras("album sent but local cache finalization failed; do not retry blindly", errors.New("local cache finalization failed"), recoveryExtras)
 					}
 					if closeErr != nil {
-						return nil, closeErr
+						return nil, safety.NewCommittedWriteWithExtras("album sent but local cache finalization failed; do not retry blindly", errors.New("local cache finalization failed"), recoveryExtras)
 					}
 					out := map[string]any{
 						"chat":        map[string]any{"chat_id": chatID, "title": chatTitle},
@@ -217,6 +238,33 @@ func hashFile(path string) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+type redactedAlbumUploadError struct {
+	message string
+	err     error
+}
+
+func (e *redactedAlbumUploadError) Error() string { return e.message }
+func (e *redactedAlbumUploadError) Unwrap() error { return e.err }
+
+func redactAlbumUploadError(err error, items []client.UploadAlbumItem) error {
+	if err == nil {
+		return nil
+	}
+	message := err.Error()
+	redacted := message
+	for _, item := range items {
+		for _, path := range []string{item.Path, filepath.Clean(item.Path), filepath.Base(item.Path)} {
+			if path != "" && path != "." {
+				redacted = strings.ReplaceAll(redacted, path, "[redacted]")
+			}
+		}
+	}
+	if redacted == message {
+		return err
+	}
+	return &redactedAlbumUploadError{message: redacted, err: err}
 }
 
 func albumFingerprint(account string, chatID int64, files []albumFileIdentity, caption string, replyTo int64, silent, streaming bool) (string, error) {

@@ -21,6 +21,7 @@ package writes
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -65,6 +66,12 @@ type PipelineInput struct {
 	// Run is the Telegram-side action. It receives the resolved chat id/title
 	// and returns the success-envelope `data` map.
 	Run func(ctx context.Context, chatID int64, chatTitle string) (map[string]any, error)
+	// CommittedExtras carries safe recovery metadata for post-Telegram
+	// finalization failures (currently album idempotency recording).
+	CommittedExtras map[string]any
+	// DurableAudit makes the pre-audit append a required precondition for the
+	// Telegram call. Non-durable commands retain best-effort audit behavior.
+	DurableAudit bool
 }
 
 // Run executes the full pipeline. It returns the runner's `data` map (or an
@@ -144,7 +151,7 @@ func Run(ctx context.Context, db *sql.DB, in PipelineInput) (any, error) {
 
 	// 7. Audit pre — NDJSON line sharing the dispatch request_id.
 	if in.AuditPath != "" {
-		_ = audit.Pre(in.AuditPath, audit.PreEntry{
+		auditErr := audit.Pre(in.AuditPath, audit.PreEntry{
 			Cmd:               in.Cmd,
 			RequestID:         dispatch.RequestIDFrom(ctx),
 			ResolvedChatID:    chatID,
@@ -153,6 +160,9 @@ func Run(ctx context.Context, db *sql.DB, in PipelineInput) (any, error) {
 			PayloadPreview:    in.PayloadPreview,
 			DryRun:            false,
 		})
+		if auditErr != nil && (in.DurableAudit || strings.TrimSpace(in.Args.IdempotencyFingerprint) != "") {
+			return nil, errors.New("durable audit preflight failed")
+		}
 	}
 
 	// 8. Telegram call
@@ -187,6 +197,9 @@ func Run(ctx context.Context, db *sql.DB, in PipelineInput) (any, error) {
 			}
 		}
 		if err := idempotency.Record(db, in.Args.IdempotencyKey, in.Cmd, dispatch.RequestIDFrom(ctx), envelope); err != nil {
+			if strings.TrimSpace(in.Args.IdempotencyFingerprint) != "" {
+				return nil, safety.NewCommittedWriteWithExtras("album committed but idempotency finalization failed; do not retry blindly", errors.New("idempotency cache finalization failed"), in.CommittedExtras)
+			}
 			return nil, err
 		}
 	}

@@ -26,9 +26,9 @@ func albumFakeConfig(t *testing.T) (CommandsConfig, *client.FakeClient, string) 
 	t.Helper()
 	cfg, fake, dir := setupWriteEnv(t)
 	fake.AlbumResp = client.UploadAlbumResp{
-		ChatID:      1,
-		MessageIDs:  []int64{7001, 7002},
-		GroupedID:   9001,
+		ChatID:     1,
+		MessageIDs: []int64{7001, 7002},
+		GroupedID:  9001,
 		Items: []client.UploadAlbumItemResp{
 			{Position: 0, MessageID: 7001, MediaType: "photo"},
 			{Position: 1, MessageID: 7002, MediaType: "video"},
@@ -72,8 +72,66 @@ func TestUploadAlbumDryRunDoesNotCallTelegramOrMutateDurableState(t *testing.T) 
 	if data["dry_run"] != true || data["item_count"] != float64(2) {
 		t.Fatalf("plan=%#v", data)
 	}
+	if data["caption_position"] != float64(0) {
+		t.Fatalf("caption position=%#v", data["caption_position"])
+	}
 	if strings.Contains(out, "secret caption") || strings.Contains(out, first) || strings.Contains(out, second) {
 		t.Fatalf("dry-run leaked caption/path: %s", out)
+	}
+}
+
+func TestUploadAlbumClientCloseFailureIsCommittedAndRedacted(t *testing.T) {
+	cfg, fake, _ := albumFakeConfig(t)
+	fake.CloseErr = errors.New("client close /private/telegram/session failed")
+	first := writeAlbumFixture(t, "first.jpg", []byte("\xff\xd8\xffphoto"))
+	second := writeAlbumFixture(t, "second.jpg", []byte("\xff\xd8\xffphoto2"))
+	out, code := runRoot(t, cfg, "upload-album", "1", first, second, "--caption", "secret caption", "--allow-write", "--json")
+	if code != 1 || !strings.Contains(out, `"committed":true`) {
+		t.Fatalf("code=%d out=%s", code, out)
+	}
+	if !strings.Contains(out, `"message_ids":[7001,7002]`) || strings.Contains(out, "client close") || strings.Contains(out, "secret caption") || strings.Contains(out, first) {
+		t.Fatalf("unsafe committed output=%s", out)
+	}
+}
+
+func TestUploadAlbumMalformedResponseIsCommittedWithRecoveryIDs(t *testing.T) {
+	cfg, fake, _ := albumFakeConfig(t)
+	fake.AlbumResp.MessageIDs = []int64{7001, 7001}
+	first := writeAlbumFixture(t, "first.jpg", []byte("\xff\xd8\xffphoto"))
+	second := writeAlbumFixture(t, "second.jpg", []byte("\xff\xd8\xffphoto2"))
+	out, code := runRoot(t, cfg, "upload-album", "1", first, second, "--allow-write", "--json")
+	if code != 1 || !strings.Contains(out, `"committed":true`) || !strings.Contains(out, `"message_ids":[7001,7001]`) {
+		t.Fatalf("code=%d out=%s", code, out)
+	}
+	if strings.Contains(out, first) || strings.Contains(out, second) {
+		t.Fatalf("malformed response leaked path: %s", out)
+	}
+}
+
+func TestUploadAlbumIdempotencyFinalizationFailureIsCommitted(t *testing.T) {
+	cfg, fake, dir := albumFakeConfig(t)
+	db, err := store.Connect(filepath.Join(dir, "telegram.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TRIGGER block_album_idempotency BEFORE INSERT ON tg_idempotency BEGIN SELECT RAISE(ABORT, 'blocked'); END`); err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	first := writeAlbumFixture(t, "first.jpg", []byte("\xff\xd8\xffphoto"))
+	second := writeAlbumFixture(t, "second.jpg", []byte("\xff\xd8\xffphoto2"))
+	out, code := runRoot(t, cfg, "upload-album", "1", first, second, "--idempotency-key", "blocked", "--allow-write", "--json")
+	if code != 1 || !strings.Contains(out, `"committed":true`) || !strings.Contains(out, `"message_ids":[7001,7002]`) {
+		t.Fatalf("code=%d out=%s", code, out)
+	}
+	if strings.Contains(out, first) || strings.Contains(out, "blocked") {
+		t.Fatalf("unsafe idempotency failure output=%s", out)
+	}
+	if len(fake.Albums) != 1 {
+		t.Fatalf("album call count=%d", len(fake.Albums))
 	}
 }
 
