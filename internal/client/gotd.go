@@ -86,7 +86,10 @@ type LoginOptions struct {
 // Login runs an interactive auth flow that persists a session at
 // LoginOptions.Session. It blocks until the user is authorized.
 func Login(ctx context.Context, opts LoginOptions) (User, error) {
-	if opts.APIID == 0 || opts.APIHash == "" {
+	if err := validateAPIID(opts.APIID); err != nil {
+		return User{}, err
+	}
+	if opts.APIHash == "" {
 		return User{}, safety.NewMissingCredentials("TG_API_ID and TG_API_HASH must be set")
 	}
 	storage := &session.FileStorage{Path: opts.Session}
@@ -154,6 +157,9 @@ func (a fullAuthenticator) SignUp(_ context.Context) (auth.UserInfo, error) {
 // goroutine, and returns a Client that proxies API calls into it. The
 // returned Client must be closed to release the connection.
 func New(ctx context.Context, apiID int, apiHash, sessionPath, dbPath string) (*GotdClient, error) {
+	if err := validateAPIID(apiID); err != nil {
+		return nil, err
+	}
 	storage, err := sessionStorageForMode(ctx, sessionPath, false)
 	if err != nil {
 		return nil, err
@@ -165,6 +171,9 @@ func New(ctx context.Context, apiID int, apiHash, sessionPath, dbPath string) (*
 // gotd can refresh its session state for the lifetime of the connection, but
 // no session data is written back to the real file.
 func NewReadonly(ctx context.Context, apiID int, apiHash, sessionPath string) (*GotdClient, error) {
+	if err := validateAPIID(apiID); err != nil {
+		return nil, err
+	}
 	storage, err := sessionStorageForMode(ctx, sessionPath, true)
 	if errors.Is(err, session.ErrNotFound) {
 		return nil, safety.NewMissingCredentials(
@@ -194,7 +203,10 @@ func sessionStorageForMode(ctx context.Context, sessionPath string, readOnly boo
 }
 
 func newClient(ctx context.Context, apiID int, apiHash, sessionPath, dbPath string, storage session.Storage) (*GotdClient, error) {
-	if apiID == 0 || apiHash == "" {
+	if err := validateAPIID(apiID); err != nil {
+		return nil, err
+	}
+	if apiHash == "" {
 		return nil, safety.NewMissingCredentials("TG_API_ID and TG_API_HASH must be set")
 	}
 	events := make(chan ListenEvent, 32)
@@ -729,8 +741,10 @@ func (g *GotdClient) TerminateSession(ctx context.Context, req TerminateSessionR
 }
 
 func (g *GotdClient) DiscoverDialogs(ctx context.Context, limit int) ([]ChatInfo, error) {
-	if limit <= 0 {
-		limit = 200
+	var err error
+	limit, err = defaultedTelegramInt32Limit(limit, 200, "limit")
+	if err != nil {
+		return nil, err
 	}
 	dialogs, err := g.api.MessagesGetDialogs(ctx, &tg.MessagesGetDialogsRequest{
 		OffsetPeer: &tg.InputPeerEmpty{},
@@ -1128,10 +1142,10 @@ func waitForThrottle(ctx context.Context, d time.Duration) error {
 }
 
 func (g *GotdClient) ListTopics(ctx context.Context, chatID int64, limit int, query string) ([]TopicInfo, error) {
-	if limit > 0 {
-		if err := validateNonNegativeNativeTelegramInt32(limit, "limit"); err != nil {
-			return nil, err
-		}
+	var err error
+	limit, err = defaultedTelegramInt32Limit(limit, 50, "limit")
+	if err != nil {
+		return nil, err
 	}
 	peer, err := g.peerFromChatID(ctx, chatID)
 	if err != nil {
@@ -1140,9 +1154,6 @@ func (g *GotdClient) ListTopics(ctx context.Context, chatID int64, limit int, qu
 	ch, ok := peer.(*tg.InputPeerChannel)
 	if !ok {
 		return nil, safety.NewBadArgs("topics-list target is not a forum supergroup")
-	}
-	if limit <= 0 {
-		limit = 50
 	}
 	resp, err := g.api.MessagesGetForumTopics(ctx, &tg.MessagesGetForumTopicsRequest{
 		Peer:  ch,
@@ -1563,6 +1574,11 @@ func (g *GotdClient) inputUserFromID(userID int64) (tg.InputUserClass, error) {
 }
 
 func (g *GotdClient) ListChatMembers(ctx context.Context, chatID int64, limit int) ([]MemberInfo, error) {
+	var err error
+	limit, err = defaultedTelegramInt32Limit(limit, 50, "limit")
+	if err != nil {
+		return nil, err
+	}
 	peer, err := g.peerFromChatID(ctx, chatID)
 	if err != nil {
 		return nil, err
@@ -1570,9 +1586,6 @@ func (g *GotdClient) ListChatMembers(ctx context.Context, chatID int64, limit in
 	ch, ok := peer.(*tg.InputPeerChannel)
 	if !ok {
 		return nil, safety.NewBadArgs("chat-members target must be a channel or supergroup")
-	}
-	if limit <= 0 {
-		limit = 50
 	}
 	resp, err := g.api.ChannelsGetParticipants(ctx, &tg.ChannelsGetParticipantsRequest{
 		Channel: &tg.InputChannel{ChannelID: ch.ChannelID, AccessHash: ch.AccessHash},

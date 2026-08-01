@@ -35,6 +35,9 @@ func uploadCommand(cfg CommandsConfig, name, kind, short string) *cobra.Command 
 			filename, _ := cmd.Flags().GetString("filename")
 			maxSize, _ := cmd.Flags().GetInt64("max-size-mb")
 			supportsStreaming, _ := cmd.Flags().GetBool("supports-streaming")
+			if _, err := media.MaxBytesFromMiB(maxSize); err != nil {
+				return emitDispatchedFailure(cmd, name, err)
+			}
 
 			path, err := media.ValidateExpected(args[1], kind, maxSize)
 			if err != nil {

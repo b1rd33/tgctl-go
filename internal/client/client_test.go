@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -191,6 +193,54 @@ func TestEnsureCredentialsValid(t *testing.T) {
 	}
 	if id != 12345 || hash != "deadbeef" {
 		t.Fatalf("got id=%d hash=%q", id, hash)
+	}
+}
+
+func TestEnsureCredentialsAPIIDBounds(t *testing.T) {
+	t.Setenv("TG_API_HASH", "deadbeef")
+	for _, value := range []string{"-1", "2147483648"} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("TG_API_ID", value)
+			_, _, err := EnsureCredentials()
+			var mc *safety.MissingCredentials
+			if !errors.As(err, &mc) {
+				t.Fatalf("error=%v, want MissingCredentials", err)
+			}
+		})
+	}
+	t.Setenv("TG_API_ID", "2147483647")
+	id, _, err := EnsureCredentials()
+	if err != nil || id != 2147483647 {
+		t.Fatalf("max int32=(%d, %v)", id, err)
+	}
+}
+
+func TestClientConstructorsRejectAPIIDBeforeSessionAccess(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing", "tg.session")
+	apiIDs := []int{-1, 0}
+	if strconv.IntSize > 32 {
+		over := int64(math.MaxInt32)
+		over++
+		apiIDs = append(apiIDs, int(over))
+	}
+	for _, apiID := range apiIDs {
+		for _, run := range []func() error{
+			func() error { _, err := New(context.Background(), apiID, "hash", missing, ""); return err },
+			func() error { _, err := NewReadonly(context.Background(), apiID, "hash", missing); return err },
+			func() error {
+				_, err := Login(context.Background(), LoginOptions{APIID: apiID, APIHash: "hash", Session: missing})
+				return err
+			},
+		} {
+			err := run()
+			var mc *safety.MissingCredentials
+			if !errors.As(err, &mc) {
+				t.Fatalf("apiID=%d error=%v, want MissingCredentials", apiID, err)
+			}
+		}
+	}
+	if _, err := os.Stat(filepath.Dir(missing)); !os.IsNotExist(err) {
+		t.Fatalf("invalid API ID created session directory: %v", err)
 	}
 }
 

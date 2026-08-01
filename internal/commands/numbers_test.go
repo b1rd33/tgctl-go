@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"math"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -74,5 +76,25 @@ func TestFolderCSVUsesFolderDiagnostic(t *testing.T) {
 	_, err := parsePositiveInt32CSV("1,2147483648", "folder-id")
 	if err == nil || !strings.Contains(err.Error(), "folder-id") || strings.Contains(err.Error(), "message-id") {
 		t.Fatalf("folder CSV error=%q", err)
+	}
+}
+
+func TestDefaultedInt32LimitSemantics(t *testing.T) {
+	for _, value := range []int{0, -1} {
+		got, err := defaultedInt32Limit(value, 200, "--limit")
+		if err != nil || got != 200 {
+			t.Fatalf("defaultedInt32Limit(%d)=(%d, %v), want (200, nil)", value, got, err)
+		}
+	}
+	got, err := defaultedInt32Limit(2147483647, 200, "--limit")
+	if err != nil || got != 2147483647 {
+		t.Fatalf("max int32=(%d, %v)", got, err)
+	}
+	if strconv.IntSize > 32 {
+		over := int64(math.MaxInt32)
+		over++
+		if _, err := defaultedInt32Limit(int(over), 200, "--limit"); err == nil {
+			t.Fatal("overflow unexpectedly accepted")
+		}
 	}
 }

@@ -81,6 +81,16 @@ func validateNonNegativeNativeInt32(value int, label string) error {
 	return nil
 }
 
+func defaultedInt32Limit(value, defaultValue int, label string) (int, error) {
+	if value <= 0 {
+		return defaultValue, nil
+	}
+	if int64(value) > math.MaxInt32 {
+		return 0, safety.NewBadArgs("%s must be a 32-bit integer (got %d)", label, value)
+	}
+	return value, nil
+}
+
 func parsePositiveInt32CSV(raw, label string) ([]int64, error) {
 	if raw == "" {
 		return nil, safety.NewBadArgs("%ss cannot be empty", label)

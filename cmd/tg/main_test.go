@@ -166,12 +166,18 @@ func TestProcessMalformedArgumentsUseOneDispatchedFailureWithoutArtifacts(t *tes
 		{name: "send reply flag above int32", command: "send", args: []string{"send", "1", "text", "--reply-to=2147483648"}},
 		{name: "username send reply flag above int32", command: "send-by-username", args: []string{"send-by-username", "@example", "text", "--reply-to=2147483648"}},
 		{name: "upload reply flag above int32", command: "upload-photo", args: []string{"upload-photo", "1", "missing.jpg", "--reply-to=2147483648"}},
+		{name: "upload size negative", command: "upload-photo", args: []string{"upload-photo", "1", "missing.jpg", "--max-size-mb=-1"}},
+		{name: "upload size overflow", command: "upload-document", args: []string{"upload-document", "1", "missing.bin", "--max-size-mb=8796093022208"}},
 		{name: "send reply flag negative", command: "send", args: []string{"send", "1", "text", "--reply-to=-1"}},
 		{name: "send topic flag above int32", command: "send", args: []string{"send", "1", "text", "--topic=2147483648"}},
 		{name: "send topic flag negative", command: "send", args: []string{"send", "1", "text", "--topic=-1"}},
 		{name: "forward topic flag above int32", command: "forward", args: []string{"forward", "1", "2", "1", "--topic=2147483648"}},
 		{name: "mark read flag above int32", command: "mark-read", args: []string{"mark-read", "1", "--up-to=2147483648"}},
 		{name: "mark read flag negative", command: "mark-read", args: []string{"mark-read", "1", "--up-to=-1"}},
+		{name: "discover limit above int32", command: "discover", args: []string{"discover", "--limit=2147483648"}},
+		{name: "backfill entities limit above int32", command: "backfill-entities", args: []string{"backfill-entities", "--limit=2147483648"}},
+		{name: "chat members limit above int32", command: "chat-members", args: []string{"chat-members", "1", "--limit=2147483648"}},
+		{name: "topics list limit above int32", command: "topics-list", args: []string{"topics-list", "1", "--limit=2147483648"}},
 		{name: "session hash with trailing junk", command: "terminate-session", args: []string{"terminate-session", "2x"}},
 		{name: "empty send text", command: "send", args: []string{"send", "1", ""}},
 		{name: "wrong arity", command: "get-msg", args: []string{"get-msg", "1"}},
@@ -335,6 +341,10 @@ func TestProcessMaxInt32PassesParserToNextStageWithoutArtifacts(t *testing.T) {
 	}{
 		{name: "read message", args: []string{"--read-only", "get-msg", "1", "2147483647", "--json"}, wantCode: 4, wantErr: "NOT_FOUND"},
 		{name: "reply flag", args: []string{"send", "1", "text", "--reply-to=2147483647", "--json"}, wantCode: 6, wantErr: "WRITE_DISALLOWED"},
+		{name: "discover limit", args: []string{"discover", "--limit=2147483647", "--json"}, wantCode: 6, wantErr: "WRITE_DISALLOWED"},
+		{name: "backfill entities limit", args: []string{"backfill-entities", "--limit=2147483647", "--json"}, wantCode: 6, wantErr: "WRITE_DISALLOWED"},
+		{name: "chat members limit", args: []string{"--read-only", "chat-members", "1", "--limit=2147483647", "--json"}, wantCode: 4, wantErr: "NOT_FOUND"},
+		{name: "topics list limit", args: []string{"--read-only", "topics-list", "1", "--limit=2147483647", "--json"}, wantCode: 4, wantErr: "NOT_FOUND"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -346,6 +356,54 @@ func TestProcessMaxInt32PassesParserToNextStageWithoutArtifacts(t *testing.T) {
 			entries, err := os.ReadDir(root)
 			if err != nil || len(entries) != 0 {
 				t.Fatalf("max int32 invocation created artifacts=%v err=%v", entries, err)
+			}
+		})
+	}
+}
+
+func TestProcessDefaultedTelegramLimitsReachNextStageWithoutArtifacts(t *testing.T) {
+	binary := buildTGProcess(t)
+	env := withoutStartupSafetyEnv(os.Environ())
+	for _, tt := range []struct {
+		name     string
+		args     []string
+		wantCode int
+		wantErr  string
+	}{
+		{name: "discover zero", args: []string{"discover", "--limit=0", "--json"}, wantCode: 6, wantErr: "WRITE_DISALLOWED"},
+		{name: "discover negative", args: []string{"discover", "--limit=-1", "--json"}, wantCode: 6, wantErr: "WRITE_DISALLOWED"},
+		{name: "backfill zero", args: []string{"backfill-entities", "--limit=0", "--json"}, wantCode: 6, wantErr: "WRITE_DISALLOWED"},
+		{name: "backfill negative", args: []string{"backfill-entities", "--limit=-1", "--json"}, wantCode: 6, wantErr: "WRITE_DISALLOWED"},
+		{name: "members zero", args: []string{"--read-only", "chat-members", "1", "--limit=0", "--json"}, wantCode: 4, wantErr: "NOT_FOUND"},
+		{name: "members negative", args: []string{"--read-only", "chat-members", "1", "--limit=-1", "--json"}, wantCode: 4, wantErr: "NOT_FOUND"},
+		{name: "topics zero", args: []string{"--read-only", "topics-list", "1", "--limit=0", "--json"}, wantCode: 4, wantErr: "NOT_FOUND"},
+		{name: "topics negative", args: []string{"--read-only", "topics-list", "1", "--limit=-1", "--json"}, wantCode: 4, wantErr: "NOT_FOUND"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			stdout, stderr, code := runTGProcessStreams(t, binary, root, env, tt.args...)
+			if code != tt.wantCode || stderr != "" || !strings.Contains(stdout, `"code":"`+tt.wantErr+`"`) {
+				t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
+			}
+			if entries, err := os.ReadDir(root); err != nil || len(entries) != 0 {
+				t.Fatalf("defaulted limit created artifacts=%v err=%v", entries, err)
+			}
+		})
+	}
+}
+
+func TestProcessInvalidAPIIDStopsBeforeSessionOrNetwork(t *testing.T) {
+	binary := buildTGProcess(t)
+	for _, value := range []string{"-1", "0", "2147483648"} {
+		t.Run(value, func(t *testing.T) {
+			root := t.TempDir()
+			env := append(withoutStartupSafetyEnv(os.Environ()), "TG_API_ID="+value, "TG_API_HASH=hash")
+			stdout, stderr, code := runTGProcessStreams(t, binary, root, env, "login", "--json")
+			if code != 3 || stderr != "" || !strings.Contains(stdout, `"code":"NOT_AUTHED"`) {
+				t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
+			}
+			if entries, err := os.ReadDir(root); err != nil || len(entries) != 0 {
+				t.Fatalf("invalid API ID created artifacts=%v err=%v", entries, err)
 			}
 		})
 	}

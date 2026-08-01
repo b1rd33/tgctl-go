@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 
 	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
@@ -27,7 +28,17 @@ func registerBackfillEntities(root *cobra.Command, mgr *accounts.Manager) {
 		Short:        "Populate the local entity cache so chat_id-keyed sends work",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			limit, _ := cmd.Flags().GetInt("limit")
+			var err error
+			limit, err = defaultedInt32Limit(limit, 200, "--limit")
+			if err != nil {
+				return emitDispatchedFailure(cmd, "backfill-entities", err)
+			}
 			if err := safety.RequireWriteAllowed(localWriteArgs(cmd)); err != nil {
+				return emitDispatchedFailure(cmd, "backfill-entities", err)
+			}
+			apiID, apiHash, err := client.EnsureCredentials()
+			if err != nil {
 				return emitDispatchedFailure(cmd, "backfill-entities", err)
 			}
 			account, err := selectedAccount(cmd, mgr)
@@ -38,15 +49,6 @@ func registerBackfillEntities(root *cobra.Command, mgr *accounts.Manager) {
 			if err != nil {
 				return emitDispatchedFailure(cmd, "backfill-entities", err)
 			}
-			apiID, apiHash, err := client.EnsureCredentials()
-			if err != nil {
-				return emitDispatchedFailure(cmd, "backfill-entities", err)
-			}
-			limit, _ := cmd.Flags().GetInt("limit")
-			if limit <= 0 {
-				limit = 200
-			}
-
 			code := dispatch.Run("backfill-entities", dispatch.Options{
 				JSON:      jsonMode(cmd),
 				Stdout:    cmd.OutOrStdout(),
@@ -66,6 +68,14 @@ func registerBackfillEntities(root *cobra.Command, mgr *accounts.Manager) {
 }
 
 func runBackfillEntities(ctx context.Context, apiID int, apiHash, sessionPath, dbPath string, limit int) (map[string]any, error) {
+	if apiID <= 0 || int64(apiID) > math.MaxInt32 {
+		return nil, safety.NewMissingCredentials("TG_API_ID must be a positive 32-bit integer")
+	}
+	var err error
+	limit, err = defaultedInt32Limit(limit, 200, "limit")
+	if err != nil {
+		return nil, err
+	}
 	storage := &session.FileStorage{Path: sessionPath}
 	tgc := telegram.NewClient(apiID, apiHash, telegram.Options{SessionStorage: storage})
 

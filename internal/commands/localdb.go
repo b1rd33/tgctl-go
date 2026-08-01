@@ -671,8 +671,10 @@ func discoverCommand(cfg CommandsConfig) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			limit, _ := cmd.Flags().GetInt("limit")
-			if limit <= 0 {
-				limit = 200
+			var err error
+			limit, err = defaultedInt32Limit(limit, 200, "--limit")
+			if err != nil {
+				return emitDispatchedFailure(cmd, "discover", err)
 			}
 			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
 			if pathErr != nil {

@@ -241,13 +241,7 @@ func parseDownloadMessageID(raw string) (int64, error) {
 }
 
 func downloadMaxBytes(maxSizeMB int64) (int64, error) {
-	if maxSizeMB < 0 {
-		return 0, safety.NewBadArgs("--max-size-mb cannot be negative")
-	}
-	if maxSizeMB > math.MaxInt64/bytesPerMiB {
-		return 0, safety.NewBadArgs("--max-size-mb is too large")
-	}
-	return maxSizeMB * bytesPerMiB, nil
+	return media.MaxBytesFromMiB(maxSizeMB)
 }
 
 func validateDownloadMediaResponse(resp client.DownloadMediaResp, chatID, messageID int64, outputRoot string, overwrite bool) (media.DownloadedArtifact, error) {

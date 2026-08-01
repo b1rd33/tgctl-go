@@ -150,8 +150,13 @@ func chatMembersCommand(cfg CommandsConfig) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			limit, _ := cmd.Flags().GetInt("limit")
+			var err error
+			limit, err = defaultedInt32Limit(limit, 50, "--limit")
+			if err != nil {
+				return emitDispatchedFailure(cmd, "chat-members", err)
+			}
 			return runAdminRead(cmd, cfg, "chat-members", args[0], func(ctx context.Context, c client.Client, chatID int64, title string) (any, error) {
-				members, err := c.ListChatMembers(ctx, chatID, positiveLimit(limit, 50))
+				members, err := c.ListChatMembers(ctx, chatID, limit)
 				if err != nil {
 					return nil, err
 				}

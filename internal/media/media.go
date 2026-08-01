@@ -2,6 +2,7 @@ package media
 
 import (
 	"bytes"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -10,7 +11,18 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/safety"
 )
 
-const defaultMaxSizeMB = 100
+const bytesPerMiB int64 = 1024 * 1024
+
+// MaxBytesFromMiB safely converts a CLI MiB limit to bytes.
+func MaxBytesFromMiB(maxSizeMB int64) (int64, error) {
+	if maxSizeMB < 0 {
+		return 0, safety.NewBadArgs("--max-size-mb cannot be negative")
+	}
+	if maxSizeMB > math.MaxInt64/bytesPerMiB {
+		return 0, safety.NewBadArgs("--max-size-mb is too large")
+	}
+	return maxSizeMB * bytesPerMiB, nil
+}
 
 // SafeUserPath mirrors the Python path guard for user-supplied media paths.
 func SafeUserPath(value string) (string, error) {
@@ -30,6 +42,10 @@ func SafeUserPath(value string) (string, error) {
 
 // ValidateExpected checks path safety, existence, max size, and command-specific media kind.
 func ValidateExpected(path, expected string, maxSizeMB int64) (string, error) {
+	maxBytes, err := MaxBytesFromMiB(maxSizeMB)
+	if err != nil {
+		return "", err
+	}
 	abs, err := SafeUserPath(path)
 	if err != nil {
 		return "", err
@@ -44,10 +60,7 @@ func ValidateExpected(path, expected string, maxSizeMB int64) (string, error) {
 	if info.IsDir() {
 		return "", safety.NewBadArgs("file is a directory: %s", abs)
 	}
-	if maxSizeMB < 0 {
-		maxSizeMB = defaultMaxSizeMB
-	}
-	if info.Size() > maxSizeMB*1024*1024 {
+	if info.Size() > maxBytes {
 		return "", safety.NewBadArgs("file %s exceeds --max-size-mb", abs)
 	}
 	kind, err := DetectType(abs)

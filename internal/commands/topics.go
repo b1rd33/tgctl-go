@@ -28,6 +28,11 @@ func topicsListCommand(cfg CommandsConfig) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			limit, _ := cmd.Flags().GetInt("limit")
+			var err error
+			limit, err = defaultedInt32Limit(limit, 50, "--limit")
+			if err != nil {
+				return emitDispatchedFailure(cmd, "topics-list", err)
+			}
 			query, _ := cmd.Flags().GetString("query")
 			paths, pathErr := resolvePaths(cmd, cfg.Paths)
 			if pathErr != nil {
@@ -51,7 +56,7 @@ func topicsListCommand(cfg CommandsConfig) *cobra.Command {
 					return nil, err
 				}
 				defer c.Close()
-				topics, err := c.ListTopics(ctx, chatID, positiveLimit(limit, 50), query)
+				topics, err := c.ListTopics(ctx, chatID, limit, query)
 				if err != nil {
 					return nil, err
 				}

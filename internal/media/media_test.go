@@ -1,6 +1,7 @@
 package media
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -67,5 +68,17 @@ func TestValidateExpectedRejectsWrongPhotoBytes(t *testing.T) {
 	}
 	if _, err := ValidateExpected(path, "photo", 100); err == nil {
 		t.Fatalf("ValidateExpected returned nil error")
+	}
+}
+
+func TestMaxBytesFromMiBBounds(t *testing.T) {
+	const maxMiB = int64(math.MaxInt64 / (1024 * 1024))
+	if got, err := MaxBytesFromMiB(maxMiB); err != nil || got != maxMiB*1024*1024 {
+		t.Fatalf("boundary=(%d, %v)", got, err)
+	}
+	for _, value := range []int64{-1, maxMiB + 1} {
+		if _, err := MaxBytesFromMiB(value); err == nil {
+			t.Fatalf("MaxBytesFromMiB(%d) unexpectedly succeeded", value)
+		}
 	}
 }

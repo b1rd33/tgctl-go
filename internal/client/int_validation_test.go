@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -61,5 +62,45 @@ func TestTelegramInt32ValidatorsAcceptMax(t *testing.T) {
 	}
 	if err := validatePositiveTelegramInts32([]int64{1, max}, "message_id"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestGotdClientRejectsLimitOverflowBeforeDependencies(t *testing.T) {
+	if strconv.IntSize == 32 {
+		t.Skip("native int cannot represent a value above Telegram int32")
+	}
+	ctx := context.Background()
+	g := &GotdClient{}
+	over64 := int64(math.MaxInt32)
+	over64++
+	over := int(over64)
+	for _, tt := range []struct {
+		name string
+		run  func() error
+	}{
+		{name: "discover dialogs", run: func() error { _, err := g.DiscoverDialogs(ctx, over); return err }},
+		{name: "list topics", run: func() error { _, err := g.ListTopics(ctx, 1, over, ""); return err }},
+		{name: "list chat members", run: func() error { _, err := g.ListChatMembers(ctx, 1, over); return err }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.run()
+			var badArgs *safety.BadArgs
+			if !errors.As(err, &badArgs) || !strings.Contains(err.Error(), "32-bit") {
+				t.Fatalf("error=%v, want 32-bit BadArgs before dependency access", err)
+			}
+		})
+	}
+}
+
+func TestDefaultedTelegramLimitSemantics(t *testing.T) {
+	for _, value := range []int{0, -1} {
+		got, err := defaultedTelegramInt32Limit(value, 50, "limit")
+		if err != nil || got != 50 {
+			t.Fatalf("defaultedTelegramInt32Limit(%d)=(%d, %v), want (50, nil)", value, got, err)
+		}
+	}
+	got, err := defaultedTelegramInt32Limit(math.MaxInt32, 50, "limit")
+	if err != nil || got != math.MaxInt32 {
+		t.Fatalf("max int32=(%d, %v)", got, err)
 	}
 }

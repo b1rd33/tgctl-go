@@ -32,6 +32,10 @@ func registerLogin(root *cobra.Command, mgr *accounts.Manager) {
 			if err := safety.RequireWritesNotReadOnly(safety.Args{ReadOnly: RootConfigFrom(cmd.Root()).ReadOnly}); err != nil {
 				return emitDispatchedFailure(cmd, "login", err)
 			}
+			apiID, apiHash, err := client.EnsureCredentials()
+			if err != nil {
+				return emitDispatchedFailure(cmd, "login", err)
+			}
 			account, err := selectedAccount(cmd, mgr)
 			if err != nil {
 				return emitDispatchedFailure(cmd, "login", err)
@@ -40,11 +44,6 @@ func registerLogin(root *cobra.Command, mgr *accounts.Manager) {
 			if err != nil {
 				return emitDispatchedFailure(cmd, "login", err)
 			}
-			apiID, apiHash, err := client.EnsureCredentials()
-			if err != nil {
-				return emitDispatchedFailure(cmd, "login", err)
-			}
-
 			code := dispatch.Run("login", dispatch.Options{
 				JSON:      jsonMode(cmd),
 				Stdout:    cmd.OutOrStdout(),
