@@ -180,3 +180,40 @@ func TestVersionCommandAndBuiltinFlagAgree(t *testing.T) {
 		t.Fatalf("--version = %q, version --json = %q", got, want)
 	}
 }
+
+func TestShortCommitFallback(t *testing.T) {
+	tests := []struct {
+		name    string
+		version string
+		want    string
+	}{
+		{name: "described release", version: "v1.2.3-12-gabcdef0", want: "abcdef0"},
+		{name: "described prerelease", version: "v1.2.3-rc.1-12-gabcdef0", want: "abcdef0"},
+		{name: "described build metadata", version: "v1.2.3+build.5-12-gabcdef0", want: "abcdef0"},
+		{name: "dirty description", version: "v1.2.3-12-gabcdef0-dirty", want: "abcdef0"},
+		{name: "mixed case hex", version: "v1.2.3-12-gAbCdEf0", want: "AbCdEf0"},
+		{name: "nondecimal count", version: "v1.2.3-many-gabcdef0", want: ""},
+		{name: "nonhex commit", version: "v1.2.3-12-gnothex", want: ""},
+		{name: "malformed version", version: "v1.2-12-gabcdef0", want: ""},
+		{name: "valid prerelease", version: "v1.2.3-rc.1", want: ""},
+		{name: "valid release with build metadata", version: "v1.2.3+build.5", want: ""},
+		{name: "opaque", version: "release-candidate", want: "release-candidate"},
+		{name: "dev", version: "dev", want: ""},
+		{name: "empty", version: "", want: ""},
+		{name: "bare commit", version: "abcdef0", want: "abcdef0"},
+	}
+
+	if revision := vcsRevision(); revision != "" {
+		t.Fatalf("unit test binary unexpectedly embeds vcs.revision %q; fallback would be masked", revision)
+	}
+	old := Version
+	defer func() { Version = old }()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Version = tt.version
+			if got := shortCommit(); got != tt.want {
+				t.Fatalf("shortCommit() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

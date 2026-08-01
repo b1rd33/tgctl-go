@@ -33,7 +33,7 @@ func buildTGProcessWithVersion(t *testing.T, version string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "tg")
 	ldflags := "-X github.com/b1rd33/tgctl-go/internal/commands.Version=" + version
-	cmd := exec.Command("go", "build", "-ldflags", ldflags, "-o", path, ".")
+	cmd := exec.Command("go", "build", "-buildvcs=false", "-ldflags", ldflags, "-o", path, ".")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build tg with version %q: %v\n%s", version, err, out)
 	}
@@ -124,6 +124,30 @@ func TestProcessLinkerInjectedPrereleaseVersion(t *testing.T) {
 	}
 	if got := envelope.Data.Version; got != want {
 		t.Fatalf("version --json = %q, want %q", got, want)
+	}
+}
+
+func TestProcessLinkerInjectedGitDescribeFallback(t *testing.T) {
+	const injected = "v1.2.3-rc.1+build.5-12-gAbCdEf0-dirty"
+	binary := buildTGProcessWithVersion(t, injected)
+	out, code := runTGProcessResult(t, binary, t.TempDir(), withoutStartupSafetyEnv(os.Environ()), "version", "--json")
+	if code != 0 {
+		t.Fatalf("version --json code=%d\n%s", code, out)
+	}
+	var envelope struct {
+		Data struct {
+			Version string `json:"version"`
+			Commit  string `json:"commit"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("decode version envelope: %v\n%s", err, out)
+	}
+	if got, want := envelope.Data.Version, "v1.2.3-rc.1+build.5"; got != want {
+		t.Fatalf("version = %q, want %q", got, want)
+	}
+	if got, want := envelope.Data.Commit, "AbCdEf0"; got != want {
+		t.Fatalf("commit = %q, want %q", got, want)
 	}
 }
 
