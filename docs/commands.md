@@ -1,6 +1,6 @@
 # Commands
 
-`tg --help` shows all 70 commands. This page is generated from the local Cobra help output, then kept as plain Markdown for the docs site.
+`tg --help` shows 69 commands. This page is generated from Cobra help output.
 
 Every command supports the global flags shown by `tg --help`: `--account`, `--full`, `--json`, `--human`, `--lock-wait`, `--read-only`, and `--version` where applicable.
 
@@ -31,6 +31,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg demote`](#tg-demote) | demote user in chat |
 | [`tg discover`](#tg-discover) | Discover dialogs and cache chat metadata |
 | [`tg doctor`](#tg-doctor) | Diagnose tgctl-go setup |
+| [`tg download-media`](#tg-download-media) | Download media attached to a message |
 | [`tg edit-msg`](#tg-edit-msg) | Edit a previously sent message |
 | [`tg folder-add-chat`](#tg-folder-add-chat) | Mutate folder chat membership |
 | [`tg folder-create`](#tg-folder-create) | Create a dialog folder |
@@ -248,7 +249,9 @@ tg backfill 1240314255 --max-messages 100 --allow-write --json
 | `--human` | Force human-readable output (default on a TTY) |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 | `--max-db-size-mb int` | Maximum main database plus WAL allocation in MiB (0 disables the cap) |
+| `--max-media-size-mb int` | Maximum size per downloaded media file in MiB (0 disables the limit) (default 100) |
 | `--max-messages int` | Maximum cached messages per chat (maximum 10000) (default 100) |
+| `--overwrite-media` | Overwrite existing backfill media files |
 | `--throttle-seconds float` | Seconds to sleep between Telegram history pages |
 
 ## `tg backfill-entities`
@@ -264,13 +267,14 @@ tg backfill-entities [flags]
 **Example**
 
 ```bash
-tg backfill-entities --json
+tg backfill-entities --allow-write --json
 ```
 
 **Flags**
 
 | Flag | Description |
 |---|---|
+| `--allow-write` | Required for local DB writes |
 | `-h, --help` | help for backfill-entities |
 | `--human` | Force human-readable output (default on a TTY) |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
@@ -643,7 +647,7 @@ tg discover [flags]
 **Example**
 
 ```bash
-tg discover --json
+tg discover --allow-write --json
 ```
 
 **Flags**
@@ -679,6 +683,35 @@ tg doctor --json
 | `-h, --help` | help for doctor |
 | `--human` | Force human-readable output (default on a TTY) |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+
+## `tg download-media`
+
+Download media attached to a message
+
+**Use**
+
+```text
+tg download-media <chat> <message-id> [flags]
+```
+
+**Example**
+
+```bash
+tg download-media 1240314255 42 --max-size-mb 100 --allow-write --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--allow-write` | Required because the download updates the local media cache |
+| `--fuzzy` | Allow title-based chat selectors |
+| `-h, --help` | help for download-media |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--max-size-mb int` | Maximum download size in MiB (0 = unlimited) (default 100) |
+| `--output string` | Output directory (default account media/<chat-id>/) |
+| `--overwrite` | Overwrite an existing media file |
 
 ## `tg edit-msg`
 
@@ -1018,27 +1051,27 @@ tg help send
 
 ## `tg import-telethon-session`
 
-Adopt a Python tgctl/Telethon session as the current Go account's session.
+Adopt a Python tgctl/Telethon session as the current Go account's session
 
 **Use**
 
 ```text
-tg import-telethon-session <path>
+tg import-telethon-session <path> [flags]
 ```
-
-**Flags**
-
-Standard global flags only. No write gate (this is a local-file copy,
-not a Telegram-side write).
 
 **Example**
 
 ```bash
-tg import-telethon-session ~/path/to/python/tgctl/accounts/default/tg.session
+tg import-telethon-session ~/path/to/tg.session --json
 ```
 
-The auth_key is reused, so no SMS round-trip is needed. The
-destination is the current `--account`'s `tg.session` file.
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `-h, --help` | help for import-telethon-session |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 
 ## `tg kick`
 
@@ -1151,7 +1184,9 @@ tg listen --once --json
 | `-h, --help` | help for listen |
 | `--human` | Force human-readable output (default on a TTY) |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
-| `--once` | Exit after one update |
+| `--once` | Exit after one filter-matching update |
+| `--only-dms` | Emit only 1-on-1 user messages; skip groups/channels |
+| `--only-groups` | Emit only group/channel messages; skip 1-on-1 DMs |
 
 ## `tg login`
 

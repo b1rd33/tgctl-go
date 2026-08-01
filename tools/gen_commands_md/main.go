@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"regexp"
 	"sort"
@@ -26,13 +27,17 @@ type flag struct {
 }
 
 func main() {
-	rootHelp := mustHelp("./tg", "--help")
+	binary, err := docsBinary()
+	if err != nil {
+		log.Fatal(err)
+	}
+	rootHelp := mustHelp(binary, "--help")
 	commands := parseCommands(rootHelp)
 	sort.Slice(commands, func(i, j int) bool { return commands[i].Name < commands[j].Name })
 
 	fmt.Println("# Commands")
 	fmt.Println()
-	fmt.Println("`tg --help` shows all 70 commands. This page is generated from the local Cobra help output, then kept as plain Markdown for the docs site.")
+	fmt.Printf("`tg --help` shows %d commands. This page is generated from Cobra help output.\n", len(commands))
 	fmt.Println()
 	fmt.Println("Every command supports the global flags shown by `tg --help`: `--account`, `--full`, `--json`, `--human`, `--lock-wait`, `--read-only`, and `--version` where applicable.")
 	fmt.Println()
@@ -42,7 +47,7 @@ func main() {
 	fmt.Println("|---|---|")
 
 	for i := range commands {
-		help := mustHelp("./tg", commands[i].Name, "--help")
+		help := mustHelp(binary, commands[i].Name, "--help")
 		commands[i].Use = parseUse(help)
 		if short := parseShort(help); short != "" {
 			commands[i].Short = short
@@ -53,7 +58,7 @@ func main() {
 	}
 
 	fmt.Println()
-	for _, cmd := range commands {
+	for commandIndex, cmd := range commands {
 		fmt.Printf("## `tg %s`\n\n", cmd.Name)
 		fmt.Println(cmd.Short)
 		fmt.Println()
@@ -70,8 +75,8 @@ func main() {
 		fmt.Println("```bash")
 		fmt.Println(cmd.Example)
 		fmt.Println("```")
-		fmt.Println()
 		if len(cmd.Flags) > 0 {
+			fmt.Println()
 			fmt.Println("**Flags**")
 			fmt.Println()
 			fmt.Println("| Flag | Description |")
@@ -79,9 +84,23 @@ func main() {
 			for _, f := range cmd.Flags {
 				fmt.Printf("| `%s` | %s |\n", escapePipes(f.Name), escapePipes(f.Description))
 			}
+		}
+		if commandIndex < len(commands)-1 {
 			fmt.Println()
 		}
 	}
+}
+
+func docsBinary() (string, error) {
+	binary, set := os.LookupEnv("TGCTL_DOCS_BINARY")
+	if !set {
+		return "./tg", nil
+	}
+	binary = strings.TrimSpace(binary)
+	if binary == "" {
+		return "", fmt.Errorf("TGCTL_DOCS_BINARY is set but empty; unset it to use ./tg or set it to a tg executable path")
+	}
+	return binary, nil
 }
 
 func mustHelp(args ...string) string {
@@ -98,7 +117,7 @@ func mustHelp(args ...string) string {
 func parseCommands(help string) []command {
 	var commands []command
 	inCommands := false
-	re := regexp.MustCompile(`^\s{2}([a-z][a-z0-9-]*)\s{2,}(.+)$`)
+	re := regexp.MustCompile(`^\s{2}([a-z][a-z0-9-]*)\s+(.+)$`)
 	for _, line := range strings.Split(help, "\n") {
 		switch {
 		case strings.TrimSpace(line) == "Available Commands:":
@@ -187,11 +206,13 @@ func exampleFor(name, use string) string {
 	case "version":
 		return "tg version --json"
 	case "discover":
-		return "tg discover --json"
+		return "tg discover --allow-write --json"
 	case "sync-contacts":
 		return "tg sync-contacts --allow-write --json"
 	case "backfill-entities":
-		return "tg backfill-entities --json"
+		return "tg backfill-entities --allow-write --json"
+	case "download-media":
+		return "tg download-media 1240314255 42 --max-size-mb 100 --allow-write --json"
 	case "backfill":
 		return "tg backfill 1240314255 --max-messages 100 --allow-write --json"
 	case "show":

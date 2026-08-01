@@ -48,9 +48,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          cache: true
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+      - name: build CLI
+        run: make build
+      - name: check generated command reference
+        run: make docs-commands-check
       - name: install mkdocs
         run: pip install mkdocs-material
       - name: mkdocs build
