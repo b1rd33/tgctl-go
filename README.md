@@ -247,6 +247,13 @@ retain the original file stream and safe filename. The CLI does not bypass
 Telegram content protection, download non-file media such as locations or
 polls, or provide an unrestricted scraping facility.
 
+## Agent skill
+
+The reusable operating guide for agents is in
+[`skills/tgctl-go/SKILL.md`](skills/tgctl-go/SKILL.md). It covers safe album
+uploads/downloads, selector and write gates, idempotent retries, backfill
+inspection, and the release verification checklist.
+
 ## Album v1
 
 `upload-album` and `download-album` are available. Cached message rows expose
