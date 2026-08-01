@@ -1,16 +1,21 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
+	"github.com/b1rd33/tgctl-go/internal/media"
 	"github.com/b1rd33/tgctl-go/internal/resolve"
 	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
@@ -367,6 +372,8 @@ func TestGotdDownloadMediaValidatesBeforeLookup(t *testing.T) {
 		{ChatID: 1, MessageID: -1},
 		{ChatID: 1, MessageID: int64(math.MaxInt32) + 1},
 		{ChatID: 1, MessageID: 1, MaxBytes: -1},
+		{ChatID: 1, MessageID: 1, OutputDir: ""},
+		{ChatID: 1, MessageID: 1, OutputDir: " \t"},
 	}
 	for _, req := range tests {
 		_, err := (&GotdClient{}).DownloadMedia(context.Background(), req)
@@ -377,7 +384,8 @@ func TestGotdDownloadMediaValidatesBeforeLookup(t *testing.T) {
 	}
 }
 
-func TestGotdDownloadMediaResolvesExtractsThenStopsWithoutFilesystemMutation(t *testing.T) {
+func TestGotdDownloadMediaStreamsAtomicallyAndReturnsSafeMetadata(t *testing.T) {
+	data := []byte("telegram media")
 	db, err := store.Connect(filepath.Join(t.TempDir(), "account.sqlite3"))
 	if err != nil {
 		t.Fatal(err)
@@ -391,24 +399,34 @@ func TestGotdDownloadMediaResolvesExtractsThenStopsWithoutFilesystemMutation(t *
 		&tg.DocumentAttributeFilename{FileName: "telegram-name.mp4"},
 	)
 	message.ID = 77
+	message.Media.(*tg.MessageMediaDocument).Document.(*tg.Document).Size = int64(len(data))
 	api := &fakeMediaDownloadAPI{resp: &tg.MessagesMessages{Messages: []tg.MessageClass{message}}}
-	outputDir := filepath.Join(t.TempDir(), "must-not-be-created")
-	g := &GotdClient{db: db, mediaAPI: api}
+	outputDir := filepath.Join(t.TempDir(), "downloads")
+	downloader := &recordingFileDownloader{chunks: [][]byte{data[:4], data[4:9], data[9:]}}
+	g := &GotdClient{db: db, mediaAPI: api, fileDownloader: downloader}
 
 	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{
-		ChatID: 321, MessageID: 77, OutputDir: outputDir, MaxBytes: 1234, Overwrite: true,
+		ChatID: 321, MessageID: 77, OutputDir: outputDir, MaxBytes: int64(len(data)), Overwrite: true,
 	})
-	if !errors.Is(err, ErrMediaDownloadNotImplemented) {
-		t.Fatalf("error = %v, want stable intermediate error", err)
+	if err != nil {
+		t.Fatal(err)
 	}
+	wantPath := filepath.Join(outputDir, "telegram-name.mp4")
 	want := DownloadMediaResp{
 		ChatID: 321, MessageID: 77, MediaType: "video", MIMEType: "video/mp4", Filename: "telegram-name.mp4",
+		Path: wantPath, Bytes: int64(len(data)),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("response = %#v, want %#v", got, want)
 	}
-	if _, statErr := os.Stat(outputDir); !errors.Is(statErr, os.ErrNotExist) {
-		t.Fatalf("output directory was created or unexpected stat error: %v", statErr)
+	if !filepath.IsAbs(got.Path) {
+		t.Fatalf("path = %q, want absolute", got.Path)
+	}
+	if contents, readErr := os.ReadFile(got.Path); readErr != nil || !bytes.Equal(contents, data) {
+		t.Fatalf("download = %q, %v", contents, readErr)
+	}
+	if info, statErr := os.Stat(got.Path); statErr != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("mode = %v, %v, want 0600", info, statErr)
 	}
 	if api.channelReq == nil {
 		t.Fatal("channel lookup was not invoked")
@@ -417,6 +435,562 @@ func TestGotdDownloadMediaResolvesExtractsThenStopsWithoutFilesystemMutation(t *
 	if channel.ChannelID != 321 || channel.AccessHash != 654 {
 		t.Fatalf("resolved channel = %#v", channel)
 	}
+	wantLocation := message.Media.(*tg.MessageMediaDocument).Document.(*tg.Document).AsInputDocumentFileLocation()
+	if locations := downloader.Locations(); len(locations) != 1 || !reflect.DeepEqual(locations[0], wantLocation) {
+		t.Fatalf("locations = %#v, want %#v", locations, wantLocation)
+	}
+}
+
+func TestGotdDownloadMediaZeroByteAndPhotoLocation(t *testing.T) {
+	message := photoMessageWithSizes(91, &tg.PhotoSize{Type: "x", W: 1, H: 1, Size: 0})
+	message.ID = 17
+	g, outputDir, downloader := downloadTestClient(t, message, nil)
+	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 17, OutputDir: outputDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Bytes != 0 || got.Filename != "photo_91.jpg" {
+		t.Fatalf("response = %#v", got)
+	}
+	if contents, err := os.ReadFile(got.Path); err != nil || len(contents) != 0 {
+		t.Fatalf("zero-byte download = %q, %v", contents, err)
+	}
+	wantLocation := message.Media.(*tg.MessageMediaPhoto).Photo.(*tg.Photo)
+	locations := downloader.Locations()
+	if len(locations) != 1 {
+		t.Fatalf("locations = %#v", locations)
+	}
+	photoLocation, ok := locations[0].(*tg.InputPhotoFileLocation)
+	if !ok || photoLocation.ID != wantLocation.ID || photoLocation.ThumbSize != "x" {
+		t.Fatalf("location = %#v", locations[0])
+	}
+}
+
+func TestGotdDownloadMediaPhotoSizeMatchesSelectedLocation(t *testing.T) {
+	message := photoMessageWithSizes(92,
+		&tg.PhotoSize{Type: "x", W: 100, H: 100, Size: 9},
+		&tg.PhotoSize{Type: "y", W: 200, H: 200, Size: 4},
+	)
+	message.ID = 33
+	g, outputDir, downloader := downloadTestClient(t, message, []byte("data"))
+	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 33, OutputDir: outputDir, MaxBytes: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Bytes != 4 {
+		t.Fatalf("bytes = %d, want selected thumbnail size 4", got.Bytes)
+	}
+	locations := downloader.Locations()
+	if len(locations) != 1 {
+		t.Fatalf("locations = %#v, want one selected y thumbnail", locations)
+	}
+	location, ok := locations[0].(*tg.InputPhotoFileLocation)
+	if !ok || location.ThumbSize != "y" {
+		t.Fatalf("locations = %#v, want selected y thumbnail", locations)
+	}
+}
+
+func TestGotdDownloadMediaKnownSizeLimitRejectsBeforeDestinationAndDownloader(t *testing.T) {
+	message := documentMessageWithSize(18, 10, "application/pdf", &tg.DocumentAttributeFilename{FileName: "large.pdf"})
+	g, outputDir, downloader := downloadTestClient(t, message, []byte("unused"))
+	_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 18, OutputDir: outputDir, MaxBytes: 9})
+	var badArgs *safety.BadArgs
+	if !errors.As(err, &badArgs) || !errors.Is(err, media.ErrLimitExceeded) {
+		t.Fatalf("error = %T %v, want BadArgs and ErrLimitExceeded", err, err)
+	}
+	if downloader.Calls() != 0 {
+		t.Fatalf("downloader calls = %d, want 0", downloader.Calls())
+	}
+	if _, statErr := os.Stat(outputDir); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("output directory stat = %v, want not exist", statErr)
+	}
+}
+
+func TestGotdDownloadMediaUnknownSizeLimitIsEnforcedWhileStreaming(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		data    []byte
+		wantErr bool
+	}{
+		{name: "exact limit", data: []byte("1234")},
+		{name: "one over", data: []byte("12345"), wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			message := documentMessageWithSize(19, -1, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "unknown.bin"})
+			g, outputDir, _ := downloadTestClient(t, message, tc.data)
+			got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 19, OutputDir: outputDir, MaxBytes: 4})
+			if tc.wantErr {
+				if !errors.Is(err, media.ErrLimitExceeded) {
+					t.Fatalf("error = %v, want ErrLimitExceeded", err)
+				}
+				assertDownloadDirClean(t, outputDir, "unknown.bin")
+				return
+			}
+			if err != nil || got.Bytes != 4 {
+				t.Fatalf("response=%#v error=%v", got, err)
+			}
+		})
+	}
+}
+
+func TestGotdDownloadMediaAuthoritativeSizeDetectsTruncation(t *testing.T) {
+	message := documentMessageWithSize(20, 5, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "short.bin"})
+	g, outputDir, _ := downloadTestClient(t, message, []byte("1234"))
+	_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 20, OutputDir: outputDir})
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("error = %v, want io.ErrUnexpectedEOF", err)
+	}
+	assertDownloadDirClean(t, outputDir, "short.bin")
+}
+
+func TestGotdDownloadMediaTransferErrorsAndCancellationCleanParts(t *testing.T) {
+	transferErr := errors.New("telegram transfer failed")
+	for _, tc := range []struct {
+		name       string
+		downloader *recordingFileDownloader
+		want       error
+	}{
+		{name: "midstream error", downloader: &recordingFileDownloader{chunks: [][]byte{[]byte("partial")}, err: transferErr}, want: transferErr},
+		{name: "cancellation", downloader: &recordingFileDownloader{chunks: [][]byte{[]byte("partial")}, cancelAfterWrite: true}, want: context.Canceled},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			message := documentMessageWithSize(21, -1, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "failed.bin"})
+			g, outputDir, _ := downloadTestClientWithDownloader(t, message, tc.downloader)
+			_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 21, OutputDir: outputDir})
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("error = %v, want %v", err, tc.want)
+			}
+			assertDownloadDirClean(t, outputDir, "failed.bin")
+		})
+	}
+}
+
+func TestGotdDownloadMediaJoinsTransferAndAbortCleanupErrors(t *testing.T) {
+	primary := errors.New("download failed")
+	cleanup := errors.New("remove part failed")
+	destination := &fakeDownloadDestination{abortErr: errors.Join(media.ErrCleanupIncomplete, cleanup)}
+	message := documentMessageWithSize(22, -1, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "failed.bin"})
+	g, _, _ := downloadTestClientWithDownloader(t, message, &recordingFileDownloader{err: primary})
+	g.destinationOpener = fakeDestinationOpener{destination: destination}
+	_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 22, OutputDir: t.TempDir()})
+	if !errors.Is(err, primary) || !errors.Is(err, cleanup) || !errors.Is(err, media.ErrCleanupIncomplete) {
+		t.Fatalf("error = %v, want primary and cleanup errors", err)
+	}
+	if destination.abortCalls != 1 || destination.commitCalls != 0 {
+		t.Fatalf("destination calls abort=%d commit=%d", destination.abortCalls, destination.commitCalls)
+	}
+}
+
+func TestGotdDownloadMediaJoinsCommitAndAbortErrors(t *testing.T) {
+	commitErr := errors.New("commit failed")
+	cleanupErr := errors.New("abort failed")
+	destination := &fakeDownloadDestination{
+		path:      filepath.Join(t.TempDir(), "commit.bin"),
+		commitErr: commitErr,
+		abortErr:  errors.Join(media.ErrCleanupIncomplete, cleanupErr),
+	}
+	message := documentMessageWithSize(30, 4, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "commit.bin"})
+	g, _, _ := downloadTestClientWithDownloader(t, message, &recordingFileDownloader{chunks: [][]byte{[]byte("data")}})
+	g.destinationOpener = fakeDestinationOpener{destination: destination}
+	_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 30, OutputDir: t.TempDir()})
+	if !errors.Is(err, commitErr) || !errors.Is(err, cleanupErr) || !errors.Is(err, media.ErrCleanupIncomplete) {
+		t.Fatalf("error = %v, want commit and cleanup errors", err)
+	}
+	if destination.commitCalls != 1 || destination.abortCalls != 1 {
+		t.Fatalf("destination calls commit=%d abort=%d", destination.commitCalls, destination.abortCalls)
+	}
+}
+
+func TestGotdDownloadMediaPublishedCommitErrorSignalsConservativeArtifact(t *testing.T) {
+	commitErr := errors.New("directory sync failed after publish")
+	destination := &fakeDownloadDestination{
+		path:      filepath.Join(t.TempDir(), "published.bin"),
+		commitErr: commitErr,
+		abortErr:  media.ErrDestinationCommitted,
+	}
+	message := documentMessageWithSize(32, 4, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "published.bin"})
+	g, _, _ := downloadTestClientWithDownloader(t, message, &recordingFileDownloader{chunks: [][]byte{[]byte("data")}})
+	g.destinationOpener = fakeDestinationOpener{destination: destination}
+	_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 32, OutputDir: t.TempDir()})
+	if !errors.Is(err, commitErr) || !errors.Is(err, media.ErrDestinationCommitted) || !errors.Is(err, media.ErrCleanupIncomplete) {
+		t.Fatalf("error = %v, want commit, committed, and cleanup-incomplete errors", err)
+	}
+}
+
+func TestGotdDownloadMediaExistingRegularSkipsWithoutDownloading(t *testing.T) {
+	message := documentMessageWithSize(23, 3, "text/plain", &tg.DocumentAttributeFilename{FileName: "existing.txt"})
+	g, outputDir, downloader := downloadTestClient(t, message, []byte("new"))
+	if err := os.MkdirAll(outputDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	final := filepath.Join(outputDir, "existing.txt")
+	if err := os.WriteFile(final, []byte("old data"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 23, OutputDir: outputDir})
+	if err != nil || !got.Skipped || got.Path != final || got.Bytes != 8 {
+		t.Fatalf("response=%#v error=%v", got, err)
+	}
+	if downloader.Calls() != 0 {
+		t.Fatalf("downloader calls = %d", downloader.Calls())
+	}
+	assertFileState(t, final, "old data", 0o640)
+	assertNoDownloadArtifacts(t, outputDir)
+}
+
+func TestGotdDownloadMediaOverwriteSuccessAndFailuresPreserveOriginal(t *testing.T) {
+	transferErr := errors.New("transfer failed")
+	for _, tc := range []struct {
+		name       string
+		downloader *recordingFileDownloader
+		max        int64
+		wantErr    error
+		want       string
+	}{
+		{name: "success", downloader: &recordingFileDownloader{chunks: [][]byte{[]byte("new")}}, want: "new"},
+		{name: "transfer failure", downloader: &recordingFileDownloader{chunks: [][]byte{[]byte("ne")}, err: transferErr}, wantErr: transferErr, want: "old"},
+		{name: "cancellation", downloader: &recordingFileDownloader{chunks: [][]byte{[]byte("ne")}, cancelAfterWrite: true}, wantErr: context.Canceled, want: "old"},
+		{name: "limit failure", downloader: &recordingFileDownloader{chunks: [][]byte{[]byte("new!")}}, max: 3, wantErr: media.ErrLimitExceeded, want: "old"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			message := documentMessageWithSize(24, -1, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "same.bin"})
+			g, outputDir, _ := downloadTestClientWithDownloader(t, message, tc.downloader)
+			if err := os.MkdirAll(outputDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			final := filepath.Join(outputDir, "same.bin")
+			if err := os.WriteFile(final, []byte("old"), 0o640); err != nil {
+				t.Fatal(err)
+			}
+			_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 24, OutputDir: outputDir, Overwrite: true, MaxBytes: tc.max})
+			if tc.wantErr == nil && err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantErr != nil && !errors.Is(err, tc.wantErr) {
+				t.Fatalf("error = %v, want %v", err, tc.wantErr)
+			}
+			wantMode := os.FileMode(0o600)
+			if tc.want != "new" {
+				wantMode = 0o640
+			}
+			assertFileState(t, final, tc.want, wantMode)
+			assertNoDownloadArtifacts(t, outputDir)
+		})
+	}
+}
+
+func TestGotdDownloadMediaUnsafeExistingTargetsAreNeverSkipped(t *testing.T) {
+	for _, kind := range []string{"directory", "symlink"} {
+		t.Run(kind, func(t *testing.T) {
+			message := documentMessageWithSize(25, -1, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "target.bin"})
+			g, outputDir, downloader := downloadTestClient(t, message, []byte("new"))
+			if err := os.MkdirAll(outputDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			final := filepath.Join(outputDir, "target.bin")
+			var referent string
+			if kind == "directory" {
+				if err := os.Mkdir(final, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				referent = filepath.Join(t.TempDir(), "referent")
+				if err := os.WriteFile(referent, []byte("safe"), 0o640); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(referent, final); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 25, OutputDir: outputDir})
+			if !errors.Is(err, media.ErrUnsafeDestination) || got.Skipped {
+				t.Fatalf("response=%#v error=%v", got, err)
+			}
+			if downloader.Calls() != 0 {
+				t.Fatalf("downloader calls = %d", downloader.Calls())
+			}
+			if referent != "" {
+				assertFileState(t, referent, "safe", 0o640)
+			}
+		})
+	}
+}
+
+func TestGotdDownloadMediaCollisionDuringTransferReturnsSafeSkip(t *testing.T) {
+	message := documentMessageWithSize(26, -1, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "race.bin"})
+	outputRoot := t.TempDir()
+	outputDir := filepath.Join(outputRoot, "downloads")
+	final := filepath.Join(outputDir, "race.bin")
+	downloader := &recordingFileDownloader{chunks: [][]byte{[]byte("loser")}, afterWrite: func() error {
+		return os.WriteFile(final, []byte("winner"), 0o640)
+	}}
+	g, _, _ := downloadTestClientAt(t, message, downloader, outputDir)
+	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 26, OutputDir: outputDir})
+	if err != nil || !got.Skipped || got.Bytes != 6 {
+		t.Fatalf("response=%#v error=%v", got, err)
+	}
+	assertFileState(t, final, "winner", 0o640)
+	assertNoDownloadArtifacts(t, outputDir)
+}
+
+func TestGotdDownloadMediaRelativeOutputAndTraversalNameStayContained(t *testing.T) {
+	message := documentMessageWithSize(27, 4, "text/plain", &tg.DocumentAttributeFilename{FileName: "../../escape.txt"})
+	absOutput := filepath.Join(t.TempDir(), "relative-download")
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	relOutput, err := filepath.Rel(wd, absOutput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, _, _ := downloadTestClientAt(t, message, &recordingFileDownloader{chunks: [][]byte{[]byte("safe")}}, relOutput)
+	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 27, OutputDir: relOutput})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !filepath.IsAbs(got.Path) || filepath.Dir(got.Path) != absOutput || got.Filename != "escape.txt" {
+		t.Fatalf("response = %#v, want absolute contained sanitized path", got)
+	}
+	assertFileState(t, got.Path, "safe", 0o600)
+}
+
+func TestGotdDownloadMediaConcurrentCallsHaveIsolatedDestinations(t *testing.T) {
+	message := documentMessageWithSize(28, 4, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "same.bin"})
+	downloader := &recordingFileDownloader{chunks: [][]byte{[]byte("data")}}
+	g, _, _ := downloadTestClientWithDownloader(t, message, downloader)
+	const calls = 12
+	results := make(chan error, calls)
+	for i := 0; i < calls; i++ {
+		dir := filepath.Join(t.TempDir(), fmt.Sprintf("d-%d", i))
+		go func() {
+			resp, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 28, OutputDir: dir})
+			if err == nil {
+				contents, readErr := os.ReadFile(resp.Path)
+				if readErr != nil || string(contents) != "data" {
+					err = fmt.Errorf("read %q: %w", contents, readErr)
+				}
+			}
+			results <- err
+		}()
+	}
+	for i := 0; i < calls; i++ {
+		if err := <-results; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if downloader.Calls() != calls {
+		t.Fatalf("calls = %d, want %d", downloader.Calls(), calls)
+	}
+}
+
+func TestGotdDownloadMediaConcurrentSameTargetPublishesOnce(t *testing.T) {
+	message := documentMessageWithSize(31, 4, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "same.bin"})
+	downloader := &recordingFileDownloader{
+		chunks:       [][]byte{[]byte("data")},
+		waitForCalls: 2,
+		allCalled:    make(chan struct{}),
+	}
+	g, outputDir, _ := downloadTestClientWithDownloader(t, message, downloader)
+	results := make(chan DownloadMediaResp, 2)
+	errs := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			resp, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 31, OutputDir: outputDir})
+			results <- resp
+			errs <- err
+		}()
+	}
+	skipped := 0
+	for i := 0; i < 2; i++ {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+		if (<-results).Skipped {
+			skipped++
+		}
+	}
+	if skipped != 1 {
+		t.Fatalf("skipped calls = %d, want exactly one", skipped)
+	}
+	assertFileState(t, filepath.Join(outputDir, "same.bin"), "data", 0o600)
+	assertNoDownloadArtifacts(t, outputDir)
+}
+
+func TestGotdFileDownloaderRejectsUninitializedAdapter(t *testing.T) {
+	var out bytes.Buffer
+	err := (gotdFileDownloader{}).Download(context.Background(), &tg.InputDocumentFileLocation{}, &out)
+	if err == nil || !strings.Contains(err.Error(), "not initialized") {
+		t.Fatalf("error = %v, want initialization error", err)
+	}
+}
+
+var _ fileDownloader = gotdFileDownloader{}
+
+func downloadTestClient(t *testing.T, message *tg.Message, data []byte) (*GotdClient, string, *recordingFileDownloader) {
+	t.Helper()
+	downloader := &recordingFileDownloader{chunks: [][]byte{data}}
+	return downloadTestClientWithDownloader(t, message, downloader)
+}
+
+func downloadTestClientWithDownloader(t *testing.T, message *tg.Message, downloader *recordingFileDownloader) (*GotdClient, string, *recordingFileDownloader) {
+	t.Helper()
+	return downloadTestClientAt(t, message, downloader, filepath.Join(t.TempDir(), "downloads"))
+}
+
+func downloadTestClientAt(t *testing.T, message *tg.Message, downloader *recordingFileDownloader, outputDir string) (*GotdClient, string, *recordingFileDownloader) {
+	t.Helper()
+	db, err := store.Connect(filepath.Join(t.TempDir(), "account.sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := store.UpsertEntity(db, 321, store.EntityChannel, 654); err != nil {
+		t.Fatal(err)
+	}
+	api := &fakeMediaDownloadAPI{resp: &tg.MessagesMessages{Messages: []tg.MessageClass{message}}}
+	return &GotdClient{db: db, mediaAPI: api, fileDownloader: downloader}, outputDir, downloader
+}
+
+func documentMessageWithSize(id, size int64, mime string, attrs ...tg.DocumentAttributeClass) *tg.Message {
+	message := documentMessage(id, mime, attrs...)
+	message.ID = int(id)
+	message.Media.(*tg.MessageMediaDocument).Document.(*tg.Document).Size = size
+	return message
+}
+
+func assertDownloadDirClean(t *testing.T, dir, finalName string) {
+	t.Helper()
+	if _, err := os.Lstat(filepath.Join(dir, finalName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("final exists or stat failed: %v", err)
+	}
+	assertNoDownloadArtifacts(t, dir)
+}
+
+func assertNoDownloadArtifacts(t *testing.T, dir string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".part") || strings.Contains(entry.Name(), ".tgctl-") {
+			t.Fatalf("staged artifact remains: %s", entry.Name())
+		}
+	}
+}
+
+func assertFileState(t *testing.T, path, want string, wantMode os.FileMode) {
+	t.Helper()
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != want {
+		t.Fatalf("%s = %q, want %q", path, got, want)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != wantMode {
+		t.Fatalf("%s mode = %#o, want %#o", path, info.Mode().Perm(), wantMode)
+	}
+}
+
+type recordingFileDownloader struct {
+	mu               sync.Mutex
+	chunks           [][]byte
+	err              error
+	cancelAfterWrite bool
+	afterWrite       func() error
+	locations        []tg.InputFileLocationClass
+	calls            int
+	waitForCalls     int
+	allCalled        chan struct{}
+	allCalledOnce    sync.Once
+}
+
+func (d *recordingFileDownloader) Download(ctx context.Context, location tg.InputFileLocationClass, out io.Writer) error {
+	d.mu.Lock()
+	d.calls++
+	d.locations = append(d.locations, location)
+	chunks := make([][]byte, len(d.chunks))
+	for i := range d.chunks {
+		chunks[i] = append([]byte(nil), d.chunks[i]...)
+	}
+	afterWrite := d.afterWrite
+	cancelAfterWrite := d.cancelAfterWrite
+	wantErr := d.err
+	waitForCalls := d.waitForCalls
+	allCalled := d.allCalled
+	if waitForCalls > 0 && d.calls >= waitForCalls {
+		d.allCalledOnce.Do(func() { close(allCalled) })
+	}
+	d.mu.Unlock()
+	if waitForCalls > 0 {
+		select {
+		case <-allCalled:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	for _, chunk := range chunks {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if _, err := out.Write(chunk); err != nil {
+			return err
+		}
+	}
+	if afterWrite != nil {
+		if err := afterWrite(); err != nil {
+			return err
+		}
+	}
+	if cancelAfterWrite {
+		cancelCtx, cancel := context.WithCancel(ctx)
+		cancel()
+		return cancelCtx.Err()
+	}
+	return wantErr
+}
+
+func (d *recordingFileDownloader) Calls() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.calls
+}
+
+func (d *recordingFileDownloader) Locations() []tg.InputFileLocationClass {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return append([]tg.InputFileLocationClass(nil), d.locations...)
+}
+
+type fakeDownloadDestination struct {
+	bytes.Buffer
+	path        string
+	commitErr   error
+	abortErr    error
+	commitCalls int
+	abortCalls  int
+}
+
+func (d *fakeDownloadDestination) FinalPath() string { return d.path }
+func (d *fakeDownloadDestination) Commit() error     { d.commitCalls++; return d.commitErr }
+func (d *fakeDownloadDestination) Abort() error      { d.abortCalls++; return d.abortErr }
+
+type fakeDestinationOpener struct {
+	destination downloadDestination
+	err         error
+}
+
+func (o fakeDestinationOpener) Open(string, string, bool) (downloadDestination, error) {
+	return o.destination, o.err
 }
 
 func photoMessage(id int64) *tg.Message {
@@ -442,6 +1016,7 @@ func reverseAttributes(in []tg.DocumentAttributeClass) []tg.DocumentAttributeCla
 }
 
 type fakeMediaDownloadAPI struct {
+	mu               sync.Mutex
 	resp             tg.MessagesMessagesClass
 	err              error
 	returnContextErr bool
@@ -451,6 +1026,8 @@ type fakeMediaDownloadAPI struct {
 }
 
 func (f *fakeMediaDownloadAPI) ChannelsGetMessages(ctx context.Context, req *tg.ChannelsGetMessagesRequest) (tg.MessagesMessagesClass, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.channelReq = req
 	if f.returnContextErr {
 		return nil, ctx.Err()
@@ -459,6 +1036,8 @@ func (f *fakeMediaDownloadAPI) ChannelsGetMessages(ctx context.Context, req *tg.
 }
 
 func (f *fakeMediaDownloadAPI) MessagesGetMessages(ctx context.Context, ids []tg.InputMessageClass) (tg.MessagesMessagesClass, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.messagesCalled++
 	f.messageIDs = ids
 	if f.returnContextErr {

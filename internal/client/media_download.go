@@ -4,19 +4,67 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math"
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 
+	"github.com/b1rd33/tgctl-go/internal/media"
 	"github.com/b1rd33/tgctl-go/internal/resolve"
 	"github.com/b1rd33/tgctl-go/internal/safety"
+	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/query/messages"
 	"github.com/gotd/td/tg"
 )
 
-// ErrMediaDownloadNotImplemented marks the Task 6 intermediate boundary:
-// lookup and metadata extraction succeeded, but no bytes were streamed and no
-// destination was touched. Task 7 replaces this return with streaming.
-var ErrMediaDownloadNotImplemented = errors.New("media download streaming is not implemented")
+type fileDownloader interface {
+	Download(context.Context, tg.InputFileLocationClass, io.Writer) error
+}
+
+type gotdFileDownloader struct {
+	client *telegram.Client
+	api    *tg.Client
+}
+
+func (d gotdFileDownloader) Download(ctx context.Context, location tg.InputFileLocationClass, out io.Writer) error {
+	if d.client == nil || d.api == nil {
+		return errors.New("Telegram media downloader is not initialized")
+	}
+	_, err := d.client.Downloader().Download(d.api, location).Stream(ctx, out)
+	return err
+}
+
+type downloadDestination interface {
+	io.Writer
+	FinalPath() string
+	Commit() error
+	Abort() error
+}
+
+type destinationOpener interface {
+	Open(dir, name string, overwrite bool) (downloadDestination, error)
+}
+
+type atomicDestinationOpener struct{}
+
+func (atomicDestinationOpener) Open(dir, name string, overwrite bool) (downloadDestination, error) {
+	destination, err := media.OpenDestination(dir, name, overwrite)
+	if err != nil {
+		return nil, err
+	}
+	return &atomicDownloadDestination{destination: destination}, nil
+}
+
+type atomicDownloadDestination struct {
+	destination *media.Destination
+}
+
+func (d *atomicDownloadDestination) Write(p []byte) (int, error) { return d.destination.File.Write(p) }
+func (d *atomicDownloadDestination) FinalPath() string           { return d.destination.FinalPath }
+func (d *atomicDownloadDestination) Commit() error               { return d.destination.Commit() }
+func (d *atomicDownloadDestination) Abort() error                { return d.destination.Abort() }
 
 type mediaDownloadAPI interface {
 	ChannelsGetMessages(context.Context, *tg.ChannelsGetMessagesRequest) (tg.MessagesMessagesClass, error)
@@ -28,6 +76,7 @@ type extractedDownloadMedia struct {
 	MIMEType  string
 	Filename  string
 	Size      int64
+	SizeKnown bool
 	File      messages.File
 }
 
@@ -41,8 +90,15 @@ func (g *GotdClient) DownloadMedia(ctx context.Context, req DownloadMediaReq) (D
 	if req.MaxBytes < 0 {
 		return DownloadMediaResp{}, safety.NewBadArgs("max_bytes cannot be negative")
 	}
+	if strings.TrimSpace(req.OutputDir) == "" {
+		return DownloadMediaResp{}, safety.NewBadArgs("output_dir cannot be blank")
+	}
 	if err := ctx.Err(); err != nil {
 		return DownloadMediaResp{}, err
+	}
+	absOutputDir, err := filepath.Abs(filepath.Clean(req.OutputDir))
+	if err != nil {
+		return DownloadMediaResp{}, fmt.Errorf("resolve output directory: %w", err)
 	}
 
 	peer, err := g.peerFromChatID(ctx, req.ChatID)
@@ -60,15 +116,87 @@ func (g *GotdClient) DownloadMedia(ctx context.Context, req DownloadMediaReq) (D
 	if err != nil {
 		return DownloadMediaResp{}, mapRPCErr(err)
 	}
-	media, err := extractDownloadMedia(message)
+	extracted, err := extractDownloadMedia(message)
 	if err != nil {
 		return DownloadMediaResp{}, err
 	}
 
-	return DownloadMediaResp{
+	safeName := media.SanitizeDownloadName(extracted.Filename)
+	resp := DownloadMediaResp{
 		ChatID: req.ChatID, MessageID: req.MessageID,
-		MediaType: media.MediaType, MIMEType: media.MIMEType, Filename: media.Filename,
-	}, ErrMediaDownloadNotImplemented
+		MediaType: extracted.MediaType, MIMEType: extracted.MIMEType, Filename: safeName,
+	}
+	if extracted.SizeKnown && req.MaxBytes > 0 && extracted.Size > req.MaxBytes {
+		return DownloadMediaResp{}, errors.Join(
+			media.ErrLimitExceeded,
+			safety.NewBadArgs("media size %d exceeds max_bytes %d", extracted.Size, req.MaxBytes),
+		)
+	}
+
+	downloader := g.fileDownloader
+	if downloader == nil {
+		downloader = gotdFileDownloader{client: g.tgc, api: g.api}
+	}
+	opener := g.destinationOpener
+	if opener == nil {
+		opener = atomicDestinationOpener{}
+	}
+
+	destination, err := opener.Open(absOutputDir, extracted.Filename, req.Overwrite)
+	if err != nil {
+		if !req.Overwrite && errors.Is(err, media.ErrDestinationExists) && !errors.Is(err, media.ErrCleanupIncomplete) {
+			return existingDownloadResponse(resp, filepath.Join(absOutputDir, safeName), err)
+		}
+		return DownloadMediaResp{}, err
+	}
+
+	limitWriter := &media.LimitWriter{W: destination, Max: req.MaxBytes}
+	transferErr := downloader.Download(ctx, extracted.File.Location, limitWriter)
+	if transferErr == nil {
+		transferErr = ctx.Err()
+	}
+	if transferErr == nil && extracted.SizeKnown && limitWriter.N != extracted.Size {
+		if limitWriter.N < extracted.Size {
+			transferErr = fmt.Errorf("downloaded %d of %d authoritative bytes: %w", limitWriter.N, extracted.Size, io.ErrUnexpectedEOF)
+		} else {
+			transferErr = fmt.Errorf("downloaded %d bytes, authoritative size is %d", limitWriter.N, extracted.Size)
+		}
+	}
+	if transferErr != nil {
+		return DownloadMediaResp{}, abortDownload(destination, transferErr)
+	}
+
+	if err := destination.Commit(); err != nil {
+		if !req.Overwrite && errors.Is(err, media.ErrDestinationExists) && !errors.Is(err, media.ErrCleanupIncomplete) {
+			return existingDownloadResponse(resp, destination.FinalPath(), err)
+		}
+		return DownloadMediaResp{}, abortDownload(destination, err)
+	}
+	resp.Path = destination.FinalPath()
+	resp.Bytes = limitWriter.N
+	return resp, nil
+}
+
+func abortDownload(destination downloadDestination, primary error) error {
+	cleanupErr := destination.Abort()
+	if errors.Is(cleanupErr, media.ErrDestinationCommitted) {
+		cleanupErr = errors.Join(media.ErrCleanupIncomplete, cleanupErr)
+	}
+	return errors.Join(primary, cleanupErr)
+}
+
+func existingDownloadResponse(resp DownloadMediaResp, finalPath string, collisionErr error) (DownloadMediaResp, error) {
+	info, err := os.Lstat(finalPath)
+	if err != nil {
+		return DownloadMediaResp{}, errors.Join(collisionErr, fmt.Errorf("inspect existing download: %w", err))
+	}
+	if !info.Mode().IsRegular() {
+		return DownloadMediaResp{}, errors.Join(collisionErr, fmt.Errorf("%w: %s", media.ErrUnsafeDestination, finalPath))
+	}
+	resp.Path = finalPath
+	resp.Bytes = info.Size()
+	resp.Skipped = true
+	return resp, nil
 }
 
 func lookupExactMessage(ctx context.Context, api mediaDownloadAPI, peer tg.InputPeerClass, messageID int) (*tg.Message, error) {
@@ -135,9 +263,10 @@ func extractDownloadMedia(message *tg.Message) (extractedDownloadMedia, error) {
 		}
 		file.Name = fmt.Sprintf("photo_%d.jpg", photo.ID)
 		file.MIMEType = "image/jpeg"
+		size, sizeKnown := selectedPhotoSize(photo.Sizes, file.Location)
 		return extractedDownloadMedia{
 			MediaType: "photo", MIMEType: file.MIMEType, Filename: file.Name,
-			Size: largestPhotoSize(photo.Sizes), File: file,
+			Size: size, SizeKnown: sizeKnown, File: file,
 		}, nil
 
 	case *tg.MessageMediaDocument:
@@ -183,7 +312,7 @@ func extractDownloadMedia(message *tg.Message) (extractedDownloadMedia, error) {
 		file.MIMEType = mimeType
 		return extractedDownloadMedia{
 			MediaType: mediaType, MIMEType: mimeType, Filename: filename,
-			Size: document.Size, File: file,
+			Size: document.Size, SizeKnown: document.Size >= 0, File: file,
 		}, nil
 	default:
 		return extractedDownloadMedia{}, safety.NewBadArgs("message has no downloadable file media")
@@ -257,29 +386,36 @@ func isTypedNil(value any) bool {
 	return rv.Kind() == reflect.Ptr && rv.IsNil()
 }
 
-func largestPhotoSize(sizes []tg.PhotoSizeClass) int64 {
-	var largest int64
+func selectedPhotoSize(sizes []tg.PhotoSizeClass, location tg.InputFileLocationClass) (int64, bool) {
+	photoLocation, ok := location.(*tg.InputPhotoFileLocation)
+	if !ok || photoLocation == nil {
+		return 0, false
+	}
 	for _, size := range sizes {
 		switch size := size.(type) {
 		case *tg.PhotoSize:
-			if size != nil && int64(size.Size) > largest {
-				largest = int64(size.Size)
+			if size != nil && size.Type == photoLocation.ThumbSize && size.Size >= 0 {
+				return int64(size.Size), true
 			}
 		case *tg.PhotoSizeProgressive:
-			if size != nil {
+			if size != nil && size.Type == photoLocation.ThumbSize && len(size.Sizes) > 0 {
+				largest := -1
 				for _, candidate := range size.Sizes {
-					if int64(candidate) > largest {
-						largest = int64(candidate)
+					if candidate > largest {
+						largest = candidate
 					}
+				}
+				if largest >= 0 {
+					return int64(largest), true
 				}
 			}
 		case *tg.PhotoCachedSize:
-			if size != nil && int64(len(size.Bytes)) > largest {
-				largest = int64(len(size.Bytes))
+			if size != nil && size.Type == photoLocation.ThumbSize {
+				return int64(len(size.Bytes)), true
 			}
 		}
 	}
-	return largest
+	return 0, false
 }
 
 func extensionForMedia(mimeType, mediaType string) string {

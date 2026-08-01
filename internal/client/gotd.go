@@ -26,13 +26,15 @@ import (
 // Close() cancels Run and waits for the goroutine to exit, ensuring the
 // session file flushes cleanly.
 type GotdClient struct {
-	api      *tg.Client
-	mediaAPI mediaDownloadAPI
-	tgc      *telegram.Client
-	cancel   context.CancelFunc
-	done     chan error
-	db       *sql.DB // per-account entity cache; may be nil for ephemeral clients
-	events   chan ListenEvent
+	api               *tg.Client
+	mediaAPI          mediaDownloadAPI
+	fileDownloader    fileDownloader
+	destinationOpener destinationOpener
+	tgc               *telegram.Client
+	cancel            context.CancelFunc
+	done              chan error
+	db                *sql.DB // per-account entity cache; may be nil for ephemeral clients
+	events            chan ListenEvent
 }
 
 // AuthPrompt is the interactive callback set used during `tg login`. Each
@@ -231,7 +233,12 @@ func newClient(ctx context.Context, apiID int, apiHash, sessionPath, dbPath stri
 		<-done
 		return nil, err
 	}
-	gc := &GotdClient{api: api, mediaAPI: api, tgc: tgc, cancel: cancel, done: done, events: events}
+	gc := &GotdClient{
+		api: api, mediaAPI: api,
+		fileDownloader:    gotdFileDownloader{client: tgc, api: api},
+		destinationOpener: atomicDestinationOpener{},
+		tgc:               tgc, cancel: cancel, done: done, events: events,
+	}
 	if dbPath != "" {
 		if db, err := store.Connect(dbPath); err == nil {
 			gc.db = db
