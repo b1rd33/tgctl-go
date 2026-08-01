@@ -60,9 +60,18 @@ tg --account test download-album 123 --grouped-id 9001 \
 
 An ungrouped anchor is a stable `not-an-album` error. Use `--overwrite` to
 redownload existing artifacts; without it, only a verified cached artifact is
-skipped. Results are per-item and may be partial; rerun failed items rather
-than assuming an album is complete. Download has no album-level idempotency
-key. Captions and local artifact paths are intentionally omitted from output.
+skipped. Results are per-item and may be partial; rerun the group and rely on
+cache checks rather than assuming an album is complete. Download has no
+album-level idempotency key or individual-item selector. Captions and local
+artifact paths are intentionally omitted from output.
+
+If media writes finish but cache persistence/finalization, Telegram client
+close, SQLite close, or durable audit finalization fails, expect a nonzero
+committed failure with
+`committed:true`, `partial:true`, `audit_failed` when applicable, and bounded
+chat/item/message/group/counter metadata. Do not blindly retry: artifacts may
+already exist. Inspect the cache and output, then make an explicit recovery
+decision; `--overwrite` forces a fresh download.
 
 ## Backfill and inspect
 
@@ -75,7 +84,10 @@ tg --account test get-msg 123 456 --json
 
 Backfill preserves Telegram `grouped_id`, de-duplicates overlapping history
 pages, and reports `albums_seen`. Existing databases without the new column
-remain readable in read-only mode; writable startup performs migrations.
+remain readable in read-only mode; writable startup performs the migration but
+cannot reconstruct old album membership. Run backfill after migration if
+album grouping is needed. A dry-run reads the local cache and cannot discover
+a remote album.
 
 ## Verification and release hygiene
 
@@ -92,9 +104,11 @@ scripts/check_public_hygiene.sh
 
 For live verification use a disposable account: confirm carousel order,
 caption placement, returned IDs, shared `grouped_id`, backfill preservation,
-dry-run zero network calls, partial failures, cancellation, size limits, and
-safe retries. Never push sessions, database files, audit logs, private paths,
-or unreviewed public history.
+legacy read-only reads, writable migration plus backfill, dry-run zero
+Telegram calls, partial failures, cancellation, size limits, client-close and
+durable-audit failures, nonzero committed envelopes, bounded recovery metadata,
+and absence of path/caption leaks. Never push sessions, database files, audit
+logs, private paths, or unreviewed public history.
 
 ## Known scope
 
