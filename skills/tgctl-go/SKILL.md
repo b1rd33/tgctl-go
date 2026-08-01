@@ -102,6 +102,21 @@ GOCACHE=/private/tmp/tgctl-gocache-docs go test ./tools/gen_commands_md -count=1
 scripts/check_public_hygiene.sh
 ```
 
+For a tagged distribution release, verify the generated Homebrew tap too:
+
+```bash
+brew update
+brew info b1rd33/tap/tgctl-go
+brew fetch b1rd33/tap/tgctl-go
+brew upgrade b1rd33/tap/tgctl-go
+brew test b1rd33/tap/tgctl-go
+tg --version
+```
+
+GoReleaser publishes the GitHub archives, checksums, and tap formula from the
+release tag. The binary's semver may be printed with or without a leading
+`v`; the formula test must accept both forms.
+
 For live verification use a disposable account: confirm carousel order,
 caption placement, returned IDs, shared `grouped_id`, backfill preservation,
 legacy read-only reads, writable migration plus backfill, dry-run zero
