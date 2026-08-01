@@ -93,15 +93,20 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 			recoveryExtras := map[string]any{}
 			return runWriteResolvedTargetDurable(cmd, name, "messages.SendMultiMedia", args[0], cfg, paths, payload, &resolved.target, recoveryExtras,
 				func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error) {
+					recoveryExtras["chat_id"] = chatID
+					recoveryExtras["item_count"] = len(items)
 					resp, err := c.UploadAlbum(ctx, client.UploadAlbumReq{
 						ChatID: chatID, Items: items, Caption: caption, ReplyTo: replyTo,
 						Silent: silent, SupportsStreaming: supportsStreaming, MaxBytes: maxBytes,
 						MaxSizeMB: maxSizeMB,
 					})
 					if err != nil {
+						var albumErr *client.AlbumUploadError
+						if errors.As(err, &albumErr) && strings.HasPrefix(albumErr.Stage, "final-send") {
+							return nil, safety.NewCommittedWriteWithExtras("album final-send outcome is unknown; do not retry blindly", errors.New("final Telegram send outcome unknown"), recoveryExtras)
+						}
 						return nil, redactAlbumUploadError(err, items, caption)
 					}
-					recoveryExtras["chat_id"] = chatID
 					recoveryExtras["item_count"] = len(resp.MessageIDs)
 					recoveryExtras["message_ids"] = append([]int64(nil), resp.MessageIDs...)
 					if resp.GroupedID != 0 {

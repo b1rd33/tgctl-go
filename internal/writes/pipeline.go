@@ -83,33 +83,58 @@ func Run(ctx context.Context, db *sql.DB, in PipelineInput) (any, error) {
 		return nil, err
 	}
 
+	requestID := dispatch.RequestIDFrom(ctx)
+	albumReservation := false
+	releaseAlbumReservation := func() {
+		if albumReservation {
+			_ = idempotency.Release(db, in.Args.IdempotencyKey, in.Cmd, requestID)
+			albumReservation = false
+		}
+	}
+	defer releaseAlbumReservation()
+	replay := func(cached map[string]any) (any, error) {
+		if expected := strings.TrimSpace(in.Args.IdempotencyFingerprint); expected != "" {
+			actual := strings.TrimSpace(fmt.Sprintf("%v", cached["idempotency_fingerprint"]))
+			if actual == "" || actual != expected {
+				return nil, safety.NewBadArgs("Idempotency key %q was already used for a different album request", in.Args.IdempotencyKey)
+			}
+		}
+		if err := validateConfirmedReplay(in.Args.IdempotencyKey, cached, in.ConfirmedTarget); err != nil {
+			return nil, err
+		}
+		// The envelope's data with `idempotent_replay: true` flag.
+		if data, ok := cached["data"].(map[string]any); ok {
+			out := map[string]any{}
+			for k, v := range data {
+				out[k] = v
+			}
+			out["idempotent_replay"] = true
+			return out, nil
+		}
+		// Defensive: if the cached envelope shape was unexpected, still return it.
+		return cached, nil
+	}
+
 	// 2. Idempotency lookup (after write gate, before resolve, matching Python).
 	// A dry-run is always a fresh plan: it must not replay or write durable
 	// idempotency state, even when the caller supplied a key.
 	if !in.Args.DryRun {
-		if cached, err := idempotency.Lookup(db, in.Args.IdempotencyKey, in.Cmd); err != nil {
-			return nil, err
-		} else if cached != nil {
-			if expected := strings.TrimSpace(in.Args.IdempotencyFingerprint); expected != "" {
-				actual := strings.TrimSpace(fmt.Sprintf("%v", cached["idempotency_fingerprint"]))
-				if actual == "" || actual != expected {
-					return nil, safety.NewBadArgs("Idempotency key %q was already used for a different album request", in.Args.IdempotencyKey)
-				}
-			}
-			if err := validateConfirmedReplay(in.Args.IdempotencyKey, cached, in.ConfirmedTarget); err != nil {
+		if strings.TrimSpace(in.Args.IdempotencyFingerprint) != "" && in.Args.IdempotencyKey != "" {
+			cached, reserved, err := idempotency.Reserve(db, in.Args.IdempotencyKey, in.Cmd, requestID, strings.TrimSpace(in.Args.IdempotencyFingerprint))
+			if err != nil {
 				return nil, err
 			}
-			// The envelope's data with `idempotent_replay: true` flag.
-			if data, ok := cached["data"].(map[string]any); ok {
-				out := map[string]any{}
-				for k, v := range data {
-					out[k] = v
+			if !reserved {
+				if idempotency.IsPending(cached) {
+					return nil, safety.NewBadArgs("Idempotency key %q is already in progress", in.Args.IdempotencyKey)
 				}
-				out["idempotent_replay"] = true
-				return out, nil
+				return replay(cached)
 			}
-			// Defensive: if the cached envelope shape was unexpected, still return it.
-			return cached, nil
+			albumReservation = true
+		} else if cached, err := idempotency.Lookup(db, in.Args.IdempotencyKey, in.Cmd); err != nil {
+			return nil, err
+		} else if cached != nil {
+			return replay(cached)
 		}
 	}
 
@@ -146,6 +171,7 @@ func Run(ctx context.Context, db *sql.DB, in PipelineInput) (any, error) {
 
 	// 6. Local rate limiter
 	if err := safety.OutboundWriteLimiter.CheckOrError(); err != nil {
+		releaseAlbumReservation()
 		return nil, err
 	}
 
@@ -161,6 +187,7 @@ func Run(ctx context.Context, db *sql.DB, in PipelineInput) (any, error) {
 			DryRun:            false,
 		})
 		if auditErr != nil && (in.DurableAudit || strings.TrimSpace(in.Args.IdempotencyFingerprint) != "") {
+			releaseAlbumReservation()
 			return nil, errors.New("durable audit preflight failed")
 		}
 	}
@@ -168,6 +195,12 @@ func Run(ctx context.Context, db *sql.DB, in PipelineInput) (any, error) {
 	// 8. Telegram call
 	data, err := in.Run(ctx, chatID, chatTitle)
 	if err != nil {
+		var committed *safety.CommittedWrite
+		if errors.As(err, &committed) {
+			albumReservation = false
+		} else {
+			releaseAlbumReservation()
+		}
 		return nil, err
 	}
 
@@ -196,12 +229,20 @@ func Run(ctx context.Context, db *sql.DB, in PipelineInput) (any, error) {
 				"value":   in.ConfirmedTarget.ConfirmationValue,
 			}
 		}
-		if err := idempotency.Record(db, in.Args.IdempotencyKey, in.Cmd, dispatch.RequestIDFrom(ctx), envelope); err != nil {
+		var recordErr error
+		if albumReservation {
+			recordErr = idempotency.Finalize(db, in.Args.IdempotencyKey, in.Cmd, requestID, envelope)
+		} else {
+			recordErr = idempotency.Record(db, in.Args.IdempotencyKey, in.Cmd, requestID, envelope)
+		}
+		if recordErr != nil {
 			if strings.TrimSpace(in.Args.IdempotencyFingerprint) != "" {
+				albumReservation = false
 				return nil, safety.NewCommittedWriteWithExtras("album committed but idempotency finalization failed; do not retry blindly", errors.New("idempotency cache finalization failed"), in.CommittedExtras)
 			}
-			return nil, err
+			return nil, recordErr
 		}
+		albumReservation = false
 	}
 	return data, nil
 }

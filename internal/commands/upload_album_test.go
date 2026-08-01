@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/b1rd33/tgctl-go/internal/client"
 	"github.com/b1rd33/tgctl-go/internal/store"
@@ -114,7 +116,7 @@ func TestUploadAlbumIdempotencyFinalizationFailureIsCommitted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`CREATE TRIGGER block_album_idempotency BEFORE INSERT ON tg_idempotency BEGIN SELECT RAISE(ABORT, 'blocked'); END`); err != nil {
+	if _, err := db.Exec(`CREATE TRIGGER block_album_idempotency BEFORE UPDATE ON tg_idempotency BEGIN SELECT RAISE(ABORT, 'blocked'); END`); err != nil {
 		db.Close()
 		t.Fatal(err)
 	}
@@ -157,6 +159,78 @@ func TestUploadAlbumDurableAuditPreflightBlocksTelegram(t *testing.T) {
 	out, code := runRoot(t, cfg, "upload-album", "1", first, second, "--allow-write", "--json")
 	if code == 0 || len(fake.Albums) != 0 || strings.Contains(out, auditPath) || strings.Contains(out, first) {
 		t.Fatalf("code=%d calls=%d unsafe output=%s", code, len(fake.Albums), out)
+	}
+}
+
+func TestUploadAlbumConcurrentSameKeySendsOnce(t *testing.T) {
+	cfg, fake, _ := albumFakeConfig(t)
+	first := writeAlbumFixture(t, "first.jpg", []byte("\xff\xd8\xffphoto"))
+	second := writeAlbumFixture(t, "second.jpg", []byte("\xff\xd8\xffphoto2"))
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var once sync.Once
+	fake.AlbumHook = func() {
+		once.Do(func() { close(entered) })
+		<-release
+	}
+	args := []string{"upload-album", "1", first, second, "--idempotency-key", "same-key", "--allow-write", "--json"}
+	type result struct {
+		out  string
+		code int
+	}
+	firstDone := make(chan result, 1)
+	go func() {
+		out, code := runRoot(t, cfg, args...)
+		firstDone <- result{out: out, code: code}
+	}()
+	select {
+	case <-entered:
+	case <-time.After(3 * time.Second):
+		t.Fatal("first album did not reach Telegram fake")
+	}
+	secondDone := make(chan result, 1)
+	go func() {
+		out, code := runRoot(t, cfg, args...)
+		secondDone <- result{out: out, code: code}
+	}()
+	select {
+	case second := <-secondDone:
+		if second.code != 2 || !strings.Contains(second.out, "already in progress") {
+			t.Fatalf("second result=%#v", second)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("second album did not return in-progress")
+	}
+	close(release)
+	firstResult := <-firstDone
+	if firstResult.code != 0 {
+		t.Fatalf("first result=%#v", firstResult)
+	}
+	if len(fake.Albums) != 1 {
+		t.Fatalf("Telegram album calls=%d", len(fake.Albums))
+	}
+}
+
+func TestUploadAlbumFinalSendFailureRetainsReservation(t *testing.T) {
+	cfg, fake, dir := albumFakeConfig(t)
+	first := writeAlbumFixture(t, "first.jpg", []byte("\xff\xd8\xffphoto"))
+	second := writeAlbumFixture(t, "second.jpg", []byte("\xff\xd8\xffphoto2"))
+	fake.AlbumErr = &client.AlbumUploadError{Stage: "final-send-cancel", Err: errors.New("RPC outcome unknown")}
+	out, code := runRoot(t, cfg, "upload-album", "1", first, second, "--idempotency-key", "unknown", "--allow-write", "--json")
+	if code != 1 || !strings.Contains(out, `"committed":true`) || strings.Contains(out, first) || strings.Contains(out, "RPC outcome") {
+		t.Fatalf("code=%d out=%s", code, out)
+	}
+	db, err := store.ConnectReadonly(filepath.Join(dir, "telegram.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var resultJSON string
+	if err := db.QueryRow("SELECT result_json FROM tg_idempotency WHERE key='unknown'").Scan(&resultJSON); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(resultJSON, `"pending":true`) {
+		t.Fatalf("reservation not retained: %s", resultJSON)
 	}
 }
 

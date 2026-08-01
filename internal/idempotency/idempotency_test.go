@@ -2,9 +2,11 @@ package idempotency
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
@@ -88,5 +90,44 @@ func TestRecordEmptyKeyIsNoop(t *testing.T) {
 	}
 	if n != 0 {
 		t.Fatalf("expected 0 rows, got %d", n)
+	}
+}
+
+func TestReserveBlocksFreshPendingAndReclaimsStale(t *testing.T) {
+	db := newDB(t)
+	if _, reserved, err := Reserve(db, "fresh", "upload-album", "req-1", "fp"); err != nil || !reserved {
+		t.Fatalf("initial reserve=%v err=%v", reserved, err)
+	}
+	if _, reserved, err := Reserve(db, "fresh", "upload-album", "req-2", "fp"); err != nil || reserved {
+		t.Fatalf("fresh pending reserve=%v err=%v", reserved, err)
+	}
+	stale, _ := json.Marshal(map[string]any{
+		"pending": true, "command": "upload-album", "request_id": "old", "idempotency_fingerprint": "fp",
+		"reserved_at": time.Now().Add(-48 * time.Hour).UTC().Format(time.RFC3339Nano),
+	})
+	if _, err := db.Exec(`INSERT INTO tg_idempotency(key, command, request_id, result_json, created_at) VALUES (?, ?, ?, ?, ?)`, "stale", "upload-album", "old", string(stale), time.Now().UTC().Format(time.RFC3339)); err != nil {
+		t.Fatal(err)
+	}
+	if _, reserved, err := Reserve(db, "stale", "upload-album", "req-3", "fp"); err != nil || !reserved {
+		t.Fatalf("stale reserve=%v err=%v", reserved, err)
+	}
+}
+
+func TestReserveDoesNotReclaimStaleDifferentFingerprint(t *testing.T) {
+	db := newDB(t)
+	stale, _ := json.Marshal(map[string]any{
+		"pending": true, "command": "upload-album", "request_id": "old", "idempotency_fingerprint": "old-fp",
+		"reserved_at": time.Now().Add(-48 * time.Hour).UTC().Format(time.RFC3339Nano),
+	})
+	if _, err := db.Exec(`INSERT INTO tg_idempotency(key, command, request_id, result_json, created_at) VALUES (?, ?, ?, ?, ?)`, "stale-different", "upload-album", "old", string(stale), time.Now().UTC().Format(time.RFC3339)); err != nil {
+		t.Fatal(err)
+	}
+	_, reserved, err := Reserve(db, "stale-different", "upload-album", "req", "new-fp")
+	if err == nil || reserved {
+		t.Fatalf("reserve=%v err=%v", reserved, err)
+	}
+	var badArgs *safety.BadArgs
+	if !errors.As(err, &badArgs) {
+		t.Fatalf("err=%v is not BadArgs", err)
 	}
 }

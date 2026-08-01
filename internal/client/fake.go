@@ -14,15 +14,18 @@ type FakeClient struct {
 	// must not mutate those fields directly while calls are in flight.
 	mu sync.Mutex
 
-	Me           User
-	NextErr      error
-	Closed       bool
-	Calls        []string
-	Sent         []SendMessageReq
-	Uploads      []UploadFileReq
-	Albums       []UploadAlbumReq
-	AlbumResp    UploadAlbumResp
-	AlbumErr     error
+	Me        User
+	NextErr   error
+	Closed    bool
+	Calls     []string
+	Sent      []SendMessageReq
+	Uploads   []UploadFileReq
+	Albums    []UploadAlbumReq
+	AlbumResp UploadAlbumResp
+	AlbumErr  error
+	// AlbumHook runs after an album request is recorded, outside the fake's
+	// mutex. Tests use it to hold the Telegram call while racing idempotency.
+	AlbumHook    func()
 	Downloads    []DownloadMediaReq
 	DownloadResp DownloadMediaResp
 	DownloadErr  error
@@ -122,12 +125,18 @@ func (f *FakeClient) UploadFile(_ context.Context, req UploadFileReq) (UploadFil
 
 func (f *FakeClient) UploadAlbum(_ context.Context, req UploadAlbumReq) (UploadAlbumResp, error) {
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	if err := f.record("UploadAlbum"); err != nil {
+		f.mu.Unlock()
 		return UploadAlbumResp{}, err
 	}
 	f.Albums = append(f.Albums, req)
-	return f.AlbumResp, f.AlbumErr
+	resp, err := f.AlbumResp, f.AlbumErr
+	hook := f.AlbumHook
+	f.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
+	return resp, err
 }
 
 func (f *FakeClient) DownloadMedia(_ context.Context, req DownloadMediaReq) (DownloadMediaResp, error) {

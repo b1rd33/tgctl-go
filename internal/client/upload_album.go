@@ -387,12 +387,12 @@ func (g *GotdClient) UploadAlbum(ctx context.Context, req UploadAlbumReq) (Uploa
 	if err != nil {
 		stage := "final-send"
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			stage = "cancel"
+			stage = "final-send-cancel"
 		}
 		return UploadAlbumResp{}, albumFailure(stage, -1, mapRPCErr(err))
 	}
 	if err := ctx.Err(); err != nil {
-		return UploadAlbumResp{}, albumFailure("cancel", -1, err)
+		return UploadAlbumResp{}, albumFailure("final-send-cancel", -1, err)
 	}
 	resp, err := extractAlbumResponse(updates, randomIDs, items)
 	if err != nil {

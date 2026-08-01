@@ -21,6 +21,7 @@ type albumRPCFake struct {
 	failUploadMedia  bool
 	uploadMediaResp  []tg.MessageMediaClass
 	afterUploadMedia func()
+	afterSend        func()
 	rawSendResponse  bool
 	sendResp         tg.UpdatesClass
 	sendErr          error
@@ -66,6 +67,9 @@ func (f *albumRPCFake) MessagesUploadMedia(_ context.Context, req *tg.MessagesUp
 func (f *albumRPCFake) MessagesSendMultiMedia(_ context.Context, req *tg.MessagesSendMultiMediaRequest) (tg.UpdatesClass, error) {
 	f.calls = append(f.calls, "send-multi-media")
 	f.sendReq = req
+	if f.afterSend != nil {
+		f.afterSend()
+	}
 	if f.rawSendResponse {
 		return f.sendResp, f.sendErr
 	}
@@ -409,6 +413,21 @@ func TestUploadAlbumFinalSendErrorIsClassified(t *testing.T) {
 	}
 	_, err := (&GotdClient{albumAPI: api}).UploadAlbum(context.Background(), UploadAlbumReq{ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, Items: []UploadAlbumItem{{Path: paths[0], Kind: "photo"}, {Path: paths[1], Kind: "photo"}}})
 	if err == nil || !strings.Contains(err.Error(), "final-send") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestUploadAlbumContextCancellationAfterFinalSendIsAmbiguous(t *testing.T) {
+	paths := writeAlbumFixtures(t, "one.jpg", "two.jpg")
+	ctx, cancel := context.WithCancel(context.Background())
+	api := &albumRPCFake{
+		uploadMediaResp: []tg.MessageMediaClass{&tg.MessageMediaPhoto{Photo: &tg.Photo{ID: 11}}, &tg.MessageMediaPhoto{Photo: &tg.Photo{ID: 22}}},
+		sendResp:        albumUpdates(501, 502),
+		afterSend:       cancel,
+	}
+	_, err := (&GotdClient{albumAPI: api}).UploadAlbum(ctx, UploadAlbumReq{ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, Items: []UploadAlbumItem{{Path: paths[0], Kind: "photo"}, {Path: paths[1], Kind: "photo"}}})
+	var albumErr *AlbumUploadError
+	if !errors.As(err, &albumErr) || albumErr.Stage != "final-send-cancel" {
 		t.Fatalf("err=%v", err)
 	}
 }
