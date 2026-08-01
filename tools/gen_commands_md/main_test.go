@@ -1,6 +1,7 @@
 package main_test
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -87,7 +88,7 @@ func TestGeneratorFallsBackToLocalBinaryWhenSelectionIsUnset(t *testing.T) {
 	}
 }
 
-func TestDocsCommandsCheckReportsDriftWithoutModifyingReference(t *testing.T) {
+func TestDocsCommandsTargetsBuildCurrentSourceWithoutRepositoryBinary(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Make recipe uses a POSIX shell")
 	}
@@ -95,16 +96,113 @@ func TestDocsCommandsCheckReportsDriftWithoutModifyingReference(t *testing.T) {
 		t.Skip("make is not installed")
 	}
 
-	repository := filepath.Clean(filepath.Join("..", ".."))
+	for _, target := range []string{"docs-commands", "docs-commands-check"} {
+		for _, staleRepositoryBinary := range []bool{false, true} {
+			name := target + "/without tg"
+			if staleRepositoryBinary {
+				name = target + "/with stale tg"
+			}
+			t.Run(name, func(t *testing.T) {
+				repository := copyTrackedRepository(t)
+				reference := filepath.Join(repository, "docs", "commands.md")
+				before, err := os.ReadFile(reference)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				fake := buildFakeTG(t)
+				if staleRepositoryBinary {
+					copyFile(t, fake, filepath.Join(repository, "tg"))
+				}
+				temporaryRoot := t.TempDir()
+				cmd := exec.Command("make", target)
+				cmd.Dir = repository
+				cmd.Env = append(os.Environ(),
+					"TMPDIR="+temporaryRoot,
+					"TGCTL_DOCS_BINARY="+fake,
+				)
+				if output, err := cmd.CombinedOutput(); err != nil {
+					t.Fatalf("standalone %s: %v\n%s", target, err, output)
+				}
+
+				after, err := os.ReadFile(reference)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !bytes.Equal(after, before) {
+					t.Fatal("docs-commands-check modified docs/commands.md")
+				}
+				entries, err := os.ReadDir(temporaryRoot)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, entry := range entries {
+					if strings.HasPrefix(entry.Name(), "tgctl-docs.") {
+						t.Fatalf("target temporary path was not cleaned up: %v", entries)
+					}
+				}
+				if !staleRepositoryBinary {
+					if _, err := os.Stat(filepath.Join(repository, "tg")); !os.IsNotExist(err) {
+						t.Fatalf("target created repository tg: %v", err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestDocsCommandsCleansBuildDirectoryWhenOutputTempCannotBeCreated(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Make recipe uses a POSIX shell")
+	}
+	if _, err := exec.LookPath("make"); err != nil {
+		t.Skip("make is not installed")
+	}
+
+	repository := copyTrackedRepository(t)
+	docsDir := filepath.Join(repository, "docs")
+	if err := os.Chmod(docsDir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(docsDir, 0o755) })
+	temporaryRoot := t.TempDir()
+	cmd := exec.Command("make", "docs-commands")
+	cmd.Dir = repository
+	cmd.Env = append(os.Environ(), "TMPDIR="+temporaryRoot)
+	if output, err := cmd.CombinedOutput(); err == nil {
+		t.Fatalf("docs-commands unexpectedly succeeded with read-only docs directory:\n%s", output)
+	}
+	entries, err := os.ReadDir(temporaryRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "tgctl-docs.") {
+			t.Fatalf("build directory survived failed output temp creation: %v", entries)
+		}
+	}
+}
+
+func TestDocsCommandsCheckReportsDriftWithoutChangingReference(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Make recipe uses a POSIX shell")
+	}
+	if _, err := exec.LookPath("make"); err != nil {
+		t.Skip("make is not installed")
+	}
+
+	repository := copyTrackedRepository(t)
 	reference := filepath.Join(repository, "docs", "commands.md")
 	before, err := os.ReadFile(reference)
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	before = append(before, []byte("\ndeliberate drift\n")...)
+	if err := os.WriteFile(reference, before, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	cmd := exec.Command("make", "docs-commands-check")
 	cmd.Dir = repository
-	cmd.Env = append(os.Environ(), "TGCTL_DOCS_BINARY="+buildFakeTG(t))
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("drift check unexpectedly succeeded:\n%s", output)
@@ -112,13 +210,53 @@ func TestDocsCommandsCheckReportsDriftWithoutModifyingReference(t *testing.T) {
 	if !strings.Contains(string(output), "docs/commands.md is out of date") {
 		t.Fatalf("drift error is not actionable:\n%s", output)
 	}
-
-	after, readErr := os.ReadFile(reference)
-	if readErr != nil {
-		t.Fatal(readErr)
+	after, err := os.ReadFile(reference)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if string(after) != string(before) {
-		t.Fatal("docs-commands-check modified docs/commands.md")
+	if !bytes.Equal(after, before) {
+		t.Fatal("docs-commands-check changed the drifted reference")
+	}
+}
+
+func copyTrackedRepository(t *testing.T) string {
+	t.Helper()
+	source, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "ls-files", "-z")
+	cmd.Dir = source
+	output, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	destination := t.TempDir()
+	for _, relativeBytes := range bytes.Split(output, []byte{0}) {
+		if len(relativeBytes) == 0 {
+			continue
+		}
+		relative := string(relativeBytes)
+		copyFile(t, filepath.Join(source, relative), filepath.Join(destination, relative))
+	}
+	return destination
+}
+
+func copyFile(t *testing.T, source, destination string) {
+	t.Helper()
+	contents, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(destination, contents, info.Mode().Perm()); err != nil {
+		t.Fatal(err)
 	}
 }
 

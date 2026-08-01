@@ -22,6 +22,8 @@ jobs:
         run: go vet ./...
       - name: go test
         run: go test ./... -count=1
+      - name: command docs generator tests
+        run: go test ./tools/gen_commands_md -count=1
       - name: go test -race
         if: matrix.os != 'windows-latest'
         run: go test -race ./... -count=1
