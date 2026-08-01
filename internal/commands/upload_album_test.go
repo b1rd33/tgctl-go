@@ -139,9 +139,9 @@ func TestUploadAlbumUploadErrorRedactsSourcePath(t *testing.T) {
 	cfg, fake, _ := albumFakeConfig(t)
 	first := writeAlbumFixture(t, "first.jpg", []byte("\xff\xd8\xffphoto"))
 	second := writeAlbumFixture(t, "second.jpg", []byte("\xff\xd8\xffphoto2"))
-	fake.AlbumErr = errors.New("open " + first + ": transport failed")
-	out, code := runRoot(t, cfg, "upload-album", "1", first, second, "--allow-write", "--json")
-	if code == 0 || strings.Contains(out, first) {
+	fake.AlbumErr = errors.New("open " + first + ": secret caption transport failed")
+	out, code := runRoot(t, cfg, "upload-album", "1", first, second, "--caption", "secret caption", "--allow-write", "--json")
+	if code == 0 || strings.Contains(out, first) || strings.Contains(out, "secret caption") {
 		t.Fatalf("code=%d leaked source path: %s", code, out)
 	}
 }

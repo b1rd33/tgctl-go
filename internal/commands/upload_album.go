@@ -99,7 +99,7 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 						MaxSizeMB: maxSizeMB,
 					})
 					if err != nil {
-						return nil, redactAlbumUploadError(err, items)
+						return nil, redactAlbumUploadError(err, items, caption)
 					}
 					recoveryExtras["chat_id"] = chatID
 					recoveryExtras["item_count"] = len(resp.MessageIDs)
@@ -248,7 +248,7 @@ type redactedAlbumUploadError struct {
 func (e *redactedAlbumUploadError) Error() string { return e.message }
 func (e *redactedAlbumUploadError) Unwrap() error { return e.err }
 
-func redactAlbumUploadError(err error, items []client.UploadAlbumItem) error {
+func redactAlbumUploadError(err error, items []client.UploadAlbumItem, caption string) error {
 	if err == nil {
 		return nil
 	}
@@ -260,6 +260,9 @@ func redactAlbumUploadError(err error, items []client.UploadAlbumItem) error {
 				redacted = strings.ReplaceAll(redacted, path, "[redacted]")
 			}
 		}
+	}
+	if caption != "" {
+		redacted = strings.ReplaceAll(redacted, caption, "[redacted]")
 	}
 	if redacted == message {
 		return err

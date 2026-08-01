@@ -160,7 +160,7 @@ func Run(name string, opts Options, runner Runner) int {
 		if err == nil {
 			committedErr := safety.NewCommittedWriteWithExtras(
 				"operation committed but durable audit finalization failed; do not retry blindly",
-				auditErr,
+				errors.New("durable audit finalization failed"),
 				opts.CommittedExtras,
 			)
 			code, msg, extra := Classify(committedErr)
