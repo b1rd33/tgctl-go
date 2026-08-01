@@ -225,9 +225,13 @@ func collectAlbumUpdates(u tg.UpdatesClass) (albumUpdateData, error) {
 			}
 			d.mapping[v.RandomID] = int64(v.ID)
 		case *tg.UpdateNewMessage:
-			collectAlbumMessage(d, v.Message)
+			if v != nil {
+				collectAlbumMessage(d, v.Message)
+			}
 		case *tg.UpdateNewChannelMessage:
-			collectAlbumMessage(d, v.Message)
+			if v != nil {
+				collectAlbumMessage(d, v.Message)
+			}
 		}
 	}
 	return d, nil
@@ -351,9 +355,12 @@ func (g *GotdClient) UploadAlbum(ctx context.Context, req UploadAlbumReq) (Uploa
 		if err := ctx.Err(); err != nil {
 			return UploadAlbumResp{}, albumFailure("cancel", i, err)
 		}
-		reusable, _, err := reusableAlbumMedia(mediaResp)
+		reusable, reusableKind, err := reusableAlbumMedia(mediaResp)
 		if err != nil {
 			return UploadAlbumResp{}, albumFailure("conversion", i, err)
+		}
+		if reusableKind != item.kind {
+			return UploadAlbumResp{}, albumFailure("conversion", i, fmt.Errorf("uploadMedia returned %s for requested %s", reusableKind, item.kind))
 		}
 		id := randomID()
 		for id == 0 {

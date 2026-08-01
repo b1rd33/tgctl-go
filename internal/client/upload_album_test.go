@@ -367,6 +367,39 @@ func TestUploadAlbumUploadMediaAndConversionFailuresDoNotSend(t *testing.T) {
 	}
 }
 
+func TestUploadAlbumRejectsUploadMediaKindMismatch(t *testing.T) {
+	paths := writeAlbumFixtures(t, "one.jpg", "two.jpg")
+	api := &albumRPCFake{
+		uploadMediaResp: []tg.MessageMediaClass{
+			&tg.MessageMediaDocument{Video: true, Document: &tg.Document{ID: 99}},
+		},
+	}
+	_, err := (&GotdClient{albumAPI: api}).UploadAlbum(context.Background(), UploadAlbumReq{ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, Items: []UploadAlbumItem{{Path: paths[0], Kind: "photo"}, {Path: paths[1], Kind: "photo"}}})
+	if err == nil || !strings.Contains(err.Error(), "conversion") {
+		t.Fatalf("err=%v", err)
+	}
+	for _, call := range api.calls {
+		if call == "send-multi-media" {
+			t.Fatalf("kind mismatch reached final send: %#v", api.calls)
+		}
+	}
+}
+
+func TestUploadAlbumIgnoresNilMessageUpdatesSafely(t *testing.T) {
+	paths := writeAlbumFixtures(t, "one.jpg", "two.jpg")
+	api := &albumRPCFake{
+		uploadMediaResp: []tg.MessageMediaClass{
+			&tg.MessageMediaPhoto{Photo: &tg.Photo{ID: 1}}, &tg.MessageMediaPhoto{Photo: &tg.Photo{ID: 2}},
+		},
+		sendResp:        &tg.Updates{Updates: []tg.UpdateClass{(*tg.UpdateNewMessage)(nil)}},
+		rawSendResponse: true,
+	}
+	_, err := (&GotdClient{albumAPI: api}).UploadAlbum(context.Background(), UploadAlbumReq{ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, Items: []UploadAlbumItem{{Path: paths[0], Kind: "photo"}, {Path: paths[1], Kind: "photo"}}})
+	if err == nil || !strings.Contains(err.Error(), "mapping") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
 func TestUploadAlbumFinalSendErrorIsClassified(t *testing.T) {
 	paths := writeAlbumFixtures(t, "one.jpg", "two.jpg")
 	api := &albumRPCFake{
