@@ -1,25 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+PROJECT_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/live_test_common.sh"
+live_workspace_init import-export
+
 CHAT="${TGCTL_LIVE_CHAT:?Set TGCTL_LIVE_CHAT to an isolated test chat or Saved Messages ID}"
 export TG_ACCOUNT="${TGCTL_LIVE_ACCOUNT:?Set TGCTL_LIVE_ACCOUNT to a dedicated authenticated test account}"
 FOLDER_TARGETS_RAW="${TGCTL_LIVE_FOLDER_TARGETS:?Set TGCTL_LIVE_FOLDER_TARGETS to four comma-separated dedicated test chat IDs}"
 FORUM_CHAT="${TGCTL_LIVE_FORUM_CHAT:?Set TGCTL_LIVE_FORUM_CHAT to a dedicated forum test chat ID}"
 RUN_ID="ie-sim-$(date +%Y%m%d%H%M%S)"
 RUN_SHORT="$(date +%H%M)"
-TMP_DIR="${TMPDIR:-/tmp}/tgctl-${RUN_ID}"
-OUT="${TGCTL_LIVE_OUTPUT:-${TMP_DIR}/import-export.transcript.txt}"
-REPORT="${TGCTL_LIVE_REPORT:-${TMP_DIR}/import-export-report.json}"
+TMP_DIR="$LIVE_WORKSPACE"
+OUT="$TMP_DIR/transcript.txt"
+REPORT="$TMP_DIR/report.json"
 DB="${TGCTL_LIVE_DB:?Set TGCTL_LIVE_DB to the selected test account database path}"
-
-is_numeric_selector() {
-  [[ "$1" =~ ^-?[1-9][0-9]{0,14}$ ]]
-}
-
-if ! is_numeric_selector "$CHAT" || ! is_numeric_selector "$FORUM_CHAT"; then
-  printf 'TGCTL_LIVE_CHAT and TGCTL_LIVE_FORUM_CHAT must be numeric test chat IDs\n' >&2
+if [ -n "${TGCTL_LIVE_OUTPUT:-}${TGCTL_LIVE_REPORT:-}" ]; then
+  printf 'raw live output retention is disabled; output remains ephemeral\n' >&2
   exit 2
 fi
+live_require_numeric_selector TGCTL_LIVE_CHAT "$CHAT"
+live_require_numeric_selector TGCTL_LIVE_FORUM_CHAT "$FORUM_CHAT"
 
 IFS=',' read -r -a FOLDER_CHAT_IDS <<<"$FOLDER_TARGETS_RAW"
 if [ "${#FOLDER_CHAT_IDS[@]}" -ne 4 ]; then
@@ -28,7 +30,7 @@ if [ "${#FOLDER_CHAT_IDS[@]}" -ne 4 ]; then
 fi
 for idx in "${!FOLDER_CHAT_IDS[@]}"; do
   target="${FOLDER_CHAT_IDS[$idx]}"
-  if ! is_numeric_selector "$target" || [ "$target" = "$CHAT" ]; then
+  if ! live_require_numeric_selector TGCTL_LIVE_FOLDER_TARGETS "$target" || [ "$target" = "$CHAT" ]; then
     printf 'TGCTL_LIVE_FOLDER_TARGETS must contain exactly four distinct numeric test chat IDs\n' >&2
     exit 2
   fi
@@ -42,6 +44,9 @@ done
 
 mkdir -p "$TMP_DIR"
 > "$OUT"
+chmod 600 "$OUT"
+live_prepare_tg "$PROJECT_ROOT" "$PROJECT_ROOT"
+TG=("$LIVE_TG_LAUNCHER")
 
 log() {
   printf '%s\n' "$*" | tee -a "$OUT"
@@ -112,7 +117,7 @@ send_inquiry() {
   local code
   code=$(printf 'SIM-IE-%03d' "$n")
   local text="${code} | run=${RUN_ID} | country=${country} | customer=${customer} | product=${product} | order=${order} | intent=${intent} | urgency=${urgency} | question=${question}"
-  run_json_capture "$TMP_DIR/send-${code}.json" ./tg send "$CHAT" "$text" --allow-write --idempotency-key "${RUN_ID}-${code}" --json
+  run_json_capture "$TMP_DIR/send-${code}.json" "${TG[@]}" send "$CHAT" "$text" --allow-write --idempotency-key "${RUN_ID}-${code}" --json
 }
 
 log "=== import/export simulation start ==="
@@ -120,9 +125,9 @@ log "run_id: $RUN_ID"
 log "self_chat: $CHAT"
 log ""
 
-run_json_capture "$TMP_DIR/version.json" ./tg version --json
-run_json_capture "$TMP_DIR/me.json" ./tg me --json
-run_json_capture "$TMP_DIR/backfill_entities.json" ./tg backfill-entities --json
+run_json_capture "$TMP_DIR/version.json" "${TG[@]}" version --json
+run_json_capture "$TMP_DIR/me.json" "${TG[@]}" me --json
+run_json_capture "$TMP_DIR/backfill_entities.json" "${TG[@]}" backfill-entities --json
 
 send_inquiry 1 Germany "@sim_de_001" "olive oil" "PO-1001" "status" "high" "Can you confirm customs paperwork and ETA?"
 send_inquiry 2 Germany "@sim_de_002" "machine parts" "PO-1002" "documents" "medium" "We need the packing list and certificate of origin."
@@ -145,10 +150,10 @@ send_inquiry 18 UAE "@sim_ae_003" "dates" "PO-4003" "status" "low" "Please confi
 send_inquiry 19 UAE "@sim_ae_004" "auto parts" "PO-4004" "shipping" "medium" "Buyer asks whether shipment can route through Jebel Ali."
 send_inquiry 20 UAE "@sim_ae_005" "medical devices" "PO-4005" "documents" "high" "Please send compliance docs and batch certificate."
 
-run_json_summary "$TMP_DIR/discover.json" '{ok,command,data:{discovered:.data.discovered}}' ./tg discover --allow-write --json
-run_json_summary "$TMP_DIR/sync_contacts.json" '{ok,command,data:{synced:.data.synced}}' ./tg sync-contacts --allow-write --json
-run_json_capture "$TMP_DIR/backfill.json" ./tg backfill "$CHAT" --max-messages 500 --allow-write --json
-run_json_capture "$TMP_DIR/search.json" ./tg search "$CHAT" "$RUN_ID" --limit 25 --json
+run_json_summary "$TMP_DIR/discover.json" '{ok,command,data:{discovered:.data.discovered}}' "${TG[@]}" discover --allow-write --json
+run_json_summary "$TMP_DIR/sync_contacts.json" '{ok,command,data:{synced:.data.synced}}' "${TG[@]}" sync-contacts --allow-write --json
+run_json_capture "$TMP_DIR/backfill.json" "${TG[@]}" backfill "$CHAT" --max-messages 500 --allow-write --json
+run_json_capture "$TMP_DIR/search.json" "${TG[@]}" search "$CHAT" "$RUN_ID" --limit 25 --json
 
 log "=== replies ==="
 for country in Germany Spain Italy UAE; do
@@ -158,13 +163,14 @@ for country in Germany Spain Italy UAE; do
     Italy) reply="SIM-IE reply | run=${RUN_ID} | queue=Italy | action=Escalate shipping delays and invoice document requests." ;;
     UAE) reply="SIM-IE reply | run=${RUN_ID} | queue=UAE | action=Collect export certificates, compliance docs, and CIF Dubai quote." ;;
   esac
-  run_json_capture "$TMP_DIR/reply-${country}.json" ./tg send "$CHAT" "$reply" --allow-write --idempotency-key "${RUN_ID}-reply-${country}" --json
+  run_json_capture "$TMP_DIR/reply-${country}.json" "${TG[@]}" send "$CHAT" "$reply" --allow-write --idempotency-key "${RUN_ID}-reply-${country}" --json
 done
 
 GERMANY_REPLY_ID=$(jq -r '.data.message_id' "$TMP_DIR/reply-Germany.json")
-run_json_capture "$TMP_DIR/pin.json" ./tg pin-msg "$CHAT" "$GERMANY_REPLY_ID" --allow-write --json
-run_json_capture "$TMP_DIR/unpin.json" ./tg unpin-msg "$CHAT" "$GERMANY_REPLY_ID" --allow-write --json
-run_json_capture "$TMP_DIR/mark_read.json" ./tg mark-read "$CHAT" --up-to "$GERMANY_REPLY_ID" --allow-write --json
+live_require_numeric_selector message_id "$GERMANY_REPLY_ID"
+run_json_capture "$TMP_DIR/pin.json" "${TG[@]}" pin-msg "$CHAT" "$GERMANY_REPLY_ID" --allow-write --json
+run_json_capture "$TMP_DIR/unpin.json" "${TG[@]}" unpin-msg "$CHAT" "$GERMANY_REPLY_ID" --allow-write --json
+run_json_capture "$TMP_DIR/mark_read.json" "${TG[@]}" mark-read "$CHAT" --up-to "$GERMANY_REPLY_ID" --allow-write --json
 
 log "=== temporary folders ==="
 idx=0
@@ -178,12 +184,12 @@ for country in Germany Spain Italy UAE; do
   include_chat="${FOLDER_CHAT_IDS[$idx]}"
   idx=$((idx + 1))
   run_json_allow_error "$TMP_DIR/folder-create-${country}.json" '.ok == true or .error.code == "BAD_ARGS" or .error.code == "GENERIC"' \
-    ./tg folder-create "$folder_title" --include-chats "$include_chat" --allow-write --idempotency-key "${RUN_ID}-folder-${country}" --json
+    "${TG[@]}" folder-create "$folder_title" --include-chats "$include_chat" --allow-write --idempotency-key "${RUN_ID}-folder-${country}" --json
 done
 
 log "=== forum topic mirror ==="
 run_json_timeout_allow_error 15 "$TMP_DIR/topics-list.json" '.ok == true or .error.code == "BAD_ARGS" or .error.code == "TIMEOUT" or .error.code == "GENERIC"' \
-  ./tg topics-list "$FORUM_CHAT" --limit 10 --json
+  "${TG[@]}" topics-list "$FORUM_CHAT" --limit 10 --json
 if jq -e '.ok == true' "$TMP_DIR/topics-list.json" >/dev/null; then
   for country in Germany Spain Italy UAE; do
     case "$country" in
@@ -193,11 +199,12 @@ if jq -e '.ok == true' "$TMP_DIR/topics-list.json" >/dev/null; then
       UAE) topic_title="IE UAE - Documents ${RUN_ID}" ;;
     esac
     run_json_timeout_allow_error 15 "$TMP_DIR/topic-create-${country}.json" '.ok == true or .error.code == "BAD_ARGS" or .error.code == "TIMEOUT" or .error.code == "GENERIC"' \
-      ./tg topic-create "$FORUM_CHAT" "$topic_title" --allow-write --idempotency-key "${RUN_ID}-topic-${country}" --json
+      "${TG[@]}" topic-create "$FORUM_CHAT" "$topic_title" --allow-write --idempotency-key "${RUN_ID}-topic-${country}" --json
     if jq -e '.ok == true' "$TMP_DIR/topic-create-${country}.json" >/dev/null; then
       topic_id=$(jq -r '.data.topic_id' "$TMP_DIR/topic-create-${country}.json")
+      live_require_numeric_selector topic_id "$topic_id"
       run_json_timeout_allow_error 15 "$TMP_DIR/topic-summary-${country}.json" '.ok == true or .error.code == "BAD_ARGS" or .error.code == "TIMEOUT" or .error.code == "GENERIC"' \
-        ./tg send "$FORUM_CHAT" "SIM-IE summary | run=${RUN_ID} | country=${country} | inquiries=5 | source_chat=${CHAT}" --topic "$topic_id" --allow-write --idempotency-key "${RUN_ID}-topic-summary-${country}" --json
+        "${TG[@]}" send "$FORUM_CHAT" "SIM-IE summary | run=${RUN_ID} | country=${country} | inquiries=5 | source_chat=${CHAT}" --topic "$topic_id" --allow-write --idempotency-key "${RUN_ID}-topic-summary-${country}" --json
     fi
   done
 else
@@ -209,8 +216,9 @@ for country in Germany Spain Italy UAE; do
   file="$TMP_DIR/folder-create-${country}.json"
   if jq -e '.ok == true' "$file" >/dev/null; then
     folder_id=$(jq -r '.data.folder_id' "$file")
+    live_require_numeric_selector folder_id "$folder_id"
     run_json_allow_error "$TMP_DIR/folder-delete-${country}.json" '.ok == true or .error.code == "BAD_ARGS" or .error.code == "GENERIC"' \
-      ./tg folder-delete "$folder_id" --allow-write --confirm "$folder_id" --json
+      "${TG[@]}" folder-delete "$folder_id" --allow-write --confirm "$folder_id" --json
   fi
 done
 

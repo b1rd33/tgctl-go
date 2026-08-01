@@ -49,7 +49,9 @@ topics when a forum test chat is available.
 
 Set the required `TGCTL_LIVE_*` variables to dedicated test targets before
 running these scripts. They fail closed when required targets are absent and
-write raw output to a temporary directory by default. Never commit live output.
+write raw output to a private temporary workspace that is removed on exit.
+Raw-output retention variables are intentionally rejected. Never commit live
+output.
 For the import/export simulation, set `TGCTL_LIVE_FORUM_CHAT` explicitly and set
 `TGCTL_LIVE_FOLDER_TARGETS` to four ordered, comma-separated dedicated test chat
 IDs. The script does not infer write targets from cached dialogs.

@@ -1,25 +1,37 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+PROJECT_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/live_test_common.sh"
+live_workspace_init live-verify
+
 CHAT="${TGCTL_LIVE_CHAT:?Set TGCTL_LIVE_CHAT to an isolated test chat or Saved Messages ID}"
 SELF_USERNAME="${TGCTL_LIVE_SELF_USERNAME:?Set TGCTL_LIVE_SELF_USERNAME to the authenticated test account username}"
 export TG_ACCOUNT="${TGCTL_LIVE_ACCOUNT:?Set TGCTL_LIVE_ACCOUNT to a dedicated authenticated test account}"
-OUT="${TGCTL_LIVE_OUTPUT:-${TMPDIR:-/tmp}/tgctl-live-verify-$$.transcript.txt}"
-MEDIA_DIR="$(mktemp -d "${TMPDIR:-/tmp}/tgctl-live-media.XXXXXX")"
+if [ -n "${TGCTL_LIVE_OUTPUT:-}" ]; then
+  printf 'TGCTL_LIVE_OUTPUT retention is disabled; raw live output remains ephemeral\n' >&2
+  exit 2
+fi
+live_require_numeric_selector TGCTL_LIVE_CHAT "$CHAT"
+live_require_username TGCTL_LIVE_SELF_USERNAME "$SELF_USERNAME"
+if [[ ! "$TG_ACCOUNT" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$ ]]; then
+  printf 'TGCTL_LIVE_ACCOUNT must name an explicit test account\n' >&2
+  exit 2
+fi
+OUT="$LIVE_WORKSPACE/transcript.txt"
+MEDIA_DIR="$LIVE_WORKSPACE/media"
+mkdir -m 700 "$MEDIA_DIR"
 export MEDIA_DIR
-cleanup() {
-  rm -f "$MEDIA_DIR/doc.txt" "$MEDIA_DIR/voice.ogg" "$MEDIA_DIR/video.mp4" "$MEDIA_DIR/pixel.png"
-  rmdir "$MEDIA_DIR" 2>/dev/null || true
-}
-trap cleanup EXIT HUP INT TERM
 > "$OUT"
+chmod 600 "$OUT"
 
 run() { echo "+ $*" | tee -a "$OUT"; "$@" | tee -a "$OUT" || (echo "FAILED: $*" | tee -a "$OUT"; exit 1); echo | tee -a "$OUT"; }
 
 run_json() {
   echo "+ $*" | tee -a "$OUT"
   local tmp
-  tmp="$(mktemp)"
+  tmp="$(mktemp "$LIVE_WORKSPACE/json.XXXXXX")"
   "$@" 2>&1 | tee "$tmp" | tee -a "$OUT"
   jq -e '.ok == true' "$tmp" >/dev/null
   rm -f "$tmp"
@@ -32,7 +44,7 @@ expect_json_error() {
   shift 2
   echo "+ $*  # expect $expected_code/$expected_exit" | tee -a "$OUT"
   local tmp status
-  tmp="$(mktemp)"
+  tmp="$(mktemp "$LIVE_WORKSPACE/json.XXXXXX")"
   set +e
   "$@" 2>&1 | tee "$tmp" | tee -a "$OUT"
   status=${PIPESTATUS[0]}
@@ -51,7 +63,7 @@ expect_json_ok_or_error() {
   shift
   echo "+ $*  # expect ok or $expected_code" | tee -a "$OUT"
   local tmp status
-  tmp="$(mktemp)"
+  tmp="$(mktemp "$LIVE_WORKSPACE/json.XXXXXX")"
   set +e
   "$@" 2>&1 | tee "$tmp" | tee -a "$OUT"
   status=${PIPESTATUS[0]}
@@ -72,45 +84,49 @@ echo "chat: $CHAT" | tee -a "$OUT"
 # skip-rationale: tg import-telethon-session was already verified in a prior session and would mutate auth state.
 # skip-rationale: tg accounts-add/use/remove mutate account directory layout; read-only account listing covers this release check.
 
-run go build -o ./tg ./cmd/tg
+live_prepare_tg "$PROJECT_ROOT" "$PROJECT_ROOT"
+TG=("$LIVE_TG_LAUNCHER")
 
 # ---- Foundation ----
-run_json ./tg version --json
-run_json ./tg doctor --json
-run_json ./tg me --json
-run_json ./tg me --offline --json
+run_json "${TG[@]}" version --json
+run_json "${TG[@]}" doctor --json
+run_json "${TG[@]}" me --json
+run_json "${TG[@]}" me --offline --json
 
 # ---- Accounts ----
-run_json ./tg accounts-list --json
-run_json ./tg accounts-show --json
+run_json "${TG[@]}" accounts-list --json
+run_json "${TG[@]}" accounts-show --json
 
 # ---- Phase 8: reads ----
-run_json ./tg backfill-entities --json
-run_json ./tg backfill "$CHAT" --max-messages 100 --allow-write --json
-run_json ./tg show "$CHAT" --limit 5 --json
-run_json ./tg show "$CHAT" --limit 3 --reverse --json
-run_json ./tg search "$CHAT" "tgctl-go" --limit 10 --json
-run_json ./tg list-msgs "$CHAT" --limit 5 --json
-run_json ./tg list-msgs "$CHAT" --since 2026-05-01 --until 2026-05-09 --limit 50 --json
-LAST_KNOWN=$(./tg show "$CHAT" --limit 1 --json | jq -r '.data.messages[0].message_id')
-run_json ./tg get-msg "$CHAT" "$LAST_KNOWN" --json
+run_json "${TG[@]}" backfill-entities --json
+run_json "${TG[@]}" backfill "$CHAT" --max-messages 100 --allow-write --json
+run_json "${TG[@]}" show "$CHAT" --limit 5 --json
+run_json "${TG[@]}" show "$CHAT" --limit 3 --reverse --json
+run_json "${TG[@]}" search "$CHAT" "tgctl-go" --limit 10 --json
+run_json "${TG[@]}" list-msgs "$CHAT" --limit 5 --json
+run_json "${TG[@]}" list-msgs "$CHAT" --since 2026-05-01 --until 2026-05-09 --limit 50 --json
+LAST_KNOWN=$("${TG[@]}" show "$CHAT" --limit 1 --json | jq -r '.data.messages[0].message_id')
+live_require_numeric_selector message_id "$LAST_KNOWN"
+run_json "${TG[@]}" get-msg "$CHAT" "$LAST_KNOWN" --json
 
 # ---- Phase 9: text writes ----
-run_json ./tg send "$CHAT" "live-verify: phase 9 send" --allow-write --json
-SENT_ID=$(./tg send "$CHAT" "live-verify: edit-me" --allow-write --json | jq -r '.data.message_id')
-run_json ./tg edit-msg "$CHAT" "$SENT_ID" "live-verify: edited body" --allow-write --json
-run_json ./tg pin-msg "$CHAT" "$SENT_ID" --allow-write --json
-run_json ./tg unpin-msg "$CHAT" "$SENT_ID" --allow-write --json
-run_json ./tg mark-read "$CHAT" --up-to "$SENT_ID" --allow-write --json
-FWD_SRC=$(./tg send "$CHAT" "live-verify: forward-source" --allow-write --json | jq -r '.data.message_id')
-run_json ./tg forward "$CHAT" "$CHAT" "$FWD_SRC" --allow-write --json
-expect_json_ok_or_error PREMIUM_REQUIRED ./tg react "$CHAT" "$SENT_ID" "👍" --allow-write --json
+run_json "${TG[@]}" send "$CHAT" "live-verify: phase 9 send" --allow-write --json
+SENT_ID=$("${TG[@]}" send "$CHAT" "live-verify: edit-me" --allow-write --json | jq -r '.data.message_id')
+live_require_numeric_selector message_id "$SENT_ID"
+run_json "${TG[@]}" edit-msg "$CHAT" "$SENT_ID" "live-verify: edited body" --allow-write --json
+run_json "${TG[@]}" pin-msg "$CHAT" "$SENT_ID" --allow-write --json
+run_json "${TG[@]}" unpin-msg "$CHAT" "$SENT_ID" --allow-write --json
+run_json "${TG[@]}" mark-read "$CHAT" --up-to "$SENT_ID" --allow-write --json
+FWD_SRC=$("${TG[@]}" send "$CHAT" "live-verify: forward-source" --allow-write --json | jq -r '.data.message_id')
+live_require_numeric_selector message_id "$FWD_SRC"
+run_json "${TG[@]}" forward "$CHAT" "$CHAT" "$FWD_SRC" --allow-write --json
+expect_json_ok_or_error PREMIUM_REQUIRED "${TG[@]}" react "$CHAT" "$SENT_ID" "👍" --allow-write --json
 KEY="live-verify-$(date +%s)"
-run_json ./tg send "$CHAT" "live-verify: idempotency $KEY" --allow-write --idempotency-key "$KEY" --json
-echo "+ ./tg send $CHAT \"live-verify: idempotency $KEY\" --allow-write --idempotency-key \"$KEY\" --json  # expect idempotent replay" | tee -a "$OUT"
-./tg send "$CHAT" "live-verify: idempotency $KEY" --allow-write --idempotency-key "$KEY" --json | tee -a "$OUT" | jq -e '.data.idempotent_replay == true' >/dev/null
+run_json "${TG[@]}" send "$CHAT" "live-verify: idempotency $KEY" --allow-write --idempotency-key "$KEY" --json
+echo "+ ${TG[*]} send <test-chat> <idempotency-payload> --allow-write --json  # expect idempotent replay" | tee -a "$OUT"
+"${TG[@]}" send "$CHAT" "live-verify: idempotency $KEY" --allow-write --idempotency-key "$KEY" --json | tee -a "$OUT" | jq -e '.data.idempotent_replay == true' >/dev/null
 echo | tee -a "$OUT"
-run_json ./tg send-by-username "$SELF_USERNAME" "live-verify: send-by-username path" --allow-write --json
+run_json "${TG[@]}" send-by-username "$SELF_USERNAME" "live-verify: send-by-username path" --allow-write --json
 
 # ---- Phase 10: media ----
 printf 'doc payload\n' > "$MEDIA_DIR/doc.txt"
@@ -136,81 +152,84 @@ png = (
 )
 open(os.path.join(os.environ["MEDIA_DIR"], "pixel.png"), "wb").write(png)
 PY
-run_json ./tg upload-document "$CHAT" "$MEDIA_DIR/doc.txt" --caption "live-verify: doc" --allow-write --json
-run_json ./tg upload-photo "$CHAT" "$MEDIA_DIR/pixel.png" --caption "live-verify: photo" --allow-write --json
+run_json "${TG[@]}" upload-document "$CHAT" "$MEDIA_DIR/doc.txt" --caption "live-verify: doc" --allow-write --json
+run_json "${TG[@]}" upload-photo "$CHAT" "$MEDIA_DIR/pixel.png" --caption "live-verify: photo" --allow-write --json
 # skip-rationale: upload-voice and upload-video need real .ogg/.mp4 assets; dry-run exercises their runner paths without ffmpeg.
-run_json ./tg upload-voice "$CHAT" "$MEDIA_DIR/voice.ogg" --allow-write --dry-run --json
-run_json ./tg upload-video "$CHAT" "$MEDIA_DIR/video.mp4" --allow-write --dry-run --json
-expect_json_error BAD_ARGS 2 ./tg upload-document "$CHAT" "/tmp/has?question.txt" --allow-write --json
+run_json "${TG[@]}" upload-voice "$CHAT" "$MEDIA_DIR/voice.ogg" --allow-write --dry-run --json
+run_json "${TG[@]}" upload-video "$CHAT" "$MEDIA_DIR/video.mp4" --allow-write --dry-run --json
+expect_json_error BAD_ARGS 2 "${TG[@]}" upload-document "$CHAT" "/tmp/has?question.txt" --allow-write --json
 
 # ---- Phase 11: topics + folders ----
-run_json ./tg folders-list --json
-FOLDER_COUNT=$(./tg folders-list --json | jq '.data.folders | length')
+run_json "${TG[@]}" folders-list --json
+FOLDER_COUNT=$("${TG[@]}" folders-list --json | jq '.data.folders | length')
 if [ "$FOLDER_COUNT" -gt 0 ]; then
-  FIRST_FOLDER_ID=$(./tg folders-list --json | jq -r '.data.folders[0].id // .data.folders[0].folder_id')
-  run_json ./tg folder-show "$FIRST_FOLDER_ID" --json
+  FIRST_FOLDER_ID=$("${TG[@]}" folders-list --json | jq -r '.data.folders[0].id // .data.folders[0].folder_id')
+  live_require_numeric_selector folder_id "$FIRST_FOLDER_ID"
+  run_json "${TG[@]}" folder-show "$FIRST_FOLDER_ID" --json
 fi
-expect_json_error BAD_ARGS 2 ./tg folder-delete 0 --allow-write --confirm 0 --json
-run_json ./tg topic-create "$CHAT" "live-verify-topic" --allow-write --dry-run --json
-run_json ./tg topic-edit "$CHAT" 1 --title "renamed" --allow-write --dry-run --json
-run_json ./tg topic-pin "$CHAT" 1 --allow-write --dry-run --json
-run_json ./tg topic-unpin "$CHAT" 1 --allow-write --dry-run --json
+expect_json_error BAD_ARGS 2 "${TG[@]}" folder-delete 0 --allow-write --confirm 0 --json
+run_json "${TG[@]}" topic-create "$CHAT" "live-verify-topic" --allow-write --dry-run --json
+run_json "${TG[@]}" topic-edit "$CHAT" 1 --title "renamed" --allow-write --dry-run --json
+run_json "${TG[@]}" topic-pin "$CHAT" 1 --allow-write --dry-run --json
+run_json "${TG[@]}" topic-unpin "$CHAT" 1 --allow-write --dry-run --json
 # skip-rationale: Saved Messages is not a forum supergroup; assert the live non-forum fallback.
-expect_json_error BAD_ARGS 2 ./tg topics-list "$CHAT" --json
-run_json ./tg chat-pinned-list "$CHAT" --json
+expect_json_error BAD_ARGS 2 "${TG[@]}" topics-list "$CHAT" --json
+run_json "${TG[@]}" chat-pinned-list "$CHAT" --json
 
 # ---- Phase 12: admin ----
-run_json ./tg chats-info "$CHAT" --json
+run_json "${TG[@]}" chats-info "$CHAT" --json
 # skip-rationale: Saved Messages is not a channel/supergroup; assert the live non-participant fallback.
-expect_json_error BAD_ARGS 2 ./tg chat-members "$CHAT" --limit 50 --json
-run_json ./tg account-sessions --json
-run_json ./tg chat-title "$CHAT" "live-verify-title" --allow-write --dry-run --json
-run_json ./tg chat-photo "$CHAT" "$MEDIA_DIR/pixel.png" --allow-write --dry-run --json
-run_json ./tg chat-description "$CHAT" "live-verify desc" --allow-write --dry-run --json
-run_json ./tg set-permissions "$CHAT" --send-messages --allow-write --dry-run --json
-run_json ./tg chat-invite-link "$CHAT" --allow-write --dry-run --json
-run_json ./tg promote "$CHAT" "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
-run_json ./tg demote "$CHAT" "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
-run_json ./tg ban-from-chat "$CHAT" "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
-run_json ./tg unban-from-chat "$CHAT" "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
-run_json ./tg kick "$CHAT" "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
+expect_json_error BAD_ARGS 2 "${TG[@]}" chat-members "$CHAT" --limit 50 --json
+run_json "${TG[@]}" account-sessions --json
+run_json "${TG[@]}" chat-title "$CHAT" "live-verify-title" --allow-write --dry-run --json
+run_json "${TG[@]}" chat-photo "$CHAT" "$MEDIA_DIR/pixel.png" --allow-write --dry-run --json
+run_json "${TG[@]}" chat-description "$CHAT" "live-verify desc" --allow-write --dry-run --json
+run_json "${TG[@]}" set-permissions "$CHAT" --send-messages --allow-write --dry-run --json
+run_json "${TG[@]}" chat-invite-link "$CHAT" --allow-write --dry-run --json
+run_json "${TG[@]}" promote "$CHAT" "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
+run_json "${TG[@]}" demote "$CHAT" "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
+run_json "${TG[@]}" ban-from-chat "$CHAT" "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
+run_json "${TG[@]}" unban-from-chat "$CHAT" "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
+run_json "${TG[@]}" kick "$CHAT" "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
 
 # ---- Phase 13: destructive ----
-DEL_ID=$(./tg send "$CHAT" "live-verify: about-to-delete" --allow-write --json | jq -r '.data.message_id')
-run_json ./tg delete-msg "$CHAT" "$DEL_ID" --allow-write --confirm "$CHAT" --json
-run_json ./tg leave-chat "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
-run_json ./tg block-user "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
-run_json ./tg unblock-user "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
-SESSION_HASH=$(./tg account-sessions --json | jq -r '.data.sessions[0].hash // 0')
+DEL_ID=$("${TG[@]}" send "$CHAT" "live-verify: about-to-delete" --allow-write --json | jq -r '.data.message_id')
+live_require_numeric_selector message_id "$DEL_ID"
+run_json "${TG[@]}" delete-msg "$CHAT" "$DEL_ID" --allow-write --confirm "$CHAT" --json
+run_json "${TG[@]}" leave-chat "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
+run_json "${TG[@]}" block-user "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
+run_json "${TG[@]}" unblock-user "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
+SESSION_HASH=$("${TG[@]}" account-sessions --json | jq -r '.data.sessions[0].hash // 0')
 if [ "$SESSION_HASH" != "0" ]; then
-  run_json ./tg terminate-session "$SESSION_HASH" --allow-write --confirm "$SESSION_HASH" --dry-run --json
+  live_require_numeric_selector session_hash "$SESSION_HASH"
+  run_json "${TG[@]}" terminate-session "$SESSION_HASH" --allow-write --confirm "$SESSION_HASH" --dry-run --json
 fi
 
 # ---- Phase 14: local DB ops ----
-run_json ./tg discover --allow-write --json
-run_json ./tg sync-contacts --allow-write --json
-run_json ./tg backfill "$CHAT" --max-messages 100 --allow-write --json
+run_json "${TG[@]}" discover --allow-write --json
+run_json "${TG[@]}" sync-contacts --allow-write --json
+run_json "${TG[@]}" backfill "$CHAT" --max-messages 100 --allow-write --json
 
 # ---- Phase 15: live ----
-echo "+ timeout 8 ./tg listen --once --allow-write --json" | tee -a "$OUT"
+echo "+ timeout 8 ${TG[*]} listen --once --allow-write --json" | tee -a "$OUT"
 if command -v timeout >/dev/null 2>&1; then
-  timeout 8 ./tg listen --once --allow-write --json | tee -a "$OUT" || echo "(no update inside 8s - acceptable)" | tee -a "$OUT"
+  timeout 8 "${TG[@]}" listen --once --allow-write --json | tee -a "$OUT" || echo "(no update inside 8s - acceptable)" | tee -a "$OUT"
 else
   echo "(timeout unavailable - listen smoke skipped)" | tee -a "$OUT"
 fi
 echo | tee -a "$OUT"
 
 # ---- Phase 16 surface ----
-./tg --help >/dev/null
+"${TG[@]}" --help >/dev/null
 echo "help ok" | tee -a "$OUT"
-COUNT=$(./tg --help | grep -E "^  [a-z]" | wc -l | tr -d ' ')
+COUNT=$("${TG[@]}" --help | grep -E "^  [a-z]" | wc -l | tr -d ' ')
 echo "command count: $COUNT" | tee -a "$OUT"
 [ "$COUNT" -ge 62 ]
 
 # ---- Safety pipeline regressions ----
-expect_json_error WRITE_DISALLOWED 6 ./tg send "$CHAT" "no-allow" --json
-expect_json_error WRITE_DISALLOWED 6 ./tg --read-only send "$CHAT" "ro" --allow-write --json
-expect_json_error BAD_ARGS 2 ./tg delete-msg "$CHAT" 999999 --allow-write --json
-expect_json_error NOT_FOUND 4 ./tg get-msg "$CHAT" 999999999999 --json
+expect_json_error WRITE_DISALLOWED 6 "${TG[@]}" send "$CHAT" "no-allow" --json
+expect_json_error WRITE_DISALLOWED 6 "${TG[@]}" --read-only send "$CHAT" "ro" --allow-write --json
+expect_json_error BAD_ARGS 2 "${TG[@]}" delete-msg "$CHAT" 999999 --allow-write --json
+expect_json_error NOT_FOUND 4 "${TG[@]}" get-msg "$CHAT" 999999999999 --json
 
 echo "=== live verification complete ===" | tee -a "$OUT"

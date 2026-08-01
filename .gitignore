@@ -30,14 +30,6 @@ audit.ndjson
 /scripts/output/
 /scripts/tmp/
 
-# Explicitly permit intentional, synthetic fixtures.
-!**/testdata/*.sqlite
-!**/testdata/*.sqlite3
-!**/testdata/*.db
-!**/fixtures/*.sqlite
-!**/fixtures/*.sqlite3
-!**/fixtures/*.db
-
 # Internal planning docs — kept on disk, not in releases
 /docs/superpowers/
 

@@ -1,23 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+PROJECT_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/live_test_common.sh"
+live_workspace_init admin-topic
+
 RUN_ID="admin-verify-$(date +%Y%m%d%H%M%S)"
 CHAT="${TGCTL_LIVE_CHAT:?Set TGCTL_LIVE_CHAT to an isolated test chat or Saved Messages ID}"
 FORUM_CHAT="${TGCTL_LIVE_FORUM_CHAT:?Set TGCTL_LIVE_FORUM_CHAT to a dedicated forum test chat ID}"
-TMP_DIR="${TMPDIR:-/tmp}/tgctl-${RUN_ID}"
-OUT="${TGCTL_LIVE_OUTPUT:-${TMP_DIR}/admin-topic.transcript.txt}"
+if [ -n "${TGCTL_LIVE_OUTPUT:-}" ]; then
+  printf 'TGCTL_LIVE_OUTPUT retention is disabled; raw live output remains ephemeral\n' >&2
+  exit 2
+fi
+live_require_numeric_selector TGCTL_LIVE_CHAT "$CHAT"
+live_require_numeric_selector TGCTL_LIVE_FORUM_CHAT "$FORUM_CHAT"
+TMP_DIR="$LIVE_WORKSPACE"
+OUT="$TMP_DIR/transcript.txt"
 ACCOUNT="adminverify-${RUN_ID}"
-ACCOUNT_ROOT="${TGCTL_ACCOUNT_ROOT:-accounts}"
+ACCOUNT_ROOT="$LIVE_WORKSPACE/accounts"
 ACCOUNT_DIR="${ACCOUNT_ROOT}/${ACCOUNT}"
 DEFAULT_SESSION="${TGCTL_SOURCE_SESSION:?Set TGCTL_SOURCE_SESSION to the authenticated test session path}"
 DEFAULT_DB="${TGCTL_SOURCE_DB:?Set TGCTL_SOURCE_DB to the matching test database path}"
 SESSION="${ACCOUNT_DIR}/tg.session"
 DB="${ACCOUNT_DIR}/telegram.sqlite"
-TG=(./tg --account "$ACCOUNT")
-export GOCACHE="${GOCACHE:-${TMPDIR:-/tmp}/tgctl-go-gocache}"
+export GOCACHE="$LIVE_WORKSPACE/go-cache"
 
 mkdir -p "$TMP_DIR"
 > "$OUT"
+chmod 600 "$OUT"
 
 log() {
   printf '%s\n' "$*" | tee -a "$OUT"
@@ -137,13 +148,11 @@ cleanup_group_if_set() {
   fi
 }
 
-cleanup() {
+live_remote_cleanup() {
   folder_delete_if_set "${FOLDER_ID:-}"
   folder_delete_if_set "${SECOND_ID:-}"
   cleanup_group_if_set "${TEMP_GROUP_ID:-}"
-  rm -rf "$ACCOUNT_DIR"
 }
-trap cleanup EXIT
 
 create_temp_group() {
   local title="$1"
@@ -219,15 +228,16 @@ log "self_chat: $CHAT"
 log "forum_chat: $FORUM_CHAT"
 log ""
 
-if [ -f .env ]; then
+if [ -f "$PROJECT_ROOT/.env" ]; then
   set -a
   # shellcheck disable=SC1091
-  . ./.env
+  . "$PROJECT_ROOT/.env"
   set +a
 fi
 
-run_plain go build -buildvcs=false -o ./tg ./cmd/tg
-run_json "$TMP_DIR/version.json" ./tg version --json
+live_prepare_tg "$PROJECT_ROOT"
+TG=("$LIVE_TG_LAUNCHER" --account "$ACCOUNT")
+run_json "$TMP_DIR/version.json" "${TG[@]}" version --json
 mkdir -p "$ACCOUNT_DIR"
 cp "$DEFAULT_SESSION" "$SESSION"
 cp "$DEFAULT_DB" "$DB"
@@ -242,6 +252,7 @@ if with_timeout 45 "${TG[@]}" topics-list "$FORUM_CHAT" --limit 1 --json >"$TMP_
   run_json_allow_known "$TMP_DIR/topic_create.json" "${TG[@]}" topic-create "$FORUM_CHAT" "av-${RUN_ID}" --allow-write --json
   TOPIC_ID="$(jq -r '.data.topic_id // empty' "$TMP_DIR/topic_create.json")"
   if [ -n "$TOPIC_ID" ]; then
+    live_require_numeric_selector topic_id "$TOPIC_ID"
     run_json_allow_known "$TMP_DIR/topic_edit.json" "${TG[@]}" topic-edit "$FORUM_CHAT" "$TOPIC_ID" --title "edited-${RUN_ID}" --allow-write --json
     run_json_allow_known "$TMP_DIR/topic_pin.json" "${TG[@]}" topic-pin "$FORUM_CHAT" "$TOPIC_ID" --allow-write --json
     run_json_allow_known "$TMP_DIR/topic_unpin.json" "${TG[@]}" topic-unpin "$FORUM_CHAT" "$TOPIC_ID" --allow-write --json
@@ -259,6 +270,7 @@ log "=== folders ==="
 # so we use short fixed names for folders (which get deleted on cleanup anyway).
 run_json_allow_known "$TMP_DIR/folder_create.json" "${TG[@]}" folder-create "av-fld-1" --include-chats "$CHAT" --allow-write --json
 FOLDER_ID="$(jq -r '.data.folder_id // empty' "$TMP_DIR/folder_create.json")"
+live_require_numeric_selector folder_id "$FOLDER_ID"
 # Add a second peer so we can later remove one without leaving the folder empty
 # (Telegram rejects DialogFilters with no include peers: FILTER_INCLUDE_EMPTY).
 run_json_allow_known "$TMP_DIR/folder_add_chat.json" "${TG[@]}" folder-add-chat "$FOLDER_ID" "$FORUM_CHAT" --allow-write --json
@@ -266,6 +278,7 @@ run_json_allow_known "$TMP_DIR/folder_remove_chat.json" "${TG[@]}" folder-remove
 run_json_allow_known "$TMP_DIR/folder_edit.json" "${TG[@]}" folder-edit "$FOLDER_ID" --name "av-fld-1r" --allow-write --json
 run_json_allow_known "$TMP_DIR/second_folder_create.json" "${TG[@]}" folder-create "av-fld-2" --include-chats "$CHAT" --allow-write --json
 SECOND_ID="$(jq -r '.data.folder_id // empty' "$TMP_DIR/second_folder_create.json")"
+live_require_numeric_selector folder_id "$SECOND_ID"
 run_json_allow_known "$TMP_DIR/folders_reorder.json" "${TG[@]}" folders-reorder "$FOLDER_ID,$SECOND_ID" --allow-write --json
 run_json_allow_known "$TMP_DIR/folder_delete_first.json" "${TG[@]}" folder-delete "$FOLDER_ID" --allow-write --confirm "$FOLDER_ID" --json
 FOLDER_ID=""
@@ -280,6 +293,8 @@ set -e
 if [ "$create_status" -eq 0 ] && [ -n "$TEMP_GROUP_CREATED" ]; then
   TEMP_GROUP_ID="${TEMP_GROUP_CREATED%% *}"
   TEMP_GROUP_HASH="${TEMP_GROUP_CREATED#* }"
+  live_require_numeric_selector temporary_group_id "$TEMP_GROUP_ID"
+  live_require_numeric_selector temporary_group_access_hash "$TEMP_GROUP_HASH"
   log "created_temp_group: $TEMP_GROUP_ID"
   sqlite3 "$DB" \
     "INSERT INTO tg_entities(id, kind, access_hash, updated_at) VALUES ($TEMP_GROUP_ID, 'channel', $TEMP_GROUP_HASH, datetime('now')) ON CONFLICT(id) DO UPDATE SET kind='channel', access_hash=$TEMP_GROUP_HASH, updated_at=datetime('now'); INSERT INTO tg_chats(chat_id, type, title, username) VALUES ($TEMP_GROUP_ID, 'supergroup', 'av-${RUN_ID}', NULL) ON CONFLICT(chat_id) DO UPDATE SET type='supergroup', title='av-${RUN_ID}', username=NULL;"
