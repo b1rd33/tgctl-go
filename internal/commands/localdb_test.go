@@ -117,6 +117,25 @@ func TestBackfillRejectsReadOnlyBeforeClient(t *testing.T) {
 	}
 }
 
+func TestBackfillPreflightCloseFailureStopsBeforeTelegramWithoutCommittedRecovery(t *testing.T) {
+	cfg, fc, _ := setupWriteEnv(t)
+	original := backfillDBClose
+	backfillDBClose = func(db *sql.DB) error {
+		if err := db.Close(); err != nil {
+			t.Fatalf("close injected database: %v", err)
+		}
+		return errors.New("injected preflight close failure")
+	}
+	t.Cleanup(func() { backfillDBClose = original })
+	out, code := runRoot(t, cfg, "backfill", "1", "--download-media", "--allow-write", "--json")
+	if code != 1 || !strings.Contains(out, "preflight close failure") || strings.Contains(out, `"committed":true`) {
+		t.Fatalf("code=%d\nout:%s", code, out)
+	}
+	if len(fc.Backfills) != 0 {
+		t.Fatalf("Telegram called after preflight close failure: %#v", fc.Backfills)
+	}
+}
+
 func TestBackfillRejectsWhenMaxAlreadyReachedBeforeRPC(t *testing.T) {
 	cfg, fc, _ := setupWriteEnv(t)
 	db, err := store.Connect(cfg.Paths.(stubPaths).db)
@@ -664,6 +683,38 @@ func TestBackfillExplicitMediaProvenanceClearsOrPreservesStalePaths(t *testing.T
 				t.Fatalf("row=%#v", got)
 			}
 		})
+	}
+}
+
+func TestBackfillFailureCannotPreservePathReplacedWithoutStableIdentity(t *testing.T) {
+	cfg, _, _ := setupWriteEnv(t)
+	db, err := store.Connect(cfg.Paths.(stubPaths).db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mediaType, oldPath, identity := "document", "/old/a.bin", "document:A"
+	if err := store.InsertMessage(db, store.Message{
+		ChatID: 1, MessageID: 990, Date: "2026-08-01T09:00:00Z", HasMedia: true,
+		MediaType: &mediaType, MediaPath: &oldPath, MediaIdentity: &identity,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateMessageMediaPath(db, 1, 990, mediaType, "/replacement/without-identity.bin"); err != nil {
+		t.Fatal(err)
+	}
+	if err := insertBackfillMessage(db, client.BackfillMessage{
+		ChatID: 1, MessageID: 990, Date: "2026-08-01T10:00:00Z", HasMedia: true,
+		MediaIdentity: identity, MediaDisposition: client.BackfillMediaFailed,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.GetOne(db, 1, 990, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.MediaPath != nil || got.MediaIdentity != nil {
+		t.Fatalf("failed same-identity backfill preserved unproven replacement: %#v", got)
 	}
 }
 

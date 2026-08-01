@@ -37,6 +37,57 @@ func TestUpdateMessageMediaPathUpdatesExistingCompositeIdentity(t *testing.T) {
 	}
 }
 
+func TestMediaPathWritersClearUnknownTelegramIdentity(t *testing.T) {
+	writers := []struct {
+		name  string
+		write func(*sql.DB, int64) error
+	}{
+		{name: "record upload", write: func(db *sql.DB, id int64) error {
+			return RecordUploadedMedia(db, 1, id, "caption", "document", "/new/upload.bin")
+		}},
+		{name: "update path", write: func(db *sql.DB, id int64) error {
+			return UpdateMessageMediaPath(db, 1, id, "document", "/new/download.bin")
+		}},
+		{name: "store existing", write: func(db *sql.DB, id int64) error {
+			return StoreMessageMediaPath(db, 1, id, time.Now(), "document", "/new/store.bin")
+		}},
+	}
+	for i, tt := range writers {
+		t.Run(tt.name, func(t *testing.T) {
+			db := setupMessages(t)
+			identity, oldType, oldPath := "document:A", "document", "/old/a.bin"
+			id := int64(500 + i)
+			if err := InsertMessage(db, Message{ChatID: 1, MessageID: id, Date: "2026-08-01T00:00:00Z", HasMedia: true, MediaType: &oldType, MediaPath: &oldPath, MediaIdentity: &identity}); err != nil {
+				t.Fatal(err)
+			}
+			if err := tt.write(db, id); err != nil {
+				t.Fatal(err)
+			}
+			got, err := GetOne(db, 1, id, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.MediaIdentity != nil {
+				t.Fatalf("media identity=%q, want NULL", *got.MediaIdentity)
+			}
+		})
+	}
+}
+
+func TestStoreMessageMediaPathInsertHasNoUnknownIdentity(t *testing.T) {
+	db := setupMessages(t)
+	if err := StoreMessageMediaPath(db, 1, 777, time.Now(), "document", "/new/insert.bin"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := GetOne(db, 1, 777, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.MediaIdentity != nil {
+		t.Fatalf("media identity=%q, want NULL", *got.MediaIdentity)
+	}
+}
+
 func TestUpdateMessageMediaPathMissingReturnsNoRows(t *testing.T) {
 	db := setupMessages(t)
 	err := UpdateMessageMediaPath(db, 99, 404, "photo", "/tmp/missing.jpg")

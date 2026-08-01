@@ -260,6 +260,7 @@ func RecordUploadedMedia(db *sql.DB, chatID, messageID int64, text, mediaType, m
 			has_media = 1,
 			media_type = excluded.media_type,
 			media_path = excluded.media_path,
+			media_id = NULL,
 			deleted = 0`,
 		chatID, messageID, time.Now().UTC().Format(time.RFC3339), nullString(text), mediaType, mediaPath,
 	)
@@ -272,7 +273,7 @@ func RecordUploadedMedia(db *sql.DB, chatID, messageID int64, text, mediaType, m
 func UpdateMessageMediaPath(db *sql.DB, chatID, messageID int64, mediaType, mediaPath string) error {
 	result, err := db.Exec(`
 		UPDATE tg_messages
-		SET has_media = 1, media_type = ?, media_path = ?
+		SET has_media = 1, media_type = ?, media_path = ?, media_id = NULL
 		WHERE chat_id = ? AND message_id = ?`,
 		mediaType, mediaPath, chatID, messageID,
 	)
@@ -309,7 +310,8 @@ func StoreMessageMediaPath(db *sql.DB, chatID, messageID int64, messageDate time
 		ON CONFLICT(chat_id, message_id) DO UPDATE SET
 			has_media = 1,
 			media_type = excluded.media_type,
-			media_path = excluded.media_path`,
+			media_path = excluded.media_path,
+			media_id = NULL`,
 		chatID, messageID, messageDate.UTC().Format(time.RFC3339), mediaType, mediaPath,
 	)
 	return err

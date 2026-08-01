@@ -322,6 +322,16 @@ func lockBackfillDBPath(path string) (func(), error) {
 	}, nil
 }
 
+var backfillDBClose = func(db *sql.DB) error { return db.Close() }
+
+func closeBackfillPreflightDB(db *sql.DB, operationErr error) error {
+	closeErr := backfillDBClose(db)
+	if closeErr == nil {
+		return operationErr
+	}
+	return errors.Join(operationErr, fmt.Errorf("close backfill preflight database: %w", closeErr))
+}
+
 func prepareBackfillDB(dbPath, selector string) (chatID int64, title string, count int, size int64, retErr error) {
 	unlock, err := lockBackfillDBPath(dbPath)
 	if err != nil {
@@ -332,17 +342,19 @@ func prepareBackfillDB(dbPath, selector string) (chatID int64, title string, cou
 	if err != nil {
 		return 0, "", 0, 0, err
 	}
-	defer db.Close()
 	chatID, title, err = resolve.ResolveChatDB(db, selector)
 	if err != nil {
-		return 0, "", 0, 0, err
+		return 0, "", 0, 0, closeBackfillPreflightDB(db, err)
 	}
 	count, err = countCachedMessages(db, chatID)
 	if err != nil {
-		return 0, "", 0, 0, err
+		return 0, "", 0, 0, closeBackfillPreflightDB(db, err)
 	}
 	size, err = databaseSizeBytes(db)
 	if err != nil {
+		return 0, "", 0, 0, closeBackfillPreflightDB(db, err)
+	}
+	if err := closeBackfillPreflightDB(db, nil); err != nil {
 		return 0, "", 0, 0, err
 	}
 	return chatID, title, count, size, nil
