@@ -1,14 +1,14 @@
 package media
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
-	"syscall"
 	"unicode"
 	"unicode/utf8"
 )
@@ -19,13 +19,15 @@ const (
 )
 
 var (
-	ErrDestinationExists    = errors.New("download destination already exists")
-	ErrUnsafeDestination    = errors.New("download destination is not a regular file")
-	ErrDestinationCommitted = errors.New("download destination is already committed")
-	ErrDestinationAborted   = errors.New("download destination is aborted")
-	ErrInvalidDestination   = errors.New("invalid download destination")
-	ErrLimitExceeded        = errors.New("download size limit exceeded")
-	ErrInvalidLimit         = errors.New("download size limit must not be negative")
+	ErrDestinationExists          = errors.New("download destination already exists")
+	ErrUnsafeDestination          = errors.New("download destination is not a regular file")
+	ErrDestinationCommitted       = errors.New("download destination is already committed")
+	ErrDestinationAborted         = errors.New("download destination is aborted")
+	ErrInvalidDestination         = errors.New("invalid download destination")
+	ErrDestinationChanged         = errors.New("download destination changed during commit")
+	ErrAtomicOverwriteUnsupported = errors.New("atomic safe overwrite is unsupported on this platform")
+	ErrLimitExceeded              = errors.New("download size limit exceeded")
+	ErrInvalidLimit               = errors.New("download size limit must not be negative")
 )
 
 type destinationState uint8
@@ -47,7 +49,21 @@ type Destination struct {
 	finalPath string
 	partPath  string
 	file      *os.File
+	dir       *anchoredDir
+	finalName string
+	partName  string
+	target    targetSnapshot
 }
+
+type targetSnapshot struct {
+	exists   bool
+	identity fileIdentity
+}
+
+var (
+	generatePartName       = randomPartName
+	beforeOverwritePublish = func() {}
+)
 
 // SanitizeDownloadName reduces name to one safe, portable path component.
 func SanitizeDownloadName(name string) string {
@@ -133,63 +149,107 @@ func OpenDestination(dir, name string, overwrite bool) (*Destination, error) {
 	if !dirInfo.IsDir() {
 		return nil, fmt.Errorf("%w: download directory is not a directory: %s", ErrUnsafeDestination, absDir)
 	}
+	dirHandle, err := openAnchoredDir(absDir)
+	if err != nil {
+		return nil, fmt.Errorf("open download directory: %w", err)
+	}
 
 	safeName := SanitizeDownloadName(name)
 	finalPath := filepath.Join(absDir, safeName)
 	if filepath.Dir(finalPath) != absDir {
+		_ = dirHandle.close()
 		return nil, fmt.Errorf("%w: destination escaped download directory", ErrInvalidDestination)
 	}
-	if err := validateFinalTarget(finalPath, overwrite); err != nil {
+	target, err := validateFinalTarget(dirHandle, safeName, finalPath, overwrite)
+	if err != nil {
+		_ = dirHandle.close()
 		return nil, err
 	}
 
-	part, err := os.CreateTemp(absDir, "."+safeName+".*.part")
+	partName, part, err := createPartFile(dirHandle, absDir, safeName)
 	if err != nil {
+		_ = dirHandle.close()
 		return nil, fmt.Errorf("create download part: %w", err)
 	}
 	if err := part.Chmod(0o600); err != nil {
 		_ = part.Close()
-		_ = os.Remove(part.Name())
+		_ = dirHandle.remove(partName)
+		_ = dirHandle.close()
 		return nil, fmt.Errorf("secure download part: %w", err)
 	}
+	partPath := filepath.Join(absDir, partName)
 	return &Destination{
 		FinalPath: finalPath,
-		PartPath:  part.Name(),
+		PartPath:  partPath,
 		File:      part,
 		overwrite: overwrite,
 		state:     destinationOpen,
 		finalPath: finalPath,
-		partPath:  part.Name(),
+		partPath:  partPath,
 		file:      part,
+		dir:       dirHandle,
+		finalName: safeName,
+		partName:  partName,
+		target:    target,
 	}, nil
 }
 
-func validateFinalTarget(path string, overwrite bool) error {
-	info, err := os.Lstat(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
+func createPartFile(dir *anchoredDir, displayDir, safeName string) (string, *os.File, error) {
+	for range 100 {
+		name, err := generatePartName(safeName)
+		if err != nil {
+			return "", nil, err
 		}
-		return fmt.Errorf("inspect download destination: %w", err)
+		if filepath.Base(name) != name || strings.ContainsAny(name, `/\`) || name == "." || name == ".." {
+			return "", nil, fmt.Errorf("%w: invalid generated part name", ErrInvalidDestination)
+		}
+		file, err := dir.createExclusive(name, filepath.Join(displayDir, name))
+		if errors.Is(err, os.ErrExist) {
+			continue
+		}
+		return name, file, err
 	}
-	if !overwrite {
-		return fmt.Errorf("%w: %s", ErrDestinationExists, path)
-	}
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("%w: %s", ErrUnsafeDestination, path)
-	}
-	return nil
+	return "", nil, fmt.Errorf("could not allocate exclusive part name")
 }
 
-// Commit syncs and publishes the part file. A non-overwriting commit uses an
-// atomic hard-link publication so a concurrently created final is not clobbered.
+func randomPartName(safeName string) (string, error) {
+	suffix := make([]byte, 16)
+	if _, err := rand.Read(suffix); err != nil {
+		return "", err
+	}
+	return "." + safeName + "." + hex.EncodeToString(suffix) + ".part", nil
+}
+
+func validateFinalTarget(dir *anchoredDir, name, displayPath string, overwrite bool) (targetSnapshot, error) {
+	info, err := dir.lstat(name)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return targetSnapshot{}, nil
+		}
+		return targetSnapshot{}, fmt.Errorf("inspect download destination: %w", err)
+	}
+	if !overwrite {
+		return targetSnapshot{}, fmt.Errorf("%w: %s", ErrDestinationExists, displayPath)
+	}
+	if !info.regular {
+		return targetSnapshot{}, fmt.Errorf("%w: %s", ErrUnsafeDestination, displayPath)
+	}
+	return targetSnapshot{exists: true, identity: info.identity}, nil
+}
+
+// Commit syncs and publishes the part file using only the directory handle
+// captured by OpenDestination. On Darwin and Linux, replacing an existing
+// regular file uses an atomic name exchange; the displaced inode is then
+// checked against the inode accepted at open time. A changed, symlink, or
+// special target is atomically restored and rejected. Platforms without an
+// atomic exchange conservatively reject existing-target overwrites.
 func (d *Destination) Commit() error {
 	if err := d.lifecycleError(); err != nil {
 		return err
 	}
-	if d.state != destinationOpen || d.file == nil || d.File != d.file ||
+	if d.state != destinationOpen || d.file == nil || d.File != d.file || d.dir == nil ||
 		d.FinalPath != d.finalPath || d.PartPath != d.partPath ||
-		d.FinalPath == "" || d.PartPath == "" {
+		d.FinalPath == "" || d.PartPath == "" || d.finalName == "" || d.partName == "" {
 		if d.state == destinationOpen {
 			return d.failBeforeCommit(ErrInvalidDestination)
 		}
@@ -213,14 +273,15 @@ func (d *Destination) Commit() error {
 	d.File = nil
 
 	if d.overwrite {
-		if err := validateFinalTarget(d.FinalPath, true); err != nil {
-			return d.failBeforeCommit(err)
-		}
-		if err := os.Rename(d.PartPath, d.FinalPath); err != nil {
-			return d.failBeforeCommit(fmt.Errorf("publish download: %w", err))
+		published, publishErr := d.publishOverwrite()
+		if publishErr != nil {
+			if !published {
+				return d.failBeforeCommit(publishErr)
+			}
+			return errors.Join(publishErr, d.finishCommit())
 		}
 	} else {
-		if err := os.Link(d.PartPath, d.FinalPath); err != nil {
+		if err := d.dir.renameNoReplace(d.partName, d.finalName); err != nil {
 			if errors.Is(err, os.ErrExist) {
 				err = fmt.Errorf("%w: %s", ErrDestinationExists, d.FinalPath)
 			} else {
@@ -228,17 +289,93 @@ func (d *Destination) Commit() error {
 			}
 			return d.failBeforeCommit(err)
 		}
-		if err := os.Remove(d.PartPath); err != nil {
-			d.state = destinationCommitted
-			return fmt.Errorf("download committed but remove part: %w", err)
-		}
 	}
 
-	d.state = destinationCommitted
-	if err := syncDirectory(filepath.Dir(d.FinalPath)); err != nil {
-		return fmt.Errorf("download committed but sync directory: %w", err)
+	return d.finishCommit()
+}
+
+func (d *Destination) publishOverwrite() (bool, error) {
+	if err := d.validateTargetUnchanged(); err != nil {
+		return false, err
+	}
+	beforeOverwritePublish()
+
+	if !d.target.exists {
+		if err := d.dir.renameNoReplace(d.partName, d.finalName); err != nil {
+			if errors.Is(err, os.ErrExist) {
+				return false, d.targetRaceError()
+			}
+			return false, fmt.Errorf("publish new download: %w", err)
+		}
+		return true, nil
+	}
+
+	if err := d.dir.exchange(d.partName, d.finalName); err != nil {
+		if errors.Is(err, ErrAtomicOverwriteUnsupported) {
+			return false, err
+		}
+		return false, errors.Join(d.targetRaceError(), fmt.Errorf("atomic exchange download: %w", err))
+	}
+	displaced, inspectErr := d.dir.lstat(d.partName)
+	if inspectErr == nil && displaced.regular && sameFileIdentity(displaced.identity, d.target.identity) {
+		if err := d.dir.remove(d.partName); err != nil {
+			return true, fmt.Errorf("download committed but remove displaced target: %w", err)
+		}
+		return true, nil
+	}
+
+	raceErr := fmt.Errorf("%w: %s", ErrDestinationChanged, d.FinalPath)
+	if inspectErr == nil && !displaced.regular {
+		raceErr = fmt.Errorf("%w: %s", ErrUnsafeDestination, d.FinalPath)
+	} else if inspectErr != nil {
+		raceErr = errors.Join(raceErr, fmt.Errorf("inspect displaced target: %w", inspectErr))
+	}
+	if err := d.dir.exchange(d.partName, d.finalName); err != nil {
+		return true, errors.Join(raceErr, fmt.Errorf("unsafe target displaced but rollback failed: %w", err))
+	}
+	return false, raceErr
+}
+
+func (d *Destination) targetRaceError() error {
+	current, err := d.dir.lstat(d.finalName)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("%w: %s", ErrDestinationChanged, d.FinalPath)
+		}
+		return errors.Join(
+			fmt.Errorf("%w: %s", ErrDestinationChanged, d.FinalPath),
+			fmt.Errorf("inspect changed destination: %w", err),
+		)
+	}
+	if !current.regular {
+		return fmt.Errorf("%w: %s", ErrUnsafeDestination, d.FinalPath)
+	}
+	return fmt.Errorf("%w: %s", ErrDestinationChanged, d.FinalPath)
+}
+
+func (d *Destination) validateTargetUnchanged() error {
+	current, err := validateFinalTarget(d.dir, d.finalName, d.FinalPath, true)
+	if err != nil {
+		return err
+	}
+	if current.exists != d.target.exists ||
+		(current.exists && !sameFileIdentity(current.identity, d.target.identity)) {
+		return fmt.Errorf("%w: %s", ErrDestinationChanged, d.FinalPath)
 	}
 	return nil
+}
+
+func (d *Destination) finishCommit() error {
+	d.state = destinationCommitted
+	syncErr := d.dir.sync()
+	closeErr := d.closeDir()
+	if syncErr != nil {
+		syncErr = fmt.Errorf("download committed but sync directory: %w", syncErr)
+	}
+	if closeErr != nil {
+		closeErr = fmt.Errorf("download committed but close directory: %w", closeErr)
+	}
+	return errors.Join(syncErr, closeErr)
 }
 
 func (d *Destination) lifecycleError() error {
@@ -289,29 +426,25 @@ func (d *Destination) abortOpen() error {
 			d.File = nil
 		}
 	}
-	if d.partPath != "" {
-		if err := os.Remove(d.partPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if d.dir != nil && d.partName != "" {
+		if err := d.dir.remove(d.partName); err != nil && !errors.Is(err, os.ErrNotExist) {
 			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("remove download part: %w", err))
 		}
+	}
+	if err := d.closeDir(); err != nil {
+		cleanupErr = errors.Join(cleanupErr, fmt.Errorf("close download directory: %w", err))
 	}
 	d.state = destinationAborted
 	return cleanupErr
 }
 
-func syncDirectory(dir string) error {
-	if runtime.GOOS == "windows" {
+func (d *Destination) closeDir() error {
+	if d.dir == nil {
 		return nil
 	}
-	f, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	syncErr := f.Sync()
-	closeErr := f.Close()
-	if errors.Is(syncErr, syscall.EINVAL) {
-		syncErr = nil
-	}
-	return errors.Join(syncErr, closeErr)
+	dir := d.dir
+	d.dir = nil
+	return dir.close()
 }
 
 // LimitWriter writes at most Max bytes. Max == 0 is unlimited; Max < 0 is

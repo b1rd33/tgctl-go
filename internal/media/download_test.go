@@ -117,18 +117,31 @@ func TestOpenDestinationConcurrentCallsUseDistinctParts(t *testing.T) {
 	}
 }
 
-func TestOpenDestinationDoesNotFollowPartSymlink(t *testing.T) {
+func TestOpenDestinationDoesNotFollowCollidingPartSymlink(t *testing.T) {
 	dir := t.TempDir()
 	victim := filepath.Join(dir, "victim")
 	if err := os.WriteFile(victim, []byte("safe"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(victim, filepath.Join(dir, ".file.bin.part")); err != nil {
+	collision := ".file.bin.collision.part"
+	if err := os.Symlink(victim, filepath.Join(dir, collision)); err != nil {
 		t.Skipf("symlink unsupported: %v", err)
 	}
+	originalGenerator := generatePartName
+	candidates := []string{collision, ".file.bin.safe.part"}
+	generatePartName = func(string) (string, error) {
+		candidate := candidates[0]
+		candidates = candidates[1:]
+		return candidate, nil
+	}
+	t.Cleanup(func() { generatePartName = originalGenerator })
+
 	d, err := OpenDestination(dir, "file.bin", false)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if got := filepath.Base(d.PartPath); got != ".file.bin.safe.part" {
+		t.Fatalf("part name = %q, want safe second candidate", got)
 	}
 	if _, err := d.File.Write([]byte("new")); err != nil {
 		t.Fatal(err)
@@ -142,6 +155,9 @@ func TestOpenDestinationDoesNotFollowPartSymlink(t *testing.T) {
 	}
 	if string(got) != "safe" {
 		t.Fatalf("part symlink victim changed to %q", got)
+	}
+	if info, err := os.Lstat(filepath.Join(dir, collision)); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("colliding symlink changed: info=%v err=%v", info, err)
 	}
 }
 
@@ -210,6 +226,74 @@ func TestDestinationCommitWithoutOverwriteDoesNotClobberRacedFinal(t *testing.T)
 	}
 }
 
+func TestDestinationCommitStaysInOpenedDirectoryAfterPathReplacement(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "downloads")
+	d, err := OpenDestination(dir, "result.bin", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.File.Write([]byte("download")); err != nil {
+		t.Fatal(err)
+	}
+
+	moved := filepath.Join(root, "moved-downloads")
+	victim := filepath.Join(root, "victim")
+	if err := os.Mkdir(victim, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(dir, moved); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(victim, dir); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+
+	if err := d.Commit(); err != nil {
+		t.Fatalf("Commit after directory replacement: %v", err)
+	}
+	if got, err := os.ReadFile(filepath.Join(moved, "result.bin")); err != nil || string(got) != "download" {
+		t.Fatalf("opened directory final = %q, err=%v", got, err)
+	}
+	if _, err := os.Lstat(filepath.Join(victim, "result.bin")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("replacement directory was modified: %v", err)
+	}
+	assertNoParts(t, moved)
+}
+
+func TestDestinationAbortStaysInOpenedDirectoryAfterPathReplacement(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "downloads")
+	d, err := OpenDestination(dir, "cancel.bin", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalPartName := filepath.Base(d.PartPath)
+
+	moved := filepath.Join(root, "moved-downloads")
+	victim := filepath.Join(root, "victim")
+	if err := os.Mkdir(victim, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(victim, originalPartName), []byte("victim"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(dir, moved); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(victim, dir); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+
+	if err := d.Abort(); err != nil {
+		t.Fatalf("Abort after directory replacement: %v", err)
+	}
+	if got, err := os.ReadFile(filepath.Join(victim, originalPartName)); err != nil || string(got) != "victim" {
+		t.Fatalf("replacement directory entry changed: content=%q err=%v", got, err)
+	}
+	assertNoParts(t, moved)
+}
+
 func TestDestinationOverwriteReplacesOnlyRegularFiles(t *testing.T) {
 	t.Run("regular file", func(t *testing.T) {
 		dir := t.TempDir()
@@ -257,6 +341,47 @@ func TestDestinationOverwriteReplacesOnlyRegularFiles(t *testing.T) {
 			assertNoParts(t, dir)
 		})
 	}
+}
+
+func TestDestinationOverwriteRollsBackSymlinkSwapBeforePublish(t *testing.T) {
+	dir := t.TempDir()
+	final := filepath.Join(dir, "result.bin")
+	victim := filepath.Join(dir, "victim.bin")
+	if err := os.WriteFile(final, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(victim, []byte("safe"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d, err := OpenDestination(dir, "result.bin", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.File.Write([]byte("download")); err != nil {
+		t.Fatal(err)
+	}
+
+	originalHook := beforeOverwritePublish
+	beforeOverwritePublish = func() {
+		if err := os.Remove(final); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(victim, final); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() { beforeOverwritePublish = originalHook })
+
+	if err := d.Commit(); !errors.Is(err, ErrUnsafeDestination) {
+		t.Fatalf("Commit error = %v, want ErrUnsafeDestination", err)
+	}
+	if got, err := os.ReadFile(victim); err != nil || string(got) != "safe" {
+		t.Fatalf("symlink referent changed: content=%q err=%v", got, err)
+	}
+	if target, err := os.Readlink(final); err != nil || target != victim {
+		t.Fatalf("unsafe target was not restored: target=%q err=%v", target, err)
+	}
+	assertNoParts(t, dir)
 }
 
 func TestDestinationAbortRemovesPartAndIsIdempotent(t *testing.T) {
