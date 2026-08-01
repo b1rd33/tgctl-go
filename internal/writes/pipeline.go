@@ -35,8 +35,9 @@ import (
 // Args is the flag bundle the pipeline reads.
 type Args struct {
 	safety.Args
-	DryRun         bool
-	IdempotencyKey string
+	DryRun                 bool
+	IdempotencyKey         string
+	IdempotencyFingerprint string
 }
 
 // ConfirmedTarget is the immutable peer and typed-confirmation target captured
@@ -76,23 +77,33 @@ func Run(ctx context.Context, db *sql.DB, in PipelineInput) (any, error) {
 	}
 
 	// 2. Idempotency lookup (after write gate, before resolve, matching Python).
-	if cached, err := idempotency.Lookup(db, in.Args.IdempotencyKey, in.Cmd); err != nil {
-		return nil, err
-	} else if cached != nil {
-		if err := validateConfirmedReplay(in.Args.IdempotencyKey, cached, in.ConfirmedTarget); err != nil {
+	// A dry-run is always a fresh plan: it must not replay or write durable
+	// idempotency state, even when the caller supplied a key.
+	if !in.Args.DryRun {
+		if cached, err := idempotency.Lookup(db, in.Args.IdempotencyKey, in.Cmd); err != nil {
 			return nil, err
-		}
-		// The envelope's data with `idempotent_replay: true` flag.
-		if data, ok := cached["data"].(map[string]any); ok {
-			out := map[string]any{}
-			for k, v := range data {
-				out[k] = v
+		} else if cached != nil {
+			if expected := strings.TrimSpace(in.Args.IdempotencyFingerprint); expected != "" {
+				actual := strings.TrimSpace(fmt.Sprintf("%v", cached["idempotency_fingerprint"]))
+				if actual == "" || actual != expected {
+					return nil, safety.NewBadArgs("Idempotency key %q was already used for a different album request", in.Args.IdempotencyKey)
+				}
 			}
-			out["idempotent_replay"] = true
-			return out, nil
+			if err := validateConfirmedReplay(in.Args.IdempotencyKey, cached, in.ConfirmedTarget); err != nil {
+				return nil, err
+			}
+			// The envelope's data with `idempotent_replay: true` flag.
+			if data, ok := cached["data"].(map[string]any); ok {
+				out := map[string]any{}
+				for k, v := range data {
+					out[k] = v
+				}
+				out["idempotent_replay"] = true
+				return out, nil
+			}
+			// Defensive: if the cached envelope shape was unexpected, still return it.
+			return cached, nil
 		}
-		// Defensive: if the cached envelope shape was unexpected, still return it.
-		return cached, nil
 	}
 
 	var chatID int64
@@ -164,6 +175,9 @@ func Run(ctx context.Context, db *sql.DB, in PipelineInput) (any, error) {
 			"request_id": dispatch.RequestIDFrom(ctx),
 			"data":       data,
 			"warnings":   []string{},
+		}
+		if fingerprint := strings.TrimSpace(in.Args.IdempotencyFingerprint); fingerprint != "" {
+			envelope["idempotency_fingerprint"] = fingerprint
 		}
 		if in.ConfirmedTarget != nil {
 			envelope["confirmed_target"] = map[string]any{

@@ -52,6 +52,10 @@ func writeArgsFrom(cmd *cobra.Command) writes.Args {
 	fuzzy, _ := cmd.Flags().GetBool("fuzzy")
 	confirm, _ := cmd.Flags().GetString("confirm")
 	key, _ := cmd.Flags().GetString("idempotency-key")
+	fingerprint := ""
+	if flag := cmd.Flags().Lookup("idempotency-fingerprint"); flag != nil {
+		fingerprint, _ = cmd.Flags().GetString("idempotency-fingerprint")
+	}
 	return writes.Args{
 		Args: safety.Args{
 			ReadOnly:   cfg.ReadOnly,
@@ -59,8 +63,9 @@ func writeArgsFrom(cmd *cobra.Command) writes.Args {
 			Confirm:    confirm,
 			Fuzzy:      fuzzy,
 		},
-		DryRun:         dryRun,
-		IdempotencyKey: key,
+		DryRun:                 dryRun,
+		IdempotencyKey:         key,
+		IdempotencyFingerprint: fingerprint,
 	}
 }
 
@@ -133,7 +138,7 @@ func resolveWritePathSet(cmd *cobra.Command, paths AccountPathProvider) (resolve
 	if err != nil {
 		return resolvedWritePaths{}, err
 	}
-	dbPath, sessionPath, auditPath, err := paths.AccountPaths(account)
+	dbPath, sessionPath, auditPath, err := accountPathsForMode(paths, account, writeArgsFrom(cmd).DryRun)
 	if err != nil {
 		return resolvedWritePaths{}, err
 	}
@@ -227,15 +232,26 @@ func runWriteResolved(cmd *cobra.Command, name, telethonMethod, selector string,
 func runWriteResolvedTarget(cmd *cobra.Command, name, telethonMethod, selector string, cfg CommandsConfig, paths resolvedWritePaths, payloadPreview map[string]any, target *writes.ConfirmedTarget, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
 	wargs := writeArgsFrom(cmd)
 	args := map[string]any{"chat": selector, "dry_run": wargs.DryRun}
+	auditPath := paths.auditPath
+	if wargs.DryRun && name == "upload-album" {
+		// A dry-run is a read-only plan: dispatch must not append an audit line.
+		auditPath = ""
+	}
 
 	code := dispatch.Run(name, dispatch.Options{
 		JSON:      jsonMode(cmd),
 		Stdout:    cmd.OutOrStdout(),
 		Stderr:    cmd.ErrOrStderr(),
-		AuditPath: paths.auditPath,
+		AuditPath: auditPath,
 		Args:      args,
 	}, func(ctx context.Context) (any, error) {
-		db, err := store.Connect(paths.dbPath)
+		var db *sql.DB
+		var err error
+		if wargs.DryRun {
+			db, err = store.ConnectReadonly(paths.dbPath)
+		} else {
+			db, err = store.Connect(paths.dbPath)
+		}
 		if err != nil {
 			return nil, err
 		}

@@ -267,6 +267,54 @@ func RecordUploadedMedia(db *sql.DB, chatID, messageID int64, text, mediaType, m
 	return err
 }
 
+// UploadedMedia is one message row produced by a successful multi-item
+// upload. The command layer commits the complete slice in one transaction so
+// a partially persisted album cannot be mistaken for a successful send.
+type UploadedMedia struct {
+	MessageID int64
+	Text      string
+	MediaType string
+	MediaPath string
+}
+
+// RecordUploadedAlbum atomically records every message created by one album.
+// It intentionally uses the existing tg_messages rows; Telegram already
+// represents an album as one message per item.
+func RecordUploadedAlbum(db *sql.DB, chatID int64, items []UploadedMedia) error {
+	if len(items) == 0 {
+		return fmt.Errorf("album must contain at least one uploaded message")
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, item := range items {
+		if item.MessageID <= 0 {
+			return fmt.Errorf("album message id must be positive")
+		}
+		if _, err := tx.Exec(`
+			INSERT INTO tg_messages(
+				chat_id, message_id, date, text, is_outgoing,
+				has_media, media_type, media_path, deleted
+			) VALUES (?, ?, ?, ?, 1, 1, ?, ?, 0)
+			ON CONFLICT(chat_id, message_id) DO UPDATE SET
+				date = excluded.date,
+				text = excluded.text,
+				is_outgoing = 1,
+				has_media = 1,
+				media_type = excluded.media_type,
+				media_path = excluded.media_path,
+				media_id = NULL,
+				deleted = 0`,
+			chatID, item.MessageID, time.Now().UTC().Format(time.RFC3339), nullString(item.Text), item.MediaType, item.MediaPath,
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 // UpdateMessageMediaPath updates only the media cache fields for one existing
 // message. It returns sql.ErrNoRows when the composite message identity is not
 // cached.

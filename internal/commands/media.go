@@ -12,6 +12,7 @@ import (
 
 func registerMediaCommands(root *cobra.Command, cfg CommandsConfig) {
 	root.AddCommand(downloadMediaCommand(cfg))
+	root.AddCommand(uploadAlbumCommand(cfg))
 	root.AddCommand(uploadCommand(cfg, "upload-photo", "photo", "Upload a photo"))
 	root.AddCommand(uploadCommand(cfg, "upload-voice", "voice", "Upload an OGG/Opus voice message"))
 	root.AddCommand(uploadCommand(cfg, "upload-video", "video", "Upload a video"))
