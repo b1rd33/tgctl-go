@@ -950,6 +950,8 @@ func (g *GotdClient) paginateBackfillHistory(
 	}
 	offsetID := 0
 	serverItemsSeen := 0
+	seenMessages := make(map[int64]struct{})
+	seenAlbums := make(map[int64]struct{})
 	for len(result.Messages) < limit {
 		if err := ctx.Err(); err != nil {
 			return result, err
@@ -966,31 +968,31 @@ func (g *GotdClient) paginateBackfillHistory(
 		if len(msgs) == 0 {
 			break
 		}
-		serverItemsSeen += len(msgs)
 		minID := 0
 		for _, mc := range msgs {
 			if err := ctx.Err(); err != nil {
 				return result, err
 			}
+			messageID, hasID := historyMessageID(mc)
+			if hasID {
+				if minID == 0 || messageID < int64(minID) {
+					minID = int(messageID)
+				}
+				if _, seen := seenMessages[messageID]; seen {
+					continue
+				}
+				seenMessages[messageID] = struct{}{}
+			}
+			serverItemsSeen++
 			m, ok := mc.(*tg.Message)
 			if !ok {
 				// Other concrete types: MessageEmpty, MessageService.
 				// Skip but still update minID so we don't re-fetch.
-				if me, ok := mc.(*tg.MessageEmpty); ok {
-					if minID == 0 || me.ID < minID {
-						minID = me.ID
-					}
-				}
-				if ms, ok := mc.(*tg.MessageService); ok {
-					if minID == 0 || ms.ID < minID {
-						minID = ms.ID
-					}
-				}
 				continue
 			}
 			row := BackfillMessage{
 				ChatID: req.ChatID, MessageID: int64(m.ID), Date: timeFromUnix(m.Date),
-				Text: m.Message, IsOutgoing: m.Out, HasMedia: m.Media != nil, MediaDisposition: BackfillMediaNone,
+				Text: m.Message, IsOutgoing: m.Out, HasMedia: m.Media != nil, GroupedID: m.GroupedID, MediaDisposition: BackfillMediaNone,
 			}
 			row.SenderID = peerID(m.FromID)
 			if req.DownloadMedia {
@@ -1000,10 +1002,13 @@ func (g *GotdClient) paginateBackfillHistory(
 			} else if m.Media != nil {
 				row.MediaType = fmt.Sprintf("%T", m.Media)
 			}
-			result.Messages = append(result.Messages, row)
-			if minID == 0 || m.ID < minID {
-				minID = m.ID
+			if m.GroupedID != 0 {
+				if _, seen := seenAlbums[m.GroupedID]; !seen {
+					seenAlbums[m.GroupedID] = struct{}{}
+					result.AlbumsSeen++
+				}
 			}
+			result.Messages = append(result.Messages, row)
 			if len(result.Messages) >= limit {
 				break
 			}
@@ -1028,6 +1033,28 @@ func (g *GotdClient) paginateBackfillHistory(
 		}
 	}
 	return result, nil
+}
+
+func historyMessageID(mc tg.MessageClass) (int64, bool) {
+	switch m := mc.(type) {
+	case *tg.Message:
+		if m == nil {
+			return 0, false
+		}
+		return int64(m.ID), true
+	case *tg.MessageEmpty:
+		if m == nil {
+			return 0, false
+		}
+		return int64(m.ID), true
+	case *tg.MessageService:
+		if m == nil {
+			return 0, false
+		}
+		return int64(m.ID), true
+	default:
+		return 0, false
+	}
 }
 
 func (g *GotdClient) backfillMessageMedia(ctx context.Context, req BackfillReq, message *tg.Message, row *BackfillMessage, result *BackfillResult) error {

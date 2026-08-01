@@ -63,6 +63,11 @@ func migrate(db *sql.DB) error {
 			return fmt.Errorf("migrate tg_messages.media_id: %w", err)
 		}
 	}
+	if !columnExists(db, "tg_messages", "grouped_id") {
+		if _, err := db.Exec("ALTER TABLE tg_messages ADD COLUMN grouped_id INTEGER"); err != nil {
+			return fmt.Errorf("migrate tg_messages.grouped_id: %w", err)
+		}
+	}
 	if !columnExists(db, "tg_messages", "deleted") {
 		if _, err := db.Exec("ALTER TABLE tg_messages ADD COLUMN deleted INTEGER DEFAULT 0"); err != nil {
 			return err
@@ -83,6 +88,9 @@ func migrate(db *sql.DB) error {
 			)`); err != nil {
 			return err
 		}
+	}
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_messages_chat_grouped ON tg_messages(chat_id, grouped_id, message_id)"); err != nil {
+		return fmt.Errorf("migrate tg_messages grouped index: %w", err)
 	}
 	return nil
 }

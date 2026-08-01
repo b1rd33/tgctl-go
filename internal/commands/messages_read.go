@@ -25,6 +25,7 @@ type ChatRef struct {
 // MessageSummaryDTO is the wire shape mirroring Python `_message_summary`.
 type MessageSummaryDTO struct {
 	MessageID  int64   `json:"message_id"`
+	GroupedID  int64   `json:"grouped_id,omitempty"`
 	Date       string  `json:"date"`
 	IsOutgoing bool    `json:"is_outgoing"`
 	Text       *string `json:"text"`
@@ -35,6 +36,7 @@ type MessageSummaryDTO struct {
 type FullMessageDTO struct {
 	ChatID       int64   `json:"chat_id"`
 	MessageID    int64   `json:"message_id"`
+	GroupedID    int64   `json:"grouped_id,omitempty"`
 	SenderID     *int64  `json:"sender_id"`
 	Date         string  `json:"date"`
 	Text         *string `json:"text"`
@@ -49,6 +51,7 @@ type FullMessageDTO struct {
 func toSummaryDTO(s store.MessageSummary) MessageSummaryDTO {
 	return MessageSummaryDTO{
 		MessageID:  s.MessageID,
+		GroupedID:  s.GroupedID,
 		Date:       s.Date,
 		IsOutgoing: s.IsOutgoing,
 		Text:       s.Text,
@@ -60,6 +63,7 @@ func toFullMessageDTO(m *store.Message) FullMessageDTO {
 	dto := FullMessageDTO{
 		ChatID:       m.ChatID,
 		MessageID:    m.MessageID,
+		GroupedID:    m.GroupedID,
 		SenderID:     m.SenderID,
 		Date:         m.Date,
 		Text:         m.Text,

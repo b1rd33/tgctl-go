@@ -11,6 +11,7 @@ import (
 // MessageSummary mirrors the Python `_message_summary` row shape.
 type MessageSummary struct {
 	MessageID  int64
+	GroupedID  int64
 	Date       string
 	IsOutgoing bool
 	Text       *string
@@ -30,7 +31,10 @@ type Message struct {
 	MediaType     *string
 	MediaPath     *string
 	MediaIdentity *string
-	RawJSON       *string
+	// GroupedID is Telegram's media-group identifier. Zero means the message
+	// is not part of an album; Telegram's grouped_id is nullable on disk.
+	GroupedID int64
+	RawJSON   *string
 }
 
 // ShowOptions mirrors the Python `show` arg surface.
@@ -53,7 +57,7 @@ func Show(db *sql.DB, opts ShowOptions) ([]MessageSummary, error) {
 		deletedClause = " AND (deleted = 0 OR deleted IS NULL)"
 	}
 	q := fmt.Sprintf(`
-		SELECT message_id, date, is_outgoing, text, media_type
+		SELECT message_id, grouped_id, date, is_outgoing, text, media_type
 		FROM tg_messages
 		WHERE chat_id = ?%s
 		ORDER BY date %s
@@ -87,7 +91,7 @@ func Search(db *sql.DB, opts SearchOptions) ([]MessageSummary, error) {
 	}
 	args = append(args, opts.Limit)
 	q := fmt.Sprintf(`
-		SELECT message_id, date, is_outgoing, text, media_type
+		SELECT message_id, grouped_id, date, is_outgoing, text, media_type
 		FROM tg_messages
 		WHERE chat_id = ?
 		  AND text IS NOT NULL
@@ -138,7 +142,7 @@ func List(db *sql.DB, opts ListOptions) ([]MessageSummary, error) {
 	}
 	args = append(args, opts.Limit)
 	q := fmt.Sprintf(`
-		SELECT message_id, date, is_outgoing, text, media_type
+		SELECT message_id, grouped_id, date, is_outgoing, text, media_type
 		FROM tg_messages
 		WHERE %s
 		ORDER BY date %s, message_id %s
@@ -156,7 +160,7 @@ func GetOne(db *sql.DB, chatID, messageID int64, includeDeleted bool) (*Message,
 	}
 	q := fmt.Sprintf(`
 		SELECT chat_id, message_id, sender_id, date, text, is_outgoing,
-		       reply_to_msg_id, has_media, media_type, media_path, media_id, raw_json
+		       reply_to_msg_id, has_media, media_type, media_path, media_id, grouped_id, raw_json
 		FROM tg_messages
 		WHERE chat_id = ? AND message_id = ?%s`,
 		deletedClause,
@@ -167,6 +171,7 @@ func GetOne(db *sql.DB, chatID, messageID int64, includeDeleted bool) (*Message,
 		mediaType     sql.NullString
 		mediaPath     sql.NullString
 		mediaIdentity sql.NullString
+		groupedID     sql.NullInt64
 		rawJSON       sql.NullString
 		senderID      sql.NullInt64
 		replyTo       sql.NullInt64
@@ -175,7 +180,7 @@ func GetOne(db *sql.DB, chatID, messageID int64, includeDeleted bool) (*Message,
 	)
 	err := db.QueryRow(q, chatID, messageID).Scan(
 		&m.ChatID, &m.MessageID, &senderID, &m.Date, &text, &isOutgoingI,
-		&replyTo, &hasMediaInt, &mediaType, &mediaPath, &mediaIdentity, &rawJSON,
+		&replyTo, &hasMediaInt, &mediaType, &mediaPath, &mediaIdentity, &groupedID, &rawJSON,
 	)
 	if err != nil {
 		return nil, err
@@ -200,10 +205,116 @@ func GetOne(db *sql.DB, chatID, messageID int64, includeDeleted bool) (*Message,
 	if mediaIdentity.Valid {
 		m.MediaIdentity = &mediaIdentity.String
 	}
+	if groupedID.Valid {
+		m.GroupedID = groupedID.Int64
+	}
 	if rawJSON.Valid {
 		m.RawJSON = &rawJSON.String
 	}
 	return &m, nil
+}
+
+// ListAlbum returns the cached messages belonging to one Telegram media
+// group, ordered by Telegram message id. Message ids are monotonic within a
+// chat and are the only ordering metadata persisted by this schema; no
+// synthetic album position is inferred.
+func ListAlbum(db *sql.DB, chatID, groupedID int64, includeDeleted bool) ([]Message, error) {
+	if groupedID <= 0 {
+		return nil, fmt.Errorf("grouped_id must be positive")
+	}
+	deletedClause := ""
+	if !includeDeleted {
+		deletedClause = " AND (deleted = 0 OR deleted IS NULL)"
+	}
+	rows, err := db.Query(fmt.Sprintf(`
+		SELECT chat_id, message_id, sender_id, date, text, is_outgoing,
+		       reply_to_msg_id, has_media, media_type, media_path, media_id, grouped_id, raw_json
+		FROM tg_messages
+		WHERE chat_id = ? AND grouped_id = ?%s
+		ORDER BY message_id ASC`, deletedClause), chatID, groupedID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Message
+	for rows.Next() {
+		m, err := scanMessage(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// GetAlbum resolves an anchor message to its media group. An ungrouped
+// anchor is returned as a one-item slice so callers can treat single media
+// and album downloads uniformly.
+func GetAlbum(db *sql.DB, chatID, messageID int64, includeDeleted bool) ([]Message, error) {
+	anchor, err := GetOne(db, chatID, messageID, includeDeleted)
+	if err != nil {
+		return nil, err
+	}
+	if anchor.GroupedID <= 0 {
+		return []Message{*anchor}, nil
+	}
+	return ListAlbum(db, chatID, anchor.GroupedID, includeDeleted)
+}
+
+type messageScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanMessage(row messageScanner) (Message, error) {
+	var (
+		m             Message
+		text          sql.NullString
+		mediaType     sql.NullString
+		mediaPath     sql.NullString
+		mediaIdentity sql.NullString
+		groupedID     sql.NullInt64
+		rawJSON       sql.NullString
+		senderID      sql.NullInt64
+		replyTo       sql.NullInt64
+		hasMediaInt   sql.NullInt64
+		isOutgoingI   sql.NullInt64
+	)
+	if err := row.Scan(
+		&m.ChatID, &m.MessageID, &senderID, &m.Date, &text, &isOutgoingI,
+		&replyTo, &hasMediaInt, &mediaType, &mediaPath, &mediaIdentity, &groupedID, &rawJSON,
+	); err != nil {
+		return Message{}, err
+	}
+	if senderID.Valid {
+		m.SenderID = &senderID.Int64
+	}
+	if replyTo.Valid {
+		m.ReplyToMsgID = &replyTo.Int64
+	}
+	m.IsOutgoing = isOutgoingI.Valid && isOutgoingI.Int64 != 0
+	m.HasMedia = hasMediaInt.Valid && hasMediaInt.Int64 != 0
+	if text.Valid && text.String != "" {
+		m.Text = &text.String
+	}
+	if mediaType.Valid {
+		m.MediaType = &mediaType.String
+	}
+	if mediaPath.Valid {
+		m.MediaPath = &mediaPath.String
+	}
+	if mediaIdentity.Valid {
+		m.MediaIdentity = &mediaIdentity.String
+	}
+	if groupedID.Valid {
+		m.GroupedID = groupedID.Int64
+	}
+	if rawJSON.Valid {
+		m.RawJSON = &rawJSON.String
+	}
+	return m, nil
 }
 
 func scanSummaries(db *sql.DB, q string, args ...any) ([]MessageSummary, error) {
@@ -216,9 +327,13 @@ func scanSummaries(db *sql.DB, q string, args ...any) ([]MessageSummary, error) 
 	for rows.Next() {
 		var s MessageSummary
 		var text, mediaType sql.NullString
+		var groupedID sql.NullInt64
 		var isOut sql.NullInt64
-		if err := rows.Scan(&s.MessageID, &s.Date, &isOut, &text, &mediaType); err != nil {
+		if err := rows.Scan(&s.MessageID, &groupedID, &s.Date, &isOut, &text, &mediaType); err != nil {
 			return nil, err
+		}
+		if groupedID.Valid {
+			s.GroupedID = groupedID.Int64
 		}
 		s.IsOutgoing = isOut.Valid && isOut.Int64 != 0
 		if text.Valid && text.String != "" {
@@ -237,11 +352,11 @@ func InsertMessage(db *sql.DB, m Message) error {
 	_, err := db.Exec(`
 		INSERT INTO tg_messages(
 			chat_id, message_id, sender_id, date, text, is_outgoing,
-			reply_to_msg_id, has_media, media_type, media_path, media_id, raw_json, deleted
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+			reply_to_msg_id, has_media, media_type, media_path, media_id, grouped_id, raw_json, deleted
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
 		m.ChatID, m.MessageID, optInt64(m.SenderID), m.Date, optStr(m.Text),
 		boolInt(m.IsOutgoing), optInt64(m.ReplyToMsgID), boolInt(m.HasMedia),
-		optStr(m.MediaType), optStr(m.MediaPath), optStr(m.MediaIdentity), optStr(m.RawJSON),
+		optStr(m.MediaType), optStr(m.MediaPath), optStr(m.MediaIdentity), nullInt64(m.GroupedID), optStr(m.RawJSON),
 	)
 	return err
 }
@@ -275,6 +390,7 @@ type UploadedMedia struct {
 	Text      string
 	MediaType string
 	MediaPath string
+	GroupedID int64
 }
 
 // RecordUploadedAlbum atomically records every message created by one album.
@@ -296,8 +412,8 @@ func RecordUploadedAlbum(db *sql.DB, chatID int64, items []UploadedMedia) error 
 		if _, err := tx.Exec(`
 			INSERT INTO tg_messages(
 				chat_id, message_id, date, text, is_outgoing,
-				has_media, media_type, media_path, deleted
-			) VALUES (?, ?, ?, ?, 1, 1, ?, ?, 0)
+				has_media, media_type, media_path, grouped_id, deleted
+			) VALUES (?, ?, ?, ?, 1, 1, ?, ?, ?, 0)
 			ON CONFLICT(chat_id, message_id) DO UPDATE SET
 				date = excluded.date,
 				text = excluded.text,
@@ -305,9 +421,10 @@ func RecordUploadedAlbum(db *sql.DB, chatID int64, items []UploadedMedia) error 
 				has_media = 1,
 				media_type = excluded.media_type,
 				media_path = excluded.media_path,
+				grouped_id = excluded.grouped_id,
 				media_id = NULL,
 				deleted = 0`,
-			chatID, item.MessageID, time.Now().UTC().Format(time.RFC3339), nullString(item.Text), item.MediaType, item.MediaPath,
+			chatID, item.MessageID, time.Now().UTC().Format(time.RFC3339), nullString(item.Text), item.MediaType, item.MediaPath, nullInt64(item.GroupedID),
 		); err != nil {
 			return err
 		}
@@ -391,6 +508,13 @@ func optInt64(p *int64) any {
 		return nil
 	}
 	return *p
+}
+
+func nullInt64(v int64) any {
+	if v == 0 {
+		return nil
+	}
+	return v
 }
 
 // MarkDeleted is a test helper that sets deleted=1 on a row.

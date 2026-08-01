@@ -25,25 +25,27 @@ type FakeClient struct {
 	AlbumErr  error
 	// AlbumHook runs after an album request is recorded, outside the fake's
 	// mutex. Tests use it to hold the Telegram call while racing idempotency.
-	AlbumHook    func()
-	Downloads    []DownloadMediaReq
-	DownloadResp DownloadMediaResp
-	DownloadErr  error
-	DownloadHook func()
-	CloseErr     error
-	Edited       []EditMessageReq
-	Forwards     []ForwardReq
-	Pins         []PinReq
-	Reacts       []ReactReq
-	Reads        []MarkReadReq
-	Deletes      []DeleteMessagesReq
-	Leaves       []LeaveChatReq
-	Blocks       []BlockUserReq
-	Unblocks     []BlockUserReq
-	Sessions     []SessionRef
-	Terms        []TerminateSessionReq
-	Dialogs      []ChatInfo
-	Contacts     []ContactInfo
+	AlbumHook         func()
+	Downloads         []DownloadMediaReq
+	DownloadResp      DownloadMediaResp
+	DownloadResponses []DownloadMediaResp
+	DownloadErr       error
+	DownloadErrors    []error
+	DownloadHook      func()
+	CloseErr          error
+	Edited            []EditMessageReq
+	Forwards          []ForwardReq
+	Pins              []PinReq
+	Reacts            []ReactReq
+	Reads             []MarkReadReq
+	Deletes           []DeleteMessagesReq
+	Leaves            []LeaveChatReq
+	Blocks            []BlockUserReq
+	Unblocks          []BlockUserReq
+	Sessions          []SessionRef
+	Terms             []TerminateSessionReq
+	Dialogs           []ChatInfo
+	Contacts          []ContactInfo
 
 	Discoveries    []int
 	ContactSyncs   []bool
@@ -146,10 +148,20 @@ func (f *FakeClient) DownloadMedia(_ context.Context, req DownloadMediaReq) (Dow
 		return DownloadMediaResp{}, err
 	}
 	f.Downloads = append(f.Downloads, req)
+	resp := f.DownloadResp
+	if len(f.DownloadResponses) > 0 {
+		resp = f.DownloadResponses[0]
+		f.DownloadResponses = f.DownloadResponses[1:]
+	}
+	err := f.DownloadErr
+	if len(f.DownloadErrors) > 0 {
+		err = f.DownloadErrors[0]
+		f.DownloadErrors = f.DownloadErrors[1:]
+	}
 	if f.DownloadHook != nil {
 		f.DownloadHook()
 	}
-	return f.DownloadResp, f.DownloadErr
+	return resp, err
 }
 
 func (f *FakeClient) EditMessage(_ context.Context, req EditMessageReq) error {

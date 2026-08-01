@@ -372,3 +372,13 @@ func TestUploadAlbumContextFactoryIsUsed(t *testing.T) {
 		t.Fatalf("code=%d factory_called=%v", code, called)
 	}
 }
+
+func TestUploadAlbumRequiresExplicitOrFuzzySelector(t *testing.T) {
+	cfg, fake, _ := albumFakeConfig(t)
+	first := writeAlbumFixture(t, "first.jpg", []byte("\xff\xd8\xffphoto"))
+	second := writeAlbumFixture(t, "second.jpg", []byte("\xff\xd8\xffphoto2"))
+	out, code := runRoot(t, cfg, "upload-album", "Bjørn", first, second, "--allow-write", "--json")
+	if code != 2 || len(fake.Albums) != 0 || !strings.Contains(out, "fuzzy") {
+		t.Fatalf("code=%d albums=%d out=%s", code, len(fake.Albums), out)
+	}
+}

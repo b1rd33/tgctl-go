@@ -49,6 +49,9 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 			if err := safety.RequireWriteAllowed(writeArgsFrom(cmd).Args); err != nil {
 				return emitDispatchedFailure(cmd, name, err)
 			}
+			if err := safety.RequireExplicitOrFuzzy(writeArgsFrom(cmd).Args, args[0]); err != nil {
+				return emitDispatchedFailure(cmd, name, err)
+			}
 			account, err := selectedAccount(cmd, cfg.Paths)
 			if err != nil {
 				return emitDispatchedFailure(cmd, name, err)
@@ -131,7 +134,7 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 						if i < len(resp.Items) && resp.Items[i].MediaType != "" {
 							mediaType = resp.Items[i].MediaType
 						}
-						rows[i] = store.UploadedMedia{MessageID: resp.MessageIDs[i], Text: item.Caption, MediaType: mediaType, MediaPath: item.Path}
+						rows[i] = store.UploadedMedia{MessageID: resp.MessageIDs[i], GroupedID: resp.GroupedID, Text: item.Caption, MediaType: mediaType, MediaPath: item.Path}
 					}
 					db, err := store.Connect(paths.dbPath)
 					if err != nil {

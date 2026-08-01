@@ -440,6 +440,37 @@ func TestBackfillThrottleSleepsOnceBetweenTwoFullPages(t *testing.T) {
 	}
 }
 
+func TestBackfillDeduplicatesOverlappingPagesAndCountsUniqueAlbums(t *testing.T) {
+	first := historyMessages(200, 100)
+	for _, item := range first {
+		item.(*tg.Message).GroupedID = 700
+	}
+	second := make([]tg.MessageClass, 0, 99)
+	for id := 101; id >= 3; id-- {
+		second = append(second, &tg.Message{ID: id, GroupedID: 700})
+	}
+	third := []tg.MessageClass{&tg.Message{ID: 3, GroupedID: 701}, &tg.Message{ID: 2, GroupedID: 701}, &tg.Message{ID: 1, GroupedID: 0}}
+	pages := []historyPage{{Messages: first, Total: 202, TotalKnown: true}, {Messages: second, Total: 202, TotalKnown: true}, {Messages: third, Total: 202, TotalKnown: true}}
+	pageIndex := 0
+	result, err := (&GotdClient{}).paginateBackfillHistory(context.Background(), BackfillReq{ChatID: 42, Limit: 199}, func(context.Context, int, int) (historyPage, error) {
+		page := pages[pageIndex]
+		pageIndex++
+		return page, nil
+	}, func(context.Context, time.Duration) error { return nil })
+	if err != nil {
+		t.Fatalf("paginateBackfillHistory: %v", err)
+	}
+	if len(result.Messages) != 199 {
+		t.Fatalf("rows=%d, want 199 unique", len(result.Messages))
+	}
+	if result.Messages[0].MessageID != 200 || result.Messages[len(result.Messages)-1].MessageID != 2 {
+		t.Fatalf("stable order endpoints=%d,%d", result.Messages[0].MessageID, result.Messages[len(result.Messages)-1].MessageID)
+	}
+	if result.AlbumsSeen != 2 {
+		t.Fatalf("albums_seen=%d, want 2", result.AlbumsSeen)
+	}
+}
+
 func TestBackfillThrottleDoesNotSleepAfterExactFullFinalPage(t *testing.T) {
 	calls := 0
 	sleeps := 0

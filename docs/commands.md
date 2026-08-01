@@ -1,6 +1,6 @@
 # Commands
 
-`tg --help` shows 69 commands. This page is generated from Cobra help output.
+`tg --help` shows 71 commands. This page is generated from Cobra help output.
 
 Every command supports the global flags shown by `tg --help`: `--account`, `--full`, `--json`, `--human`, `--lock-wait`, `--read-only`, and `--version` where applicable.
 
@@ -31,6 +31,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg demote`](#tg-demote) | demote user in chat |
 | [`tg discover`](#tg-discover) | Discover dialogs and cache chat metadata |
 | [`tg doctor`](#tg-doctor) | Diagnose tgctl-go setup |
+| [`tg download-album`](#tg-download-album) | Download one cached Telegram media group |
 | [`tg download-media`](#tg-download-media) | Download media attached to a message |
 | [`tg edit-msg`](#tg-edit-msg) | Edit a previously sent message |
 | [`tg folder-add-chat`](#tg-folder-add-chat) | Mutate folder chat membership |
@@ -72,6 +73,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg unblock-user`](#tg-unblock-user) | Unblock a previously blocked user |
 | [`tg unpin-msg`](#tg-unpin-msg) | Unpin a previously pinned message |
 | [`tg unread`](#tg-unread) | List recently cached incoming messages |
+| [`tg upload-album`](#tg-upload-album) | Upload a 2–10 item photo/video album |
 | [`tg upload-document`](#tg-upload-document) | Upload a document |
 | [`tg upload-photo`](#tg-upload-photo) | Upload a photo |
 | [`tg upload-video`](#tg-upload-video) | Upload a video |
@@ -684,6 +686,38 @@ tg doctor --json
 | `-h, --help` | help for doctor |
 | `--human` | Force human-readable output (default on a TTY) |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+
+## `tg download-album`
+
+Download one cached Telegram media group
+
+**Use**
+
+```text
+tg download-album <chat> [message-id] [flags]
+```
+
+**Example**
+
+```bash
+tg download-album <chat> [message-id] [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--allow-write` | Required for album media/cache writes |
+| `--dry-run` | Print album metadata without contacting Telegram |
+| `--fuzzy` | Allow title-based chat selectors |
+| `--grouped-id int` | Telegram grouped_id to download |
+| `-h, --help` | help for download-album |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--max-size-mb int` | Maximum download size per item in MiB (0 = unlimited) (default 100) |
+| `--message-id int` | Anchor message id (or pass it as the second argument) |
+| `--output string` | Output directory (default account media/<chat-id>/) |
+| `--overwrite` | Overwrite existing media files |
 
 ## `tg download-media`
 
@@ -1839,6 +1873,40 @@ tg unread --json
 | `--human` | Force human-readable output (default on a TTY) |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 | `--limit int` | Maximum messages (default 50) |
+
+## `tg upload-album`
+
+Upload a 2–10 item photo/video album
+
+**Use**
+
+```text
+tg upload-album <chat> <file>... [flags]
+```
+
+**Example**
+
+```bash
+tg upload-album <chat> <file>... [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--allow-write` | Required for any Telegram-side write |
+| `--caption string` | Album caption (placed on the first item) |
+| `--confirm string` | Typed confirm against the resolved id |
+| `--dry-run` | Print payload preview without contacting Telegram |
+| `--fuzzy` | Allow title-based selectors for write commands |
+| `-h, --help` | help for upload-album |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--idempotency-key string` | Per-account replay-safe key |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--max-size-mb int` | Maximum size per item in MiB (default 100) |
+| `--reply-to int` | Reply-to message id |
+| `--silent` | Send silently |
+| `--supports-streaming` | Mark video items as streamable |
 
 ## `tg upload-document`
 

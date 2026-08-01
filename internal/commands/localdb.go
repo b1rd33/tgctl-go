@@ -172,6 +172,7 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 					"media_downloaded":  result.MediaDownloaded,
 					"media_skipped":     result.MediaSkipped,
 					"media_failed":      result.MediaFailed,
+					"albums_seen":       result.AlbumsSeen,
 					"warnings":          warnings,
 					"skipped":           skipped,
 					"cap_warnings":      capOnlyWarnings,
@@ -820,6 +821,7 @@ func setBackfillRecoveryExtras(dst map[string]any, result client.BackfillResult,
 	dst["media_downloaded"] = result.MediaDownloaded
 	dst["media_skipped"] = result.MediaSkipped
 	dst["media_failed"] = result.MediaFailed
+	dst["albums_seen"] = result.AlbumsSeen
 	outcomes := make([]map[string]any, 0, min(len(result.MediaOutcomes), maxBackfillRecoveryOutcomes))
 	ordered := append(committed, diagnostic...)
 	for _, outcome := range ordered {
@@ -881,6 +883,7 @@ func setBackfillAuditResult(args map[string]any, result client.BackfillResult) {
 	args["media_downloaded"] = result.MediaDownloaded
 	args["media_skipped"] = result.MediaSkipped
 	args["media_failed"] = result.MediaFailed
+	args["albums_seen"] = result.AlbumsSeen
 	args["client_warning_count"] = len(result.Warnings)
 	args["client_warnings"] = boundedBackfillWarnings(result.Warnings, 20)
 }
@@ -938,12 +941,12 @@ func insertBackfillMessageContext(ctx context.Context, db sqliteContextExecer, r
 	}
 	_, err := db.ExecContext(ctx, `
 		INSERT INTO tg_messages(chat_id, message_id, sender_id, date, text, is_outgoing,
-			reply_to_msg_id, has_media, media_type, media_path, media_id, raw_json, deleted)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+			reply_to_msg_id, has_media, media_type, media_path, media_id, grouped_id, raw_json, deleted)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
 		ON CONFLICT(chat_id, message_id) DO UPDATE SET
 			sender_id=excluded.sender_id, date=excluded.date, text=excluded.text,
 			is_outgoing=excluded.is_outgoing, reply_to_msg_id=excluded.reply_to_msg_id,
-			has_media=excluded.has_media,
+			has_media=excluded.has_media, grouped_id=excluded.grouped_id,
 			media_type=CASE
 				WHEN ? IN ('downloaded','skipped') THEN excluded.media_type
 				WHEN ?='failed' AND excluded.media_id IS NOT NULL AND tg_messages.media_id=excluded.media_id THEN tg_messages.media_type
@@ -961,7 +964,7 @@ func insertBackfillMessageContext(ctx context.Context, db sqliteContextExecer, r
 				ELSE NULL END,
 			raw_json=excluded.raw_json, deleted=0`,
 		row.ChatID, row.MessageID, sender, date, nullIfEmpty(row.Text), localDBBoolInt(row.IsOutgoing),
-		reply, localDBBoolInt(row.HasMedia), nullIfEmpty(row.MediaType), nullIfEmpty(row.MediaPath), nullIfEmpty(row.MediaIdentity), nullIfEmpty(row.RawJSON),
+		reply, localDBBoolInt(row.HasMedia), nullIfEmpty(row.MediaType), nullIfEmpty(row.MediaPath), nullIfEmpty(row.MediaIdentity), nullInt64(row.GroupedID), nullIfEmpty(row.RawJSON),
 		row.MediaDisposition, row.MediaDisposition, row.MediaDisposition,
 		row.MediaDisposition, row.MediaDisposition, row.MediaDisposition,
 		row.MediaDisposition, row.MediaDisposition, row.MediaDisposition)
@@ -985,4 +988,11 @@ func localDBBoolInt(v bool) int {
 		return 1
 	}
 	return 0
+}
+
+func nullInt64(v int64) any {
+	if v == 0 {
+		return nil
+	}
+	return v
 }

@@ -290,6 +290,7 @@ type BackfillMessage struct {
 	IsOutgoing       bool
 	ReplyToMsgID     int64
 	HasMedia         bool
+	GroupedID        int64
 	MediaType        string
 	MediaPath        string
 	MediaIdentity    string
@@ -322,6 +323,7 @@ type BackfillMediaOutcome struct {
 
 type BackfillResult struct {
 	Messages        []BackfillMessage
+	AlbumsSeen      int
 	MediaDownloaded int
 	MediaSkipped    int
 	MediaFailed     int

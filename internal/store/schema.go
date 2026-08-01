@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS tg_messages (
     media_type       TEXT,
     media_path       TEXT,
     media_id         TEXT,
+    grouped_id       INTEGER,
     raw_json         TEXT,
     deleted          INTEGER DEFAULT 0,
     PRIMARY KEY (chat_id, message_id)

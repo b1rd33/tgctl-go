@@ -247,10 +247,11 @@ retain the original file stream and safe filename. The CLI does not bypass
 Telegram content protection, download non-file media such as locations or
 polls, or provide an unrestricted scraping facility.
 
-## Planned, not implemented: album v1
+## Album v1
 
-There is no runnable `upload-album` or `download-album` command yet, and cached
-messages do not yet expose `grouped_id`. The planned first version is:
+`upload-album` and `download-album` are available. Cached message rows expose
+Telegram's `grouped_id`, and history/backfill preserves it while grouping
+album rows by ascending message ID. The first version supports:
 
 - upload 2–10 ordered photo/video items, including mixed photo/video albums;
 - put the CLI's single album caption on the first item;
@@ -259,7 +260,7 @@ messages do not yet expose `grouped_id`. The planned first version is:
   after all items are ready, make one final `messages.sendMultiMedia` call;
 - return every resulting message ID, preserve Telegram's shared `grouped_id`
   during history/backfill, and offer album-aware grouping/downloads;
-- make the planned album dry-run perform zero Telegram or other network calls;
+- make album dry-run perform zero Telegram or other network calls;
   test ordering, captions, failures, idempotency, and live carousel rendering.
 
 The upload phase is not transactional: if a later temporary upload fails,
