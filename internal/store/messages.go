@@ -260,6 +260,47 @@ func RecordUploadedMedia(db *sql.DB, chatID, messageID int64, text, mediaType, m
 	return err
 }
 
+// UpdateMessageMediaPath updates only the media cache fields for one existing
+// message. It returns sql.ErrNoRows when the composite message identity is not
+// cached.
+func UpdateMessageMediaPath(db *sql.DB, chatID, messageID int64, mediaType, mediaPath string) error {
+	result, err := db.Exec(`
+		UPDATE tg_messages
+		SET has_media = 1, media_type = ?, media_path = ?
+		WHERE chat_id = ? AND message_id = ?`,
+		mediaType, mediaPath, chatID, messageID,
+	)
+	if err != nil {
+		return err
+	}
+	updated, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if updated == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// StoreMessageMediaPath records downloaded media whether or not the live
+// message was already cached. The single UPSERT is race-safe: if another
+// writer inserts a richer row first, the conflict arm changes only the media
+// fields and preserves all other message data.
+func StoreMessageMediaPath(db *sql.DB, chatID, messageID int64, mediaType, mediaPath string) error {
+	_, err := db.Exec(`
+		INSERT INTO tg_messages(
+			chat_id, message_id, date, has_media, media_type, media_path, deleted
+		) VALUES (?, ?, ?, 1, ?, ?, 0)
+		ON CONFLICT(chat_id, message_id) DO UPDATE SET
+			has_media = 1,
+			media_type = excluded.media_type,
+			media_path = excluded.media_path`,
+		chatID, messageID, time.Now().UTC().Format(time.RFC3339), mediaType, mediaPath,
+	)
+	return err
+}
+
 func nullString(s string) any {
 	if s == "" {
 		return nil
