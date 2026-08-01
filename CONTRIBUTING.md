@@ -32,6 +32,7 @@ Use the local test gate before sending a PR:
 ```bash
 go test ./... -count=1
 go vet ./...
+make public-hygiene
 ```
 
 For broader confidence before a release or risky change:
@@ -95,6 +96,16 @@ Add integration or live verification when:
 Live tests must only touch Saved Messages or explicitly created temporary test
 chats. They must clean up temporary Telegram state with traps or equivalent
 failure-safe cleanup.
+
+Live scripts must require test chat/account selectors through environment
+variables. They must not default to a maintainer's account, session, username, or
+local path, and raw transcripts/reports must stay outside the repository.
+
+Before filing an issue or opening a PR, remove Telegram phone numbers, usernames,
+peer/message IDs, invite links, session/auth data, local database paths, message
+contents, and downloaded media. Use synthetic placeholders. Report suspected
+vulnerabilities through the private process in [SECURITY.md](SECURITY.md), not a
+public issue.
 
 ## Local Live Verification
 

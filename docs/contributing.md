@@ -26,6 +26,7 @@ The project targets Go 1.25.
 go test ./... -count=1
 go vet ./...
 go test -race ./... -count=1
+make public-hygiene
 ```
 
 Before a commit, keep both `go test ./... -count=1` and `go vet ./...`
@@ -45,6 +46,16 @@ scripts/import_export_simulation.sh
 simulation creates 20 synthetic self-chat inquiries, groups them into
 country queues, exercises folders, and mirrors summaries into forum
 topics when a forum test chat is available.
+
+Set the required `TGCTL_LIVE_*` variables to dedicated test targets before
+running these scripts. They fail closed when required targets are absent and
+write raw output to a temporary directory by default. Never commit live output.
+
+Redact Telegram identities, phone numbers, peer/message IDs, invite links,
+session/auth material, message contents, local paths, SQLite data, audit logs,
+and downloaded media from issues and pull requests. Use synthetic placeholders.
+Security reports belong in GitHub private vulnerability reporting as described
+in the repository's `SECURITY.md`.
 
 ## Running the docs site locally
 

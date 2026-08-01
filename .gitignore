@@ -3,10 +3,40 @@
 /tg
 /dist/
 /accounts/
-/tg
 /.env
 *.session
 *.session.lock
+
+# Local Telegram data and verification output. Never commit these: they may
+# contain message bodies, peer identifiers, access hashes, or session metadata.
+*.transcript.txt
+*.live-report.txt
+*.live-report.json
+*_live_report.txt
+*_live_report.json
+*_simulation_report.json
+*.sqlite
+*.sqlite3
+*.db
+*.sqlite-wal
+*.sqlite-shm
+*.db-wal
+*.db-shm
+audit.ndjson
+*.audit.log
+*.part
+/downloads/
+/test-output/
+/scripts/output/
+/scripts/tmp/
+
+# Explicitly permit intentional, synthetic fixtures.
+!**/testdata/*.sqlite
+!**/testdata/*.sqlite3
+!**/testdata/*.db
+!**/fixtures/*.sqlite
+!**/fixtures/*.sqlite3
+!**/fixtures/*.db
 
 # Internal planning docs — kept on disk, not in releases
 /docs/superpowers/

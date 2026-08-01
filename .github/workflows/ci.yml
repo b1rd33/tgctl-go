@@ -30,6 +30,10 @@ jobs:
       - name: go build
         run: go build ./cmd/tg
 
+      - name: public repository hygiene
+        if: matrix.os == 'ubuntu-latest'
+        run: make public-hygiene
+
   lint:
     runs-on: ubuntu-latest
     steps:

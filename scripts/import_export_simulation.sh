@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CHAT=1240314255
-OUT=scripts/import_export_simulation.transcript.txt
-REPORT=scripts/import_export_simulation_report.json
+CHAT="${TGCTL_LIVE_CHAT:?Set TGCTL_LIVE_CHAT to an isolated test chat or Saved Messages ID}"
+export TG_ACCOUNT="${TGCTL_LIVE_ACCOUNT:?Set TGCTL_LIVE_ACCOUNT to a dedicated authenticated test account}"
 RUN_ID="ie-sim-$(date +%Y%m%d%H%M%S)"
 RUN_SHORT="$(date +%H%M)"
-TMP_DIR="/tmp/tgctl-${RUN_ID}"
-DB="accounts/default/telegram.sqlite"
+TMP_DIR="${TMPDIR:-/tmp}/tgctl-${RUN_ID}"
+OUT="${TGCTL_LIVE_OUTPUT:-${TMP_DIR}/import-export.transcript.txt}"
+REPORT="${TGCTL_LIVE_REPORT:-${TMP_DIR}/import-export-report.json}"
+DB="${TGCTL_LIVE_DB:?Set TGCTL_LIVE_DB to the selected test account database path}"
 mkdir -p "$TMP_DIR"
 > "$OUT"
 

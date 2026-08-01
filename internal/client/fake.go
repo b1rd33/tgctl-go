@@ -380,7 +380,7 @@ func (f *FakeClient) AdminAction(_ context.Context, req AdminActionReq) (InviteL
 		return InviteLinkResp{}, err
 	}
 	f.AdminActions = append(f.AdminActions, req)
-	return InviteLinkResp{Link: "https://t.me/+fake"}, nil
+	return InviteLinkResp{Link: "https://example.invalid/synthetic-invite"}, nil
 }
 
 func (f *FakeClient) ListChatMembers(_ context.Context, chatID int64, limit int) ([]MemberInfo, error) {

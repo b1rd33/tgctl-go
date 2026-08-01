@@ -1,9 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CHAT=1240314255
-SELF_USERNAME="@la71bi33d"
-OUT=scripts/live_verify.transcript.txt
+CHAT="${TGCTL_LIVE_CHAT:?Set TGCTL_LIVE_CHAT to an isolated test chat or Saved Messages ID}"
+SELF_USERNAME="${TGCTL_LIVE_SELF_USERNAME:?Set TGCTL_LIVE_SELF_USERNAME to the authenticated test account username}"
+export TG_ACCOUNT="${TGCTL_LIVE_ACCOUNT:?Set TGCTL_LIVE_ACCOUNT to a dedicated authenticated test account}"
+OUT="${TGCTL_LIVE_OUTPUT:-${TMPDIR:-/tmp}/tgctl-live-verify-$$.transcript.txt}"
+MEDIA_DIR="$(mktemp -d "${TMPDIR:-/tmp}/tgctl-live-media.XXXXXX")"
+export MEDIA_DIR
+cleanup() {
+  rm -f "$MEDIA_DIR/doc.txt" "$MEDIA_DIR/voice.ogg" "$MEDIA_DIR/video.mp4" "$MEDIA_DIR/pixel.png"
+  rmdir "$MEDIA_DIR" 2>/dev/null || true
+}
+trap cleanup EXIT HUP INT TERM
 > "$OUT"
 
 run() { echo "+ $*" | tee -a "$OUT"; "$@" | tee -a "$OUT" || (echo "FAILED: $*" | tee -a "$OUT"; exit 1); echo | tee -a "$OUT"; }
@@ -105,11 +113,11 @@ echo | tee -a "$OUT"
 run_json ./tg send-by-username "$SELF_USERNAME" "live-verify: send-by-username path" --allow-write --json
 
 # ---- Phase 10: media ----
-mkdir -p /tmp/tgctl-live
-printf 'doc payload\n' > /tmp/tgctl-live/doc.txt
-printf 'OggS placeholder for dry-run\n' > /tmp/tgctl-live/voice.ogg
-printf '\x00\x00\x00\x18ftypmp42placeholder for dry-run\n' > /tmp/tgctl-live/video.mp4
+printf 'doc payload\n' > "$MEDIA_DIR/doc.txt"
+printf 'OggS placeholder for dry-run\n' > "$MEDIA_DIR/voice.ogg"
+printf '\x00\x00\x00\x18ftypmp42placeholder for dry-run\n' > "$MEDIA_DIR/video.mp4"
 python3 - <<'PY'
+import os
 import struct
 import zlib
 
@@ -126,13 +134,13 @@ png = (
     + chunk(b"IDAT", zlib.compress(rows, 9))
     + chunk(b"IEND", b"")
 )
-open("/tmp/tgctl-live/pixel.png", "wb").write(png)
+open(os.path.join(os.environ["MEDIA_DIR"], "pixel.png"), "wb").write(png)
 PY
-run_json ./tg upload-document "$CHAT" /tmp/tgctl-live/doc.txt --caption "live-verify: doc" --allow-write --json
-run_json ./tg upload-photo "$CHAT" /tmp/tgctl-live/pixel.png --caption "live-verify: photo" --allow-write --json
+run_json ./tg upload-document "$CHAT" "$MEDIA_DIR/doc.txt" --caption "live-verify: doc" --allow-write --json
+run_json ./tg upload-photo "$CHAT" "$MEDIA_DIR/pixel.png" --caption "live-verify: photo" --allow-write --json
 # skip-rationale: upload-voice and upload-video need real .ogg/.mp4 assets; dry-run exercises their runner paths without ffmpeg.
-run_json ./tg upload-voice "$CHAT" /tmp/tgctl-live/voice.ogg --allow-write --dry-run --json
-run_json ./tg upload-video "$CHAT" /tmp/tgctl-live/video.mp4 --allow-write --dry-run --json
+run_json ./tg upload-voice "$CHAT" "$MEDIA_DIR/voice.ogg" --allow-write --dry-run --json
+run_json ./tg upload-video "$CHAT" "$MEDIA_DIR/video.mp4" --allow-write --dry-run --json
 expect_json_error BAD_ARGS 2 ./tg upload-document "$CHAT" "/tmp/has?question.txt" --allow-write --json
 
 # ---- Phase 11: topics + folders ----
@@ -157,7 +165,7 @@ run_json ./tg chats-info "$CHAT" --json
 expect_json_error BAD_ARGS 2 ./tg chat-members "$CHAT" --limit 50 --json
 run_json ./tg account-sessions --json
 run_json ./tg chat-title "$CHAT" "live-verify-title" --allow-write --dry-run --json
-run_json ./tg chat-photo "$CHAT" /tmp/tgctl-live/pixel.png --allow-write --dry-run --json
+run_json ./tg chat-photo "$CHAT" "$MEDIA_DIR/pixel.png" --allow-write --dry-run --json
 run_json ./tg chat-description "$CHAT" "live-verify desc" --allow-write --dry-run --json
 run_json ./tg set-permissions "$CHAT" --send-messages --allow-write --dry-run --json
 run_json ./tg chat-invite-link "$CHAT" --allow-write --dry-run --json

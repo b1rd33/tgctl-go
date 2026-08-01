@@ -1,6 +1,6 @@
 VERSION := $(shell git describe --tags --dirty --always 2>/dev/null || echo dev)
 
-.PHONY: build docs-commands docs-commands-check
+.PHONY: build docs-commands docs-commands-check public-hygiene
 build:
 	go build -ldflags "-X github.com/b1rd33/tgctl-go/internal/commands.Version=$(VERSION)" -o tg ./cmd/tg
 
@@ -28,3 +28,7 @@ docs-commands-check:
 	echo "docs/commands.md is out of date; run 'make docs-commands'" >&2; \
 	diff -u docs/commands.md "$$output" || true; \
 	exit 1
+
+public-hygiene:
+	./scripts/check_public_hygiene_test.sh
+	./scripts/check_public_hygiene.sh

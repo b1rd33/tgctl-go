@@ -4,12 +4,17 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
 func main() {
-	db, err := store.Connect("./accounts/default/telegram.sqlite")
+	dbPath := os.Getenv("TGCTL_TEST_DB")
+	if dbPath == "" {
+		log.Fatal("TGCTL_TEST_DB must point to a disposable test database")
+	}
+	db, err := store.Connect(dbPath)
 	if err != nil {
 		log.Fatal(err)
 	}

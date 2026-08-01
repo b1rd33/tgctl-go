@@ -82,11 +82,11 @@ export TG_API_HASH=abcdef0123456789abcdef0123456789
 ```
 
 `tg` reads `.env` from the current working directory. If you keep the
-repo checkout at `/Users/christiannikolov/Projects/tgctl-go`, run
+repo checkout at `$HOME/Projects/tgctl-go`, run
 login and setup commands from there:
 
 ```bash
-cd /Users/christiannikolov/Projects/tgctl-go
+cd "$HOME/Projects/tgctl-go"
 tg login
 ```
 
@@ -129,7 +129,7 @@ connectivity.
 the directory with `.env`, or export both variables:
 
 ```bash
-cd /Users/christiannikolov/Projects/tgctl-go
+cd "$HOME/Projects/tgctl-go"
 tg --account test login
 ```
 

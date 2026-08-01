@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RUN_ID="admin-verify-20260509170450"
-CHAT=1240314255
-FORUM_CHAT=3957621025
-OUT=scripts/admin_topic_live_verify.transcript.txt
-TMP_DIR="/tmp/tgctl-${RUN_ID}"
+RUN_ID="admin-verify-$(date +%Y%m%d%H%M%S)"
+CHAT="${TGCTL_LIVE_CHAT:?Set TGCTL_LIVE_CHAT to an isolated test chat or Saved Messages ID}"
+FORUM_CHAT="${TGCTL_LIVE_FORUM_CHAT:?Set TGCTL_LIVE_FORUM_CHAT to a dedicated forum test chat ID}"
+TMP_DIR="${TMPDIR:-/tmp}/tgctl-${RUN_ID}"
+OUT="${TGCTL_LIVE_OUTPUT:-${TMP_DIR}/admin-topic.transcript.txt}"
 ACCOUNT="adminverify-${RUN_ID}"
-ACCOUNT_DIR="accounts/${ACCOUNT}"
-DEFAULT_SESSION="accounts/default/tg.session"
-DEFAULT_DB="accounts/default/telegram.sqlite"
+ACCOUNT_ROOT="${TGCTL_ACCOUNT_ROOT:-accounts}"
+ACCOUNT_DIR="${ACCOUNT_ROOT}/${ACCOUNT}"
+DEFAULT_SESSION="${TGCTL_SOURCE_SESSION:?Set TGCTL_SOURCE_SESSION to the authenticated test session path}"
+DEFAULT_DB="${TGCTL_SOURCE_DB:?Set TGCTL_SOURCE_DB to the matching test database path}"
 SESSION="${ACCOUNT_DIR}/tg.session"
 DB="${ACCOUNT_DIR}/telegram.sqlite"
 TG=(./tg --account "$ACCOUNT")
-export GOCACHE="${GOCACHE:-/private/tmp/tgctl-go-gocache}"
+export GOCACHE="${GOCACHE:-${TMPDIR:-/tmp}/tgctl-go-gocache}"
 
 mkdir -p "$TMP_DIR"
 > "$OUT"
@@ -296,7 +297,7 @@ if [ "$create_status" -eq 0 ] && [ -n "$TEMP_GROUP_CREATED" ]; then
   run_json "$TMP_DIR/kick_dry_run.json" "${TG[@]}" kick "$TEMP_GROUP_ID" "$CHAT" --allow-write --confirm "$CHAT" --dry-run --json
   run_json_allow_known "$TMP_DIR/set_permissions.json" "${TG[@]}" set-permissions "$TEMP_GROUP_ID" --send-messages --allow-write --json
   log "skip: chat-photo uses --dry-run because this script does not carry a PNG fixture"
-  run_json "$TMP_DIR/chat_photo_dry_run.json" "${TG[@]}" chat-photo "$TEMP_GROUP_ID" /tmp/tgctl-live/pixel.png --allow-write --dry-run --json
+  run_json "$TMP_DIR/chat_photo_dry_run.json" "${TG[@]}" chat-photo "$TEMP_GROUP_ID" "${TGCTL_TEST_PHOTO:-${TMPDIR:-/tmp}/tgctl-test-photo.png}" --allow-write --dry-run --json
 else
   log "skip: could not create a temporary self-only admin group"
   sed 's/^/create-group: /' "$TMP_DIR/create_group.err" | tee -a "$OUT"
