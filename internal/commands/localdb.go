@@ -119,14 +119,14 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 					return nil, err
 				}
 				defer db.Close()
-				inserted, dbCapReached, dbSize, err := insertBackfillRowsAtomic(
+				inserted, dbCapReached, dbSize, finalCount, err := insertBackfillRowsAtomic(
 					ctx, db, chatID, maxMessages, dbCapBytes, rows,
 				)
 				if err != nil {
 					return nil, err
 				}
 				skipped := len(rows) - inserted
-				warnings := capWarnings(current+inserted, maxMessages)
+				warnings := capWarnings(finalCount, maxMessages)
 				return map[string]any{
 					"chats_processed":   1,
 					"messages_inserted": inserted,
@@ -339,7 +339,7 @@ func insertBackfillRowsAtomic(
 	maxMessages int,
 	dbCapBytes int64,
 	rows []client.BackfillMessage,
-) (inserted int, capReached bool, finalSize int64, retErr error) {
+) (inserted int, capReached bool, finalSize int64, finalCount int, retErr error) {
 	return insertBackfillRowsAtomicWithHooks(ctx, db, chatID, maxMessages, dbCapBytes, rows, backfillAtomicHooks{})
 }
 
@@ -356,14 +356,14 @@ func insertBackfillRowsAtomicWithHooks(
 	dbCapBytes int64,
 	rows []client.BackfillMessage,
 	hooks backfillAtomicHooks,
-) (inserted int, capReached bool, finalSize int64, retErr error) {
+) (inserted int, capReached bool, finalSize int64, finalCount int, retErr error) {
 	// sql.Conn.Close normally returns the driver connection to the pool. An
 	// exclusive-locking connection must instead be physically closed before the
 	// operation boundary, otherwise SQLite can retain its file locks while idle.
 	db.SetMaxIdleConns(0)
 	conn, err := db.Conn(ctx)
 	if err != nil {
-		return 0, false, 0, err
+		return 0, false, 0, 0, err
 	}
 	committed := false
 	defer func() {
@@ -382,7 +382,7 @@ func insertBackfillRowsAtomicWithHooks(
 		}
 	}()
 	if _, err := conn.ExecContext(ctx, "PRAGMA busy_timeout=500"); err != nil {
-		return 0, false, 0, err
+		return 0, false, 0, 0, err
 	}
 
 	transactionOpen := false
@@ -437,39 +437,39 @@ func insertBackfillRowsAtomicWithHooks(
 	if dbCapBytes > 0 {
 		var lockingMode string
 		if err := conn.QueryRowContext(ctx, "PRAGMA locking_mode=EXCLUSIVE").Scan(&lockingMode); err != nil {
-			return 0, false, 0, fmt.Errorf("enable SQLite exclusive locking: %w", err)
+			return 0, false, 0, 0, fmt.Errorf("enable SQLite exclusive locking: %w", err)
 		}
 		if !strings.EqualFold(lockingMode, "exclusive") {
-			return 0, false, 0, fmt.Errorf("enable SQLite exclusive locking: got %q", lockingMode)
+			return 0, false, 0, 0, fmt.Errorf("enable SQLite exclusive locking: got %q", lockingMode)
 		}
 		exclusiveLocking = true
 		// Touch the database in an EXCLUSIVE transaction, then roll it back.
 		// With locking_mode=EXCLUSIVE the dedicated connection retains the lock
 		// across the following no-transaction PRAGMAs and mode transitions.
 		if _, err := conn.ExecContext(ctx, "BEGIN EXCLUSIVE"); err != nil {
-			return 0, false, 0, failBeforeCommit(fmt.Errorf("acquire SQLite exclusive lock: %w", err))
+			return 0, false, 0, 0, failBeforeCommit(fmt.Errorf("acquire SQLite exclusive lock: %w", err))
 		}
 		transactionOpen = true
 		var schemaRows int
 		if err := conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_schema").Scan(&schemaRows); err != nil {
-			return 0, false, 0, failBeforeCommit(fmt.Errorf("touch SQLite under exclusive lock: %w", err))
+			return 0, false, 0, 0, failBeforeCommit(fmt.Errorf("touch SQLite under exclusive lock: %w", err))
 		}
 		if err := rollbackTransaction(); err != nil {
-			return 0, false, 0, failBeforeCommit(err)
+			return 0, false, 0, 0, failBeforeCommit(err)
 		}
 		var busy, logFrames, checkpointed int
 		if err := conn.QueryRowContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE)").Scan(&busy, &logFrames, &checkpointed); err != nil {
-			return 0, false, 0, failBeforeCommit(fmt.Errorf("checkpoint SQLite WAL: %w", err))
+			return 0, false, 0, 0, failBeforeCommit(fmt.Errorf("checkpoint SQLite WAL: %w", err))
 		}
 		if busy != 0 {
-			return 0, false, 0, failBeforeCommit(fmt.Errorf("checkpoint SQLite WAL: database is busy"))
+			return 0, false, 0, 0, failBeforeCommit(fmt.Errorf("checkpoint SQLite WAL: database is busy"))
 		}
 		var mode string
 		if err := conn.QueryRowContext(ctx, "PRAGMA journal_mode=DELETE").Scan(&mode); err != nil {
-			return 0, false, 0, failBeforeCommit(fmt.Errorf("switch SQLite journal mode for capped write: %w", err))
+			return 0, false, 0, 0, failBeforeCommit(fmt.Errorf("switch SQLite journal mode for capped write: %w", err))
 		}
 		if !strings.EqualFold(mode, "delete") {
-			return 0, false, 0, failBeforeCommit(fmt.Errorf("switch SQLite journal mode for capped write: got %q", mode))
+			return 0, false, 0, 0, failBeforeCommit(fmt.Errorf("switch SQLite journal mode for capped write: got %q", mode))
 		}
 		deleteJournal = true
 	}
@@ -479,19 +479,19 @@ func insertBackfillRowsAtomicWithHooks(
 		begin = "BEGIN EXCLUSIVE"
 	}
 	if _, err := conn.ExecContext(ctx, begin); err != nil {
-		return 0, false, 0, failBeforeCommit(fmt.Errorf("begin atomic backfill: %w", err))
+		return 0, false, 0, 0, failBeforeCommit(fmt.Errorf("begin atomic backfill: %w", err))
 	}
 	transactionOpen = true
 	var current int
 	if err := conn.QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM tg_messages WHERE chat_id=? AND (deleted=0 OR deleted IS NULL)", chatID,
 	).Scan(&current); err != nil {
-		return 0, false, 0, failBeforeCommit(err)
+		return 0, false, 0, 0, failBeforeCommit(err)
 	}
 	if dbCapBytes > 0 {
 		size, err := databaseSizeBytesContext(ctx, conn)
 		if err != nil {
-			return 0, false, 0, failBeforeCommit(err)
+			return 0, false, 0, 0, failBeforeCommit(err)
 		}
 		if size >= dbCapBytes {
 			capReached = true
@@ -506,12 +506,12 @@ func insertBackfillRowsAtomicWithHooks(
 			row.ChatID = chatID
 		}
 		if _, err := conn.ExecContext(ctx, "SAVEPOINT backfill_candidate"); err != nil {
-			return inserted, capReached, 0, failBeforeCommit(err)
+			return inserted, capReached, 0, 0, failBeforeCommit(err)
 		}
 		if err := insertBackfillMessageContext(ctx, conn, row); err != nil {
 			_, rollbackErr := conn.ExecContext(context.Background(), "ROLLBACK TO backfill_candidate")
 			_, releaseErr := conn.ExecContext(context.Background(), "RELEASE backfill_candidate")
-			return inserted, capReached, 0, failBeforeCommit(errors.Join(
+			return inserted, capReached, 0, 0, failBeforeCommit(errors.Join(
 				err,
 				wrapSQLiteCleanupError("rollback SQLite candidate savepoint", rollbackErr),
 				wrapSQLiteCleanupError("release SQLite candidate savepoint", releaseErr),
@@ -520,13 +520,13 @@ func insertBackfillRowsAtomicWithHooks(
 		if dbCapBytes > 0 {
 			size, err := databaseSizeBytesContext(ctx, conn)
 			if err != nil {
-				return inserted, capReached, 0, failBeforeCommit(err)
+				return inserted, capReached, 0, 0, failBeforeCommit(err)
 			}
 			if size > dbCapBytes {
 				_, rollbackErr := conn.ExecContext(ctx, "ROLLBACK TO backfill_candidate")
 				_, releaseErr := conn.ExecContext(ctx, "RELEASE backfill_candidate")
 				if rollbackErr != nil || releaseErr != nil {
-					return inserted, true, 0, failBeforeCommit(errors.Join(
+					return inserted, true, 0, 0, failBeforeCommit(errors.Join(
 						wrapSQLiteCleanupError("rollback oversized SQLite candidate", rollbackErr),
 						wrapSQLiteCleanupError("release oversized SQLite candidate", releaseErr),
 					))
@@ -536,18 +536,23 @@ func insertBackfillRowsAtomicWithHooks(
 			}
 		}
 		if _, err := conn.ExecContext(ctx, "RELEASE backfill_candidate"); err != nil {
-			return inserted, capReached, 0, failBeforeCommit(err)
+			return inserted, capReached, 0, 0, failBeforeCommit(err)
 		}
 		inserted++
 		current++
 	}
+	if err := conn.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM tg_messages WHERE chat_id=? AND (deleted=0 OR deleted IS NULL)", chatID,
+	).Scan(&finalCount); err != nil {
+		return inserted, capReached, 0, 0, failBeforeCommit(err)
+	}
 	if hooks.beforeCommit != nil {
 		if err := hooks.beforeCommit(); err != nil {
-			return inserted, capReached, 0, failBeforeCommit(err)
+			return inserted, capReached, 0, finalCount, failBeforeCommit(err)
 		}
 	}
 	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
-		return inserted, capReached, 0, failBeforeCommit(fmt.Errorf("commit SQLite backfill transaction: %w", err))
+		return inserted, capReached, 0, finalCount, failBeforeCommit(fmt.Errorf("commit SQLite backfill transaction: %w", err))
 	}
 	transactionOpen = false
 	committed = true
@@ -556,16 +561,16 @@ func insertBackfillRowsAtomicWithHooks(
 		postCommitErr = hooks.afterCommit()
 	}
 	if err := failAfterCommit(postCommitErr); err != nil {
-		return inserted, capReached, 0, err
+		return inserted, capReached, 0, finalCount, err
 	}
 	finalSize, err = databaseSizeBytesContext(context.Background(), conn)
 	if err != nil {
-		return inserted, capReached, 0, safety.NewCommittedWrite("backfill rows committed but final size accounting failed", err)
+		return inserted, capReached, 0, finalCount, safety.NewCommittedWrite("backfill rows committed but final size accounting failed", err)
 	}
 	if dbCapBytes > 0 && finalSize >= dbCapBytes {
 		capReached = true
 	}
-	return inserted, capReached, finalSize, nil
+	return inserted, capReached, finalSize, finalCount, nil
 }
 
 func wrapSQLiteCleanupError(action string, err error) error {

@@ -147,8 +147,10 @@ func TestRunUnknownErrorMapsToGeneric(t *testing.T) {
 }
 
 func TestRunClassifiesCommittedCleanupFailure(t *testing.T) {
+	dir := t.TempDir()
+	auditPath := filepath.Join(dir, "audit.jsonl")
 	var stdout, stderr bytes.Buffer
-	code := Run("backfill", Options{JSON: true, Stdout: &stdout, Stderr: &stderr},
+	code := Run("backfill", Options{JSON: true, Stdout: &stdout, Stderr: &stderr, AuditPath: auditPath},
 		func(context.Context) (any, error) {
 			return nil, safety.NewCommittedWrite(
 				"backfill rows committed but SQLite cleanup failed",
@@ -160,6 +162,14 @@ func TestRunClassifiesCommittedCleanupFailure(t *testing.T) {
 	}
 	if !bytes.Contains(stdout.Bytes(), []byte(`"committed":true`)) || !bytes.Contains(stdout.Bytes(), []byte(`"partial":true`)) {
 		t.Fatalf("stdout missing committed classification: %s", stdout.Bytes())
+	}
+	entries := readAuditEntries(t, auditPath)
+	if len(entries) != 1 {
+		t.Fatalf("audit entries=%d, want 1", len(entries))
+	}
+	entry := entries[0]
+	if entry["result"] != "fail" || entry["error_code"] != "GENERIC" || entry["committed"] != true || entry["partial"] != true {
+		t.Fatalf("audit missing durable committed classification: %#v", entry)
 	}
 }
 

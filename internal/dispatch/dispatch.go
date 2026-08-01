@@ -114,7 +114,17 @@ func Run(name string, opts Options, runner Runner) int {
 	if err != nil {
 		code, msg, extra := Classify(err)
 		envelope = output.Fail(name, code, msg, requestID, extra)
-		auditExtra = map[string]any{"error_code": code.String()}
+		auditExtra = make(map[string]any, len(extra)+1)
+		for key, value := range extra {
+			switch key {
+			case "ts", "cmd", "request_id", "args", "result", "error_code":
+				continue
+			}
+			auditExtra[key] = value
+		}
+		// Classification metadata is supplemental; the dispatcher owns this
+		// durable core field regardless of future classifier extras.
+		auditExtra["error_code"] = code.String()
 		result = "fail"
 	} else {
 		envelope = output.Success(name, data, requestID, nil)

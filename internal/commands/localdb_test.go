@@ -36,6 +36,18 @@ func sqliteJournalMode(t *testing.T, path string) string {
 	return strings.ToLower(mode)
 }
 
+type hookedBackfillClient struct {
+	*client.FakeClient
+	backfill func(context.Context, client.BackfillReq) ([]client.BackfillMessage, error)
+}
+
+func (c *hookedBackfillClient) BackfillMessages(ctx context.Context, req client.BackfillReq) ([]client.BackfillMessage, error) {
+	if c.backfill != nil {
+		return c.backfill(ctx, req)
+	}
+	return c.FakeClient.BackfillMessages(ctx, req)
+}
+
 func TestDatabaseSizeBytesUsesSQLiteAllocatedPages(t *testing.T) {
 	cfg, _, _ := setupWriteEnv(t)
 	dbPath := cfg.Paths.(stubPaths).db
@@ -284,6 +296,56 @@ func TestBackfillInsertsMessagesAndWarnsNearCap(t *testing.T) {
 	}
 }
 
+func TestBackfillWarningUsesAuthoritativeCountAfterConcurrentRPCWrite(t *testing.T) {
+	cfg, _, _ := setupWriteEnv(t)
+	path := cfg.Paths.(stubPaths).db
+	db, err := store.Connect(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id := int64(1); id <= 3; id++ {
+		row := client.BackfillMessage{ChatID: 1, MessageID: id, Date: "2026-08-01T10:00:00Z", Text: "seed"}
+		if err := insertBackfillMessage(db, row); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	hooked := &hookedBackfillClient{FakeClient: &client.FakeClient{Me: client.User{ID: 99}}}
+	hooked.backfill = func(context.Context, client.BackfillReq) ([]client.BackfillMessage, error) {
+		concurrentDB, err := store.Connect(path)
+		if err != nil {
+			return nil, err
+		}
+		defer concurrentDB.Close()
+		if err := insertBackfillMessage(concurrentDB, client.BackfillMessage{
+			ChatID: 1, MessageID: 4, Date: "2026-08-01T10:01:00Z", Text: "concurrent",
+		}); err != nil {
+			return nil, err
+		}
+		return []client.BackfillMessage{{ChatID: 1, MessageID: 5, Date: "2026-08-01T10:02:00Z", Text: "rpc"}}, nil
+	}
+	cfg.ClientFactory = func(context.Context, string, string) (client.Client, error) { return hooked, nil }
+
+	out, code := runRoot(t, cfg, "backfill", "1", "--max-messages", "6", "--allow-write", "--json")
+	if code != 0 {
+		t.Fatalf("code=%d\nout:%s", code, out)
+	}
+	var envelope struct {
+		Data struct {
+			Warnings []string `json:"warnings"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if len(envelope.Data.Warnings) != 1 || !strings.Contains(envelope.Data.Warnings[0], "cached 5 of --max-messages 6") {
+		t.Fatalf("warnings=%#v, want authoritative final count 5", envelope.Data.Warnings)
+	}
+}
+
 func TestBackfillRejectsNegativeLimitsAndThrottle(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -393,7 +455,7 @@ func TestCappedBackfillPrecommitFailureRollsBackAndRestoresWAL(t *testing.T) {
 	}
 	defer db.Close()
 	wantErr := errors.New("injected before commit")
-	_, _, _, err = insertBackfillRowsAtomicWithHooks(context.Background(), db, 1, 10, 1024*1024,
+	_, _, _, _, err = insertBackfillRowsAtomicWithHooks(context.Background(), db, 1, 10, 1024*1024,
 		[]client.BackfillMessage{{ChatID: 1, MessageID: 300, Date: "2026-08-01T12:00:00Z", Text: "not committed"}},
 		backfillAtomicHooks{beforeCommit: func() error { return wantErr }},
 	)
@@ -442,7 +504,7 @@ func TestCappedBackfillActiveReaderFailsBeforeWriteAndKeepsWAL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	defer cancel()
 	started := time.Now()
-	_, _, _, err = insertBackfillRowsAtomic(ctx, writerDB, 1, 10, 1024*1024,
+	_, _, _, _, err = insertBackfillRowsAtomic(ctx, writerDB, 1, 10, 1024*1024,
 		[]client.BackfillMessage{{ChatID: 1, MessageID: 301, Date: "2026-08-01T12:00:00Z", Text: "blocked"}},
 	)
 	if err == nil {
@@ -491,7 +553,7 @@ func TestCappedBackfillRacingReaderCannotInterruptWALRestore(t *testing.T) {
 		var count int
 		readerDone <- readerDB.QueryRow("SELECT COUNT(*) FROM tg_messages WHERE message_id=302").Scan(&count)
 	}()
-	_, _, _, err = insertBackfillRowsAtomicWithHooks(context.Background(), db, 1, 10, 1024*1024,
+	_, _, _, _, err = insertBackfillRowsAtomicWithHooks(context.Background(), db, 1, 10, 1024*1024,
 		[]client.BackfillMessage{{ChatID: 1, MessageID: 302, Date: "2026-08-01T12:00:00Z", Text: "committed"}},
 		backfillAtomicHooks{afterCommit: func() error {
 			close(committed)
@@ -529,7 +591,7 @@ func TestCappedBackfillPostcommitFailureIsClassifiedAndRestoresWAL(t *testing.T)
 	}
 	defer db.Close()
 	wantErr := errors.New("injected after commit")
-	_, _, _, err = insertBackfillRowsAtomicWithHooks(context.Background(), db, 1, 10, 1024*1024,
+	_, _, _, _, err = insertBackfillRowsAtomicWithHooks(context.Background(), db, 1, 10, 1024*1024,
 		[]client.BackfillMessage{{ChatID: 1, MessageID: 303, Date: "2026-08-01T12:00:00Z", Text: "durable"}},
 		backfillAtomicHooks{afterCommit: func() error { return wantErr }},
 	)
@@ -549,8 +611,8 @@ func TestCappedBackfillPostcommitFailureIsClassifiedAndRestoresWAL(t *testing.T)
 	}
 }
 
-func TestBackfillCrossProcessHelper(t *testing.T) {
-	if os.Getenv("TGCTL_BACKFILL_HELPER") != "1" {
+func TestBackfillFullCommandProcessHelper(t *testing.T) {
+	if os.Getenv("TGCTL_BACKFILL_COMMAND_HELPER") != "1" {
 		return
 	}
 	path := os.Getenv("TGCTL_BACKFILL_DB")
@@ -560,11 +622,6 @@ func TestBackfillCrossProcessHelper(t *testing.T) {
 	}
 	ready := os.Getenv("TGCTL_BACKFILL_READY")
 	gate := os.Getenv("TGCTL_BACKFILL_GATE")
-	db, err := sql.Open("sqlite", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
 	if err := os.WriteFile(ready, []byte("ready"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -574,35 +631,63 @@ func TestBackfillCrossProcessHelper(t *testing.T) {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("timed out waiting for subprocess gate")
+			t.Fatal("timed out waiting for full-command subprocess gate")
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	_, _, _, err = insertBackfillRowsAtomic(context.Background(), db, 1, 10, 1024*1024,
-		[]client.BackfillMessage{{ChatID: 1, MessageID: id, Date: "2026-08-01T12:00:00Z", Text: strings.Repeat("x", 650000)}},
-	)
-	if err != nil {
-		t.Fatal(err)
+	fc := &client.FakeClient{
+		Me: client.User{ID: 99},
+		BackfillRows: []client.BackfillMessage{{
+			ChatID: 1, MessageID: id, Date: "2026-08-01T12:00:00Z", Text: strings.Repeat("x", 650000),
+		}},
 	}
+	cfg := CommandsConfig{
+		Paths: stubPaths{
+			db: path, session: os.Getenv("TGCTL_BACKFILL_SESSION"), audit: os.Getenv("TGCTL_BACKFILL_AUDIT"),
+		},
+		ClientFactory: func(context.Context, string, string) (client.Client, error) { return fc, nil },
+	}
+	out, code := runRoot(t, cfg, "backfill", "1", "--max-messages", "10", "--max-db-size-mb", "1", "--allow-write", "--json")
+	if code != 0 {
+		var envelope struct {
+			OK    bool `json:"ok"`
+			Error struct {
+				Code    string `json:"code"`
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+			t.Fatalf("non-JSON command failure code=%d: %v\nout:%s", code, err, out)
+		}
+		message := strings.ToLower(envelope.Error.Message)
+		if code != 1 || envelope.OK || envelope.Error.Code != "GENERIC" ||
+			(!strings.Contains(message, "locked") && !strings.Contains(message, "busy")) {
+			t.Fatalf("command failed unclearly code=%d envelope=%#v\nout:%s", code, envelope, out)
+		}
+	}
+	t.Logf("command code=%d output=%s", code, strings.TrimSpace(out))
 }
 
-func TestCappedBackfillCrossProcessContentionRespectsCap(t *testing.T) {
+func TestCappedBackfillFullCommandCrossProcessContention(t *testing.T) {
 	cfg, _, dir := setupWriteEnv(t)
-	path := cfg.Paths.(stubPaths).db
-	gate := filepath.Join(dir, "process-gate")
+	paths := cfg.Paths.(stubPaths)
+	gate := filepath.Join(dir, "full-command-process-gate")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	type child struct {
 		cmd *exec.Cmd
 		out bytes.Buffer
 	}
 	children := make([]*child, 2)
 	for i := range children {
-		ready := filepath.Join(dir, fmt.Sprintf("ready-%d", i))
+		ready := filepath.Join(dir, fmt.Sprintf("full-command-ready-%d", i))
 		child := &child{}
-		child.cmd = exec.Command(os.Args[0], "-test.run=^TestBackfillCrossProcessHelper$")
+		child.cmd = exec.CommandContext(ctx, os.Args[0], "-test.run=^TestBackfillFullCommandProcessHelper$", "-test.v")
 		child.cmd.Env = append(os.Environ(),
-			"TGCTL_BACKFILL_HELPER=1", "TGCTL_BACKFILL_DB="+path,
-			"TGCTL_BACKFILL_ID="+strconv.Itoa(400+i), "TGCTL_BACKFILL_READY="+ready,
-			"TGCTL_BACKFILL_GATE="+gate,
+			"TGCTL_BACKFILL_COMMAND_HELPER=1", "TGCTL_BACKFILL_DB="+paths.db,
+			"TGCTL_BACKFILL_ID="+strconv.Itoa(500+i), "TGCTL_BACKFILL_READY="+ready,
+			"TGCTL_BACKFILL_GATE="+gate, "TGCTL_BACKFILL_SESSION="+filepath.Join(dir, fmt.Sprintf("child-%d.session", i)),
+			"TGCTL_BACKFILL_AUDIT="+filepath.Join(dir, fmt.Sprintf("child-%d.audit", i)),
 		)
 		child.cmd.Stdout = &child.out
 		child.cmd.Stderr = &child.out
@@ -613,13 +698,13 @@ func TestCappedBackfillCrossProcessContentionRespectsCap(t *testing.T) {
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for i := range children {
-		ready := filepath.Join(dir, fmt.Sprintf("ready-%d", i))
+		ready := filepath.Join(dir, fmt.Sprintf("full-command-ready-%d", i))
 		for {
 			if _, err := os.Stat(ready); err == nil {
 				break
 			}
 			if time.Now().After(deadline) {
-				t.Fatal("timed out waiting for child readiness")
+				t.Fatalf("timed out waiting for child %d readiness", i)
 			}
 			time.Sleep(5 * time.Millisecond)
 		}
@@ -627,18 +712,19 @@ func TestCappedBackfillCrossProcessContentionRespectsCap(t *testing.T) {
 	if err := os.WriteFile(gate, []byte("go"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	for _, child := range children {
+	for i, child := range children {
 		if err := child.cmd.Wait(); err != nil {
-			t.Fatalf("child failed: %v\n%s", err, child.out.String())
+			t.Fatalf("full-command child %d failed: %v\n%s", i, err, child.out.String())
 		}
+		t.Logf("child %d:\n%s", i, child.out.String())
 	}
-	db, err := store.Connect(path)
+	db, err := store.Connect(paths.db)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
 	var count int
-	if err := db.QueryRow("SELECT COUNT(*) FROM tg_messages WHERE message_id IN (400,401)").Scan(&count); err != nil {
+	if err := db.QueryRow("SELECT COUNT(*) FROM tg_messages WHERE message_id IN (500,501)").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	size, err := databaseSizeBytes(db)
@@ -646,10 +732,10 @@ func TestCappedBackfillCrossProcessContentionRespectsCap(t *testing.T) {
 		t.Fatal(err)
 	}
 	if count != 1 || size > 1024*1024 {
-		t.Fatalf("cross-process count=%d size=%d, want one row within cap", count, size)
+		t.Fatalf("full-command cross-process count=%d size=%d, want one row within cap", count, size)
 	}
-	if mode := sqliteJournalMode(t, path); mode != "wal" {
-		t.Fatalf("journal_mode=%q after subprocess contention, want wal", mode)
+	if mode := sqliteJournalMode(t, paths.db); mode != "wal" {
+		t.Fatalf("journal_mode=%q after full-command subprocess contention, want wal", mode)
 	}
 }
 
