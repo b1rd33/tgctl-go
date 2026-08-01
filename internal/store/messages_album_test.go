@@ -138,3 +138,58 @@ func TestOldSchemaMigratesGroupedID(t *testing.T) {
 		t.Fatalf("migration failed: grouped index: %v", err)
 	}
 }
+
+func TestReadonlyLegacySchemaReadsWithoutGroupedID(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "messages.sqlite")
+	db, err := Connect(path)
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	text := "legacy album caption"
+	if err := InsertMessage(db, Message{
+		ChatID: 4, MessageID: 102, GroupedID: 88,
+		Date: "2026-08-01T00:00:00Z", Text: &text,
+	}); err != nil {
+		t.Fatalf("InsertMessage: %v", err)
+	}
+	if _, err := db.Exec("DROP INDEX IF EXISTS idx_messages_chat_grouped"); err != nil {
+		t.Fatalf("drop grouped index: %v", err)
+	}
+	if _, err := db.Exec("ALTER TABLE tg_messages DROP COLUMN grouped_id"); err != nil {
+		t.Fatalf("drop grouped_id: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	ro, err := ConnectReadonly(path)
+	if err != nil {
+		t.Fatalf("ConnectReadonly: %v", err)
+	}
+	defer ro.Close()
+	if rows, err := Show(ro, ShowOptions{ChatID: 4, Limit: 10}); err != nil {
+		t.Fatalf("Show: %v", err)
+	} else if len(rows) != 1 || rows[0].GroupedID != 0 {
+		t.Fatalf("legacy Show rows = %#v", rows)
+	}
+	if rows, err := Search(ro, SearchOptions{ChatID: 4, Query: "legacy", Limit: 10}); err != nil {
+		t.Fatalf("Search: %v", err)
+	} else if len(rows) != 1 || rows[0].GroupedID != 0 {
+		t.Fatalf("legacy Search rows = %#v", rows)
+	}
+	if rows, err := List(ro, ListOptions{ChatID: 4, Limit: 10}); err != nil {
+		t.Fatalf("List: %v", err)
+	} else if len(rows) != 1 || rows[0].GroupedID != 0 {
+		t.Fatalf("legacy List rows = %#v", rows)
+	}
+	if row, err := GetOne(ro, 4, 102, false); err != nil {
+		t.Fatalf("GetOne: %v", err)
+	} else if row.GroupedID != 0 || row.MessageID != 102 {
+		t.Fatalf("legacy GetOne row = %#v", row)
+	}
+	if rows, err := ListAlbum(ro, 4, 88, false); err != nil {
+		t.Fatalf("ListAlbum: %v", err)
+	} else if len(rows) != 0 {
+		t.Fatalf("legacy ListAlbum rows = %#v, want empty", rows)
+	}
+}

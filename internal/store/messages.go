@@ -48,6 +48,7 @@ type ShowOptions struct {
 // Show returns up to Limit messages for ChatID. When IncludeDeleted is false
 // (the Python default), tombstoned rows are excluded.
 func Show(db *sql.DB, opts ShowOptions) ([]MessageSummary, error) {
+	groupedIDExpr := groupedIDProjection(db)
 	order := "DESC"
 	if opts.Reverse {
 		order = "ASC"
@@ -57,12 +58,12 @@ func Show(db *sql.DB, opts ShowOptions) ([]MessageSummary, error) {
 		deletedClause = " AND (deleted = 0 OR deleted IS NULL)"
 	}
 	q := fmt.Sprintf(`
-		SELECT message_id, grouped_id, date, is_outgoing, text, media_type
+		SELECT message_id, %s, date, is_outgoing, text, media_type
 		FROM tg_messages
 		WHERE chat_id = ?%s
 		ORDER BY date %s
 		LIMIT ?`,
-		deletedClause, order,
+		groupedIDExpr, deletedClause, order,
 	)
 	return scanSummaries(db, q, opts.ChatID, opts.Limit)
 }
@@ -78,6 +79,7 @@ type SearchOptions struct {
 
 // Search filters tg_messages by chat + LIKE pattern, optionally case-sensitive.
 func Search(db *sql.DB, opts SearchOptions) ([]MessageSummary, error) {
+	groupedIDExpr := groupedIDProjection(db)
 	pattern := likePattern(opts.Query)
 	args := []any{opts.ChatID, pattern}
 	caseClause := ""
@@ -91,7 +93,7 @@ func Search(db *sql.DB, opts SearchOptions) ([]MessageSummary, error) {
 	}
 	args = append(args, opts.Limit)
 	q := fmt.Sprintf(`
-		SELECT message_id, grouped_id, date, is_outgoing, text, media_type
+		SELECT message_id, %s, date, is_outgoing, text, media_type
 		FROM tg_messages
 		WHERE chat_id = ?
 		  AND text IS NOT NULL
@@ -99,7 +101,7 @@ func Search(db *sql.DB, opts SearchOptions) ([]MessageSummary, error) {
 		  %s%s
 		ORDER BY date DESC, message_id DESC
 		LIMIT ?`,
-		caseClause, deletedClause,
+		groupedIDExpr, caseClause, deletedClause,
 	)
 	return scanSummaries(db, q, args...)
 }
@@ -123,6 +125,7 @@ type ListOptions struct {
 
 // List filters by chat + optional date range.
 func List(db *sql.DB, opts ListOptions) ([]MessageSummary, error) {
+	groupedIDExpr := groupedIDProjection(db)
 	order := "DESC"
 	if opts.Reverse {
 		order = "ASC"
@@ -142,28 +145,29 @@ func List(db *sql.DB, opts ListOptions) ([]MessageSummary, error) {
 	}
 	args = append(args, opts.Limit)
 	q := fmt.Sprintf(`
-		SELECT message_id, grouped_id, date, is_outgoing, text, media_type
+		SELECT message_id, %s, date, is_outgoing, text, media_type
 		FROM tg_messages
 		WHERE %s
 		ORDER BY date %s, message_id %s
 		LIMIT ?`,
-		strings.Join(where, " AND "), order, order,
+		groupedIDExpr, strings.Join(where, " AND "), order, order,
 	)
 	return scanSummaries(db, q, args...)
 }
 
 // GetOne returns the full message row, or sql.ErrNoRows when absent.
 func GetOne(db *sql.DB, chatID, messageID int64, includeDeleted bool) (*Message, error) {
+	groupedIDExpr := groupedIDProjection(db)
 	deletedClause := ""
 	if !includeDeleted {
 		deletedClause = " AND (deleted = 0 OR deleted IS NULL)"
 	}
 	q := fmt.Sprintf(`
 		SELECT chat_id, message_id, sender_id, date, text, is_outgoing,
-		       reply_to_msg_id, has_media, media_type, media_path, media_id, grouped_id, raw_json
+		       reply_to_msg_id, has_media, media_type, media_path, media_id, %s, raw_json
 		FROM tg_messages
 		WHERE chat_id = ? AND message_id = ?%s`,
-		deletedClause,
+		groupedIDExpr, deletedClause,
 	)
 	var (
 		m             Message
@@ -222,6 +226,12 @@ func ListAlbum(db *sql.DB, chatID, groupedID int64, includeDeleted bool) ([]Mess
 	if groupedID <= 0 {
 		return nil, fmt.Errorf("grouped_id must be positive")
 	}
+	// ConnectReadonly deliberately skips migrations. A legacy database cannot
+	// have cached album membership, so report an empty album rather than issuing
+	// a query against a column that does not exist.
+	if !columnExists(db, "tg_messages", "grouped_id") {
+		return []Message{}, nil
+	}
 	deletedClause := ""
 	if !includeDeleted {
 		deletedClause = " AND (deleted = 0 OR deleted IS NULL)"
@@ -248,6 +258,17 @@ func ListAlbum(db *sql.DB, chatID, groupedID int64, includeDeleted bool) ([]Mess
 		return nil, err
 	}
 	return out, nil
+}
+
+// groupedIDProjection keeps read-only access compatible with databases made
+// before grouped_id was introduced. ConnectReadonly intentionally never runs
+// migrations, so a SELECT must use a NULL projection when that column is
+// absent. The fixed projection is safe to interpolate into SQL.
+func groupedIDProjection(db *sql.DB) string {
+	if columnExists(db, "tg_messages", "grouped_id") {
+		return "grouped_id"
+	}
+	return "NULL AS grouped_id"
 }
 
 // GetAlbum resolves an anchor message to its media group. An ungrouped
