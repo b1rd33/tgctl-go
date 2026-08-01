@@ -233,7 +233,7 @@ func resolveDownloadMediaPaths(paths AccountPathProvider, account string) (downl
 }
 
 func parseDownloadMessageID(raw string) (int64, error) {
-	id, err := parsePositiveDecimal(raw, "message-id")
+	id, err := parsePositiveInt32Decimal(raw, "message-id")
 	if err != nil || id > math.MaxInt32 {
 		return 0, safety.NewBadArgs("message-id must be an integer between 1 and %d (got %q)", math.MaxInt32, raw)
 	}

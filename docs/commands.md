@@ -534,6 +534,7 @@ Generate the autocompletion script for tg for the specified shell.
 **Use**
 
 ```text
+tg completion [flags]
 tg completion [command]
 ```
 

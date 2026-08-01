@@ -25,6 +25,10 @@ func registerSendByUsername(root *cobra.Command, mgr *accounts.Manager) {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selector := args[0]
 			text := args[1]
+			replyTo, _ := cmd.Flags().GetInt64("reply-to")
+			if err := validateOptionalPositiveInt32(replyTo, "--reply-to"); err != nil {
+				return emitDispatchedFailure(cmd, "send-by-username", err)
+			}
 			rootCfg := RootConfigFrom(cmd.Root())
 			allow, _ := cmd.Flags().GetBool("allow-write")
 			if err := safety.RequireWriteAllowed(safety.Args{ReadOnly: rootCfg.ReadOnly, AllowWrite: allow}); err != nil {
@@ -40,7 +44,6 @@ func registerSendByUsername(root *cobra.Command, mgr *accounts.Manager) {
 			}
 
 			dryRun, _ := cmd.Flags().GetBool("dry-run")
-			replyTo, _ := cmd.Flags().GetInt64("reply-to")
 			silent, _ := cmd.Flags().GetBool("silent")
 			noWeb, _ := cmd.Flags().GetBool("no-webpage")
 

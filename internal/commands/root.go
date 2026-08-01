@@ -24,9 +24,6 @@ type RootConfig struct {
 	// process exit matches the dispatch classification rather than cobra's
 	// default exit-1-on-RunE-error.
 	ExitCode int
-	// InvocationArgs retains the caller-provided argv for structural command
-	// resolution before Cobra runs hooks or a non-runnable command group.
-	InvocationArgs []string
 }
 
 type rootConfigKey struct{}
@@ -270,12 +267,9 @@ func isASCIIAlpha(char byte) bool {
 }
 
 func ExecuteRoot(root *cobra.Command) int {
+	root.InitDefaultHelpCmd()
+	root.InitDefaultCompletionCmd()
 	classifyCobraSyntaxErrors(root)
-	if cfg := rootConfigPtr(root); cfg != nil && cfg.InvocationArgs != nil {
-		if command, err := findUnknownSubcommand(root, cfg.InvocationArgs); err != nil {
-			return dispatchUnhandledFailure(root, command, err, invocationJSONMode(cfg.InvocationArgs))
-		}
-	}
 	executed, err := root.ExecuteC()
 	cfg := rootConfigPtr(root)
 	if cfg != nil && cfg.ExitCode != 0 {
@@ -285,21 +279,9 @@ func ExecuteRoot(root *cobra.Command) int {
 		if executed == nil {
 			executed = root
 		}
-		json := jsonMode(executed)
-		if executed == root {
-			json, _ = root.Flags().GetBool("json")
-		}
-		return dispatchUnhandledFailure(root, executed, err, json)
+		return dispatchUnhandledFailure(root, executed, err, fallbackJSONMode(executed))
 	}
 	return 0
-}
-
-func ExecuteRootArgs(root *cobra.Command, args []string) int {
-	root.SetArgs(args)
-	if cfg := rootConfigPtr(root); cfg != nil {
-		cfg.InvocationArgs = append([]string(nil), args...)
-	}
-	return ExecuteRoot(root)
 }
 
 func dispatchUnhandledFailure(root, command *cobra.Command, err error, json bool) int {
@@ -313,32 +295,15 @@ func dispatchUnhandledFailure(root, command *cobra.Command, err error, json bool
 	}, func(context.Context) (any, error) { return nil, err })
 }
 
-func invocationJSONMode(args []string) bool {
-	for _, arg := range args {
-		if arg == "--json" || arg == "--json=true" {
-			return true
-		}
+func fallbackJSONMode(command *cobra.Command) bool {
+	if command == nil || command.Flags().Lookup("json") == nil {
+		return false
 	}
-	return false
-}
-
-func findUnknownSubcommand(root *cobra.Command, args []string) (*cobra.Command, error) {
-	root.InitDefaultHelpCmd()
-	root.InitDefaultCompletionCmd(args...)
-	command, remaining, err := root.Find(args)
-	if err != nil {
-		return command, safety.NewBadArgs("%s", err)
+	if command == command.Root() {
+		json, _ := command.Flags().GetBool("json")
+		return json
 	}
-	if command == nil || !command.HasSubCommands() {
-		return command, nil
-	}
-	for _, arg := range remaining {
-		if arg == "--" || strings.HasPrefix(arg, "-") {
-			continue
-		}
-		return command, unknownSubcommandError(command, arg)
-	}
-	return command, nil
+	return jsonMode(command)
 }
 
 func unknownSubcommandError(command *cobra.Command, arg string) error {
@@ -361,7 +326,14 @@ func classifyCobraSyntaxErrors(root *cobra.Command) {
 	})
 	var wrapArgs func(*cobra.Command)
 	wrapArgs = func(cmd *cobra.Command) {
-		if validate := cmd.Args; validate != nil {
+		switch {
+		case cmd.Name() == "help" && cmd.Parent() == root:
+			cmd.Args = helpPathArgs
+		case cmd.HasSubCommands() && !cmd.Runnable():
+			cmd.Args = unknownGroupArgs
+			cmd.RunE = func(cmd *cobra.Command, _ []string) error { return cmd.Help() }
+		case cmd.Args != nil:
+			validate := cmd.Args
 			cmd.Args = func(cmd *cobra.Command, args []string) error {
 				err := validate(cmd, args)
 				if err == nil {
@@ -373,19 +345,40 @@ func classifyCobraSyntaxErrors(root *cobra.Command) {
 				}
 				return safety.NewBadArgs("%s", err)
 			}
-		} else if cmd.HasSubCommands() {
-			cmd.Args = func(cmd *cobra.Command, args []string) error {
-				if len(args) == 0 {
-					return nil
-				}
-				return unknownSubcommandError(cmd, args[0])
-			}
+		case cmd.HasSubCommands():
+			cmd.Args = unknownGroupArgs
 		}
 		for _, child := range cmd.Commands() {
 			wrapArgs(child)
 		}
 	}
 	wrapArgs(root)
+}
+
+func unknownGroupArgs(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return nil
+	}
+	return unknownSubcommandError(cmd, args[0])
+}
+
+func helpPathArgs(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return nil
+	}
+	target, remaining, err := cmd.Root().Find(args)
+	if err != nil {
+		return safety.NewBadArgs("%s", err)
+	}
+	if target == nil {
+		return unknownSubcommandError(cmd.Root(), args[0])
+	}
+	for _, arg := range remaining {
+		if arg != "--" && !strings.HasPrefix(arg, "-") {
+			return unknownSubcommandError(target, arg)
+		}
+	}
+	return nil
 }
 
 // rootConfigPtr exposes the live *RootConfig so command runners can write

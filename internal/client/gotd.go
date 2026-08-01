@@ -355,6 +355,12 @@ func (g *GotdClient) persistEntitiesFromResolved(users []tg.UserClass, chats []t
 }
 
 func (g *GotdClient) SendMessage(ctx context.Context, req SendMessageReq) (SendMessageResp, error) {
+	if err := validateOptionalTelegramInt32(req.ReplyTo, "reply_to"); err != nil {
+		return SendMessageResp{}, err
+	}
+	if err := validateOptionalTelegramInt32(req.TopicID, "topic_id"); err != nil {
+		return SendMessageResp{}, err
+	}
 	// chat_id-only sends require a cached access_hash. The pipeline already
 	// resolved selector→chat_id from tg_chats; for now we accept the
 	// selector via the tg_chats.username column when available, or via @username.
@@ -412,6 +418,9 @@ func (g *GotdClient) peerFromChatID(_ context.Context, chatID int64) (tg.InputPe
 // SendMessageBySelector resolves selector via Telegram and sends in one call.
 // Bypasses the cached-access-hash requirement so users can send today.
 func (g *GotdClient) SendMessageBySelector(ctx context.Context, selector, text string, replyTo int64, silent, noWeb bool) (SendMessageResp, error) {
+	if err := validateOptionalTelegramInt32(replyTo, "reply_to"); err != nil {
+		return SendMessageResp{}, err
+	}
 	peer, err := g.resolvePeer(ctx, selector)
 	if err != nil {
 		return SendMessageResp{}, err
@@ -431,6 +440,9 @@ func (g *GotdClient) SendMessageBySelector(ctx context.Context, selector, text s
 }
 
 func (g *GotdClient) UploadFile(ctx context.Context, req UploadFileReq) (UploadFileResp, error) {
+	if err := validateOptionalTelegramInt32(req.ReplyTo, "reply_to"); err != nil {
+		return UploadFileResp{}, err
+	}
 	peer, err := g.peerFromChatID(ctx, req.ChatID)
 	if err != nil {
 		return UploadFileResp{}, err
@@ -524,6 +536,9 @@ func extractNewMessageID(u tg.UpdatesClass) int64 {
 // ---- write methods backed by gotd ----
 
 func (g *GotdClient) EditMessage(ctx context.Context, req EditMessageReq) error {
+	if err := validatePositiveTelegramInt32(req.MessageID, "message_id"); err != nil {
+		return err
+	}
 	peer, err := g.peerFromChatID(ctx, req.ChatID)
 	if err != nil {
 		return err
@@ -535,6 +550,12 @@ func (g *GotdClient) EditMessage(ctx context.Context, req EditMessageReq) error 
 }
 
 func (g *GotdClient) Forward(ctx context.Context, req ForwardReq) (ForwardResp, error) {
+	if err := validatePositiveTelegramInts32(req.MessageIDs, "message_id"); err != nil {
+		return ForwardResp{}, err
+	}
+	if err := validateOptionalTelegramInt32(req.TopicID, "topic_id"); err != nil {
+		return ForwardResp{}, err
+	}
 	from, err := g.peerFromChatID(ctx, req.FromChatID)
 	if err != nil {
 		return ForwardResp{}, err
@@ -563,6 +584,9 @@ func (g *GotdClient) Forward(ctx context.Context, req ForwardReq) (ForwardResp, 
 }
 
 func (g *GotdClient) Pin(ctx context.Context, req PinReq) error {
+	if err := validatePositiveTelegramInt32(req.MessageID, "message_id"); err != nil {
+		return err
+	}
 	peer, err := g.peerFromChatID(ctx, req.ChatID)
 	if err != nil {
 		return err
@@ -575,6 +599,9 @@ func (g *GotdClient) Pin(ctx context.Context, req PinReq) error {
 }
 
 func (g *GotdClient) React(ctx context.Context, req ReactReq) error {
+	if err := validatePositiveTelegramInt32(req.MessageID, "message_id"); err != nil {
+		return err
+	}
 	peer, err := g.peerFromChatID(ctx, req.ChatID)
 	if err != nil {
 		return err
@@ -590,6 +617,9 @@ func (g *GotdClient) React(ctx context.Context, req ReactReq) error {
 }
 
 func (g *GotdClient) MarkRead(ctx context.Context, req MarkReadReq) error {
+	if err := validateOptionalTelegramInt32(req.UpToID, "up_to_id"); err != nil {
+		return err
+	}
 	peer, err := g.peerFromChatID(ctx, req.ChatID)
 	if err != nil {
 		return err
@@ -608,6 +638,9 @@ func (g *GotdClient) MarkRead(ctx context.Context, req MarkReadReq) error {
 }
 
 func (g *GotdClient) DeleteMessages(ctx context.Context, req DeleteMessagesReq) (DeleteMessagesResp, error) {
+	if err := validatePositiveTelegramInts32(req.MessageIDs, "message_id"); err != nil {
+		return DeleteMessagesResp{}, err
+	}
 	peer, err := g.peerFromChatID(ctx, req.ChatID)
 	if err != nil {
 		return DeleteMessagesResp{}, err
@@ -1095,6 +1128,11 @@ func waitForThrottle(ctx context.Context, d time.Duration) error {
 }
 
 func (g *GotdClient) ListTopics(ctx context.Context, chatID int64, limit int, query string) ([]TopicInfo, error) {
+	if limit > 0 {
+		if err := validateNonNegativeNativeTelegramInt32(limit, "limit"); err != nil {
+			return nil, err
+		}
+	}
 	peer, err := g.peerFromChatID(ctx, chatID)
 	if err != nil {
 		return nil, err
@@ -1128,6 +1166,9 @@ func (g *GotdClient) ListTopics(ctx context.Context, chatID int64, limit int, qu
 }
 
 func (g *GotdClient) CreateTopic(ctx context.Context, req CreateTopicReq) (CreateTopicResp, error) {
+	if err := validateNonNegativeNativeTelegramInt32(req.IconColor, "icon_color"); err != nil {
+		return CreateTopicResp{}, err
+	}
 	peer, err := g.peerFromChatID(ctx, req.ChatID)
 	if err != nil {
 		return CreateTopicResp{}, err
@@ -1155,6 +1196,9 @@ func (g *GotdClient) CreateTopic(ctx context.Context, req CreateTopicReq) (Creat
 }
 
 func (g *GotdClient) EditTopic(ctx context.Context, req EditTopicReq) error {
+	if err := validatePositiveTelegramInt32(req.TopicID, "topic_id"); err != nil {
+		return err
+	}
 	peer, err := g.peerFromChatID(ctx, req.ChatID)
 	if err != nil {
 		return err
@@ -1178,6 +1222,9 @@ func (g *GotdClient) EditTopic(ctx context.Context, req EditTopicReq) error {
 }
 
 func (g *GotdClient) PinTopic(ctx context.Context, req PinTopicReq) error {
+	if err := validatePositiveTelegramInt32(req.TopicID, "topic_id"); err != nil {
+		return err
+	}
 	peer, err := g.peerFromChatID(ctx, req.ChatID)
 	if err != nil {
 		return err
@@ -1212,6 +1259,9 @@ func (g *GotdClient) ListFolders(ctx context.Context) ([]FolderInfo, error) {
 }
 
 func (g *GotdClient) UpdateFolder(ctx context.Context, req FolderUpdateReq) error {
+	if err := validatePositiveTelegramInt32(req.ID, "folder_id"); err != nil {
+		return err
+	}
 	if existing, ok, err := g.folderInfoByID(ctx, req.ID); err != nil {
 		return err
 	} else if ok {
@@ -1341,11 +1391,17 @@ func folderFilterFromReq(req FolderUpdateReq, includePeers, excludePeers []tg.In
 }
 
 func (g *GotdClient) DeleteFolder(ctx context.Context, id int64) error {
+	if err := validatePositiveTelegramInt32(id, "folder_id"); err != nil {
+		return err
+	}
 	_, err := g.api.MessagesUpdateDialogFilter(ctx, &tg.MessagesUpdateDialogFilterRequest{ID: int(id)})
 	return mapRPCErr(err)
 }
 
 func (g *GotdClient) ReorderFolders(ctx context.Context, ids []int64) error {
+	if err := validatePositiveTelegramInts32(ids, "folder_id"); err != nil {
+		return err
+	}
 	order := make([]int, len(ids))
 	for i, id := range ids {
 		order[i] = int(id)

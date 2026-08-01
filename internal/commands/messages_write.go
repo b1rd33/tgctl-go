@@ -299,6 +299,12 @@ func sendCommand(cfg CommandsConfig) *cobra.Command {
 			}
 			replyTo, _ := cmd.Flags().GetInt64("reply-to")
 			topic, _ := cmd.Flags().GetInt64("topic")
+			if err := validateOptionalPositiveInt32(replyTo, "--reply-to"); err != nil {
+				return err
+			}
+			if err := validateOptionalPositiveInt32(topic, "--topic"); err != nil {
+				return err
+			}
 			silent, _ := cmd.Flags().GetBool("silent")
 			noWeb, _ := cmd.Flags().GetBool("no-webpage")
 
@@ -354,7 +360,7 @@ func editMsgCommand(cfg CommandsConfig) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selector := args[0]
-			msgID, err := parsePositiveDecimal(args[1], "message-id")
+			msgID, err := parsePositiveInt32Decimal(args[1], "message-id")
 			if err != nil {
 				return err
 			}
@@ -396,6 +402,9 @@ func forwardCommand(cfg CommandsConfig) *cobra.Command {
 				return err
 			}
 			topic, _ := cmd.Flags().GetInt64("topic")
+			if err := validateOptionalPositiveInt32(topic, "--topic"); err != nil {
+				return err
+			}
 			payload := map[string]any{"from_chat_selector": fromSel, "message_ids": ids, "to_chat_selector": toSel, "topic_id": topic}
 
 			// Resolve both chats. The pipeline only resolves one selector
@@ -472,7 +481,7 @@ func pinMsgCommand(cfg CommandsConfig, unpin bool) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selector := args[0]
-			msgID, err := parsePositiveDecimal(args[1], "message-id")
+			msgID, err := parsePositiveInt32Decimal(args[1], "message-id")
 			if err != nil {
 				return err
 			}
@@ -503,7 +512,7 @@ func reactCommand(cfg CommandsConfig) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selector := args[0]
-			msgID, err := parsePositiveDecimal(args[1], "message-id")
+			msgID, err := parsePositiveInt32Decimal(args[1], "message-id")
 			if err != nil {
 				return err
 			}
@@ -541,6 +550,9 @@ func markReadCommand(cfg CommandsConfig) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selector := args[0]
 			upTo, _ := cmd.Flags().GetInt64("up-to")
+			if err := validateOptionalPositiveInt32(upTo, "--up-to"); err != nil {
+				return err
+			}
 			payload := map[string]any{"up_to_id": upTo}
 			return runWrite(cmd, "mark-read", "messages.ReadHistory", selector, cfg, payload,
 				func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error) {
@@ -558,17 +570,5 @@ func markReadCommand(cfg CommandsConfig) *cobra.Command {
 }
 
 func parseIntCSV(s string) ([]int64, error) {
-	if s == "" {
-		return nil, safety.NewBadArgs("message-ids cannot be empty")
-	}
-	parts := strings.Split(s, ",")
-	out := make([]int64, 0, len(parts))
-	for _, p := range parts {
-		v, err := parsePositiveDecimal(p, "message-id")
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, v)
-	}
-	return out, nil
+	return parsePositiveInt32CSV(s, "message-id")
 }

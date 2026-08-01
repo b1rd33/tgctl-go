@@ -1,18 +1,34 @@
 package commands
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
-func TestParsePositiveDecimalStrictWholeToken(t *testing.T) {
-	for _, raw := range []string{"", "0", "-1", "+1", " 1", "1 ", "1x", "1 x", "9223372036854775808"} {
+func TestParsePositiveInt32DecimalStrictWholeToken(t *testing.T) {
+	for _, raw := range []string{"", "0", "-1", "+1", " 1", "1 ", "1x", "1 x", "2147483648", "9223372036854775808"} {
 		t.Run(raw, func(t *testing.T) {
-			if _, err := parsePositiveDecimal(raw, "message-id"); err == nil {
-				t.Fatalf("parsePositiveDecimal(%q) unexpectedly succeeded", raw)
+			if _, err := parsePositiveInt32Decimal(raw, "message-id"); err == nil {
+				t.Fatalf("parsePositiveInt32Decimal(%q) unexpectedly succeeded", raw)
 			}
 		})
 	}
-	for raw, want := range map[string]int64{"1": 1, "42": 42, "9223372036854775807": 9223372036854775807} {
-		if got, err := parsePositiveDecimal(raw, "message-id"); err != nil || got != want {
-			t.Fatalf("parsePositiveDecimal(%q)=(%d, %v), want (%d, nil)", raw, got, err, want)
+	for raw, want := range map[string]int64{"1": 1, "42": 42, "2147483647": 2147483647} {
+		if got, err := parsePositiveInt32Decimal(raw, "message-id"); err != nil || got != want {
+			t.Fatalf("parsePositiveInt32Decimal(%q)=(%d, %v), want (%d, nil)", raw, got, err, want)
+		}
+	}
+}
+
+func TestOptionalInt32FlagBounds(t *testing.T) {
+	for _, value := range []int64{-1, 2147483648} {
+		if err := validateOptionalPositiveInt32(value, "--reply-to"); err == nil {
+			t.Fatalf("validateOptionalPositiveInt32(%d) unexpectedly succeeded", value)
+		}
+	}
+	for _, value := range []int64{0, 1, 2147483647} {
+		if err := validateOptionalPositiveInt32(value, "--reply-to"); err != nil {
+			t.Fatalf("validateOptionalPositiveInt32(%d): %v", value, err)
 		}
 	}
 }
@@ -25,8 +41,8 @@ func TestParseIntCSVRejectsMalformedMessageIDs(t *testing.T) {
 			}
 		})
 	}
-	got, err := parseIntCSV("1,2,9223372036854775807")
-	if err != nil || len(got) != 3 || got[0] != 1 || got[1] != 2 || got[2] != 9223372036854775807 {
+	got, err := parseIntCSV("1,2,2147483647")
+	if err != nil || len(got) != 3 || got[0] != 1 || got[1] != 2 || got[2] != 2147483647 {
 		t.Fatalf("valid parseIntCSV = (%v, %v)", got, err)
 	}
 }
@@ -51,5 +67,12 @@ func TestDownloadMessageIDRejectsWhitespaceAndSigns(t *testing.T) {
 	}
 	if got, err := parseDownloadMessageID("2147483647"); err != nil || got != 2147483647 {
 		t.Fatalf("parseDownloadMessageID(max)=(%d, %v)", got, err)
+	}
+}
+
+func TestFolderCSVUsesFolderDiagnostic(t *testing.T) {
+	_, err := parsePositiveInt32CSV("1,2147483648", "folder-id")
+	if err == nil || !strings.Contains(err.Error(), "folder-id") || strings.Contains(err.Error(), "message-id") {
+		t.Fatalf("folder CSV error=%q", err)
 	}
 }

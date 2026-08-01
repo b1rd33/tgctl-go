@@ -408,7 +408,7 @@ func getMsgCommand(paths AccountPathProvider) *cobra.Command {
 		Args:         cobra.ExactArgs(2),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			msgID, err := parsePositiveDecimal(args[1], "message-id")
+			msgID, err := parsePositiveInt32Decimal(args[1], "message-id")
 			if err != nil {
 				return err
 			}

@@ -265,7 +265,7 @@ func foldersReorderCommand(cfg CommandsConfig) *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ids, err := parseIntCSV(args[0])
+			ids, err := parsePositiveInt32CSV(args[0], "folder-id")
 			if err != nil {
 				return emitDispatchedFailure(cmd, "folders-reorder", err)
 			}

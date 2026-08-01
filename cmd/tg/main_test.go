@@ -145,6 +145,7 @@ func TestProcessMalformedArgumentsUseOneDispatchedFailureWithoutArtifacts(t *tes
 		{name: "get zero message id", command: "get-msg", args: []string{"get-msg", "1", "0"}},
 		{name: "get negative message id", command: "get-msg", args: []string{"get-msg", "1", "--", "-2"}, modeBeforeBadFlag: true},
 		{name: "get overflowing message id", command: "get-msg", args: []string{"get-msg", "1", "9223372036854775808"}},
+		{name: "get message id above int32", command: "get-msg", args: []string{"get-msg", "1", "2147483648"}},
 		{name: "edit message id with trailing junk", command: "edit-msg", args: []string{"edit-msg", "1", "2x", "text"}},
 		{name: "pin message id with trailing junk", command: "pin-msg", args: []string{"pin-msg", "1", "2x"}},
 		{name: "unpin message id with trailing junk", command: "unpin-msg", args: []string{"unpin-msg", "1", "2x"}},
@@ -155,8 +156,22 @@ func TestProcessMalformedArgumentsUseOneDispatchedFailureWithoutArtifacts(t *tes
 		{name: "forward CSV zero", command: "forward", args: []string{"forward", "1", "2", "1,0"}},
 		{name: "forward CSV negative", command: "forward", args: []string{"forward", "1", "2", "1,-2"}},
 		{name: "forward CSV overflow", command: "forward", args: []string{"forward", "1", "2", "1,9223372036854775808"}},
+		{name: "forward CSV above int32", command: "forward", args: []string{"forward", "1", "2", "1,2147483648"}},
 		{name: "folder id with trailing junk", command: "folder-show", args: []string{"folder-show", "2x"}},
+		{name: "folder id above int32", command: "folder-show", args: []string{"folder-show", "2147483648"}},
+		{name: "folder reorder above int32", command: "folders-reorder", args: []string{"folders-reorder", "1,2147483648"}},
 		{name: "topic id with trailing junk", command: "topic-edit", args: []string{"topic-edit", "1", "2x"}},
+		{name: "topic id above int32", command: "topic-edit", args: []string{"topic-edit", "1", "2147483648"}},
+		{name: "topic icon color above int32", command: "topic-create", args: []string{"topic-create", "1", "title", "--icon-color=2147483648"}},
+		{name: "send reply flag above int32", command: "send", args: []string{"send", "1", "text", "--reply-to=2147483648"}},
+		{name: "username send reply flag above int32", command: "send-by-username", args: []string{"send-by-username", "@example", "text", "--reply-to=2147483648"}},
+		{name: "upload reply flag above int32", command: "upload-photo", args: []string{"upload-photo", "1", "missing.jpg", "--reply-to=2147483648"}},
+		{name: "send reply flag negative", command: "send", args: []string{"send", "1", "text", "--reply-to=-1"}},
+		{name: "send topic flag above int32", command: "send", args: []string{"send", "1", "text", "--topic=2147483648"}},
+		{name: "send topic flag negative", command: "send", args: []string{"send", "1", "text", "--topic=-1"}},
+		{name: "forward topic flag above int32", command: "forward", args: []string{"forward", "1", "2", "1", "--topic=2147483648"}},
+		{name: "mark read flag above int32", command: "mark-read", args: []string{"mark-read", "1", "--up-to=2147483648"}},
+		{name: "mark read flag negative", command: "mark-read", args: []string{"mark-read", "1", "--up-to=-1"}},
 		{name: "session hash with trailing junk", command: "terminate-session", args: []string{"terminate-session", "2x"}},
 		{name: "empty send text", command: "send", args: []string{"send", "1", ""}},
 		{name: "wrong arity", command: "get-msg", args: []string{"get-msg", "1"}},
@@ -225,9 +240,16 @@ func TestProcessUnknownCommandsUseBadArgsWithoutArtifacts(t *testing.T) {
 	}{
 		{name: "root default human", args: []string{"unknown-command"}, wantCommand: "tg", wantText: `unknown command "unknown-command"`},
 		{name: "root JSON", args: []string{"unknown-command", "--json"}, wantCommand: "tg", jsonMode: true, wantText: `unknown command "unknown-command"`},
+		{name: "root JSON before command", args: []string{"--json", "unknown-command"}, wantCommand: "tg", jsonMode: true, wantText: `unknown command "unknown-command"`},
+		{name: "root repeated JSON final true", args: []string{"unknown-command", "--json=false", "--json=true"}, wantCommand: "tg", jsonMode: true, wantText: `unknown command "unknown-command"`},
+		{name: "root repeated JSON final false", args: []string{"unknown-command", "--json=true", "--json=false"}, wantCommand: "tg", wantText: `unknown command "unknown-command"`},
+		{name: "root JSON after terminator is positional", args: []string{"unknown-command", "--", "--json"}, wantCommand: "tg", wantText: `unknown command "unknown-command"`},
 		{name: "root suggestion", args: []string{"shwo"}, wantCommand: "tg", wantText: "Did you mean this?"},
 		{name: "nested completion command", args: []string{"completion", "unknown-shell"}, wantCommand: "completion", wantText: `unknown command "unknown-shell"`},
+		{name: "unknown help topic", args: []string{"help", "unknown-topic"}, wantCommand: "help", wantText: `unknown command "unknown-topic"`},
+		{name: "completion leaf extra argument", args: []string{"completion", "bash", "extra"}, wantCommand: "bash", wantText: `unknown command "extra"`},
 		{name: "unsupported root human flag", args: []string{"--human"}, wantCommand: "tg", wantText: "unknown flag: --human"},
+		{name: "unknown root flag", args: []string{"--bogus"}, wantCommand: "tg", wantText: "unknown flag: --bogus"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -267,6 +289,63 @@ func TestProcessUnknownCommandsUseBadArgsWithoutArtifacts(t *testing.T) {
 			}
 			if len(entries) != 0 {
 				t.Fatalf("malformed invocation created cwd artifacts: %v", entries)
+			}
+		})
+	}
+}
+
+func TestProcessCobraCompletionPathsRemainNative(t *testing.T) {
+	binary := buildTGProcess(t)
+	env := withoutStartupSafetyEnv(os.Environ())
+	for _, args := range [][]string{
+		{"__complete", ""},
+		{"__completeNoDesc", ""},
+	} {
+		t.Run(args[0], func(t *testing.T) {
+			root := t.TempDir()
+			stdout, stderr, code := runTGProcessStreams(t, binary, root, env, args...)
+			if code != 0 {
+				t.Fatalf("exit code=%d\nstdout:\n%s\nstderr:\n%s", code, stdout, stderr)
+			}
+			if !strings.Contains(stdout, ":4\n") || !strings.Contains(stderr, "Completion ended with directive:") {
+				t.Fatalf("completion protocol changed\nstdout:\n%s\nstderr:\n%s", stdout, stderr)
+			}
+			entries, err := os.ReadDir(root)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("completion created artifacts=%v err=%v", entries, err)
+			}
+		})
+	}
+
+	root := t.TempDir()
+	stdout, stderr, code := runTGProcessStreams(t, binary, root, env, "completion", "bash")
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "bash completion V2") {
+		t.Fatalf("completion bash code=%d\nstdout:\n%s\nstderr:\n%s", code, stdout, stderr)
+	}
+}
+
+func TestProcessMaxInt32PassesParserToNextStageWithoutArtifacts(t *testing.T) {
+	binary := buildTGProcess(t)
+	env := withoutStartupSafetyEnv(os.Environ())
+	tests := []struct {
+		name     string
+		args     []string
+		wantCode int
+		wantErr  string
+	}{
+		{name: "read message", args: []string{"--read-only", "get-msg", "1", "2147483647", "--json"}, wantCode: 4, wantErr: "NOT_FOUND"},
+		{name: "reply flag", args: []string{"send", "1", "text", "--reply-to=2147483647", "--json"}, wantCode: 6, wantErr: "WRITE_DISALLOWED"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			stdout, stderr, code := runTGProcessStreams(t, binary, root, env, tt.args...)
+			if code != tt.wantCode || stderr != "" || !strings.Contains(stdout, `"code":"`+tt.wantErr+`"`) {
+				t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
+			}
+			entries, err := os.ReadDir(root)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("max int32 invocation created artifacts=%v err=%v", entries, err)
 			}
 		})
 	}

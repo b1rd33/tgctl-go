@@ -28,6 +28,9 @@ func uploadCommand(cfg CommandsConfig, name, kind, short string) *cobra.Command 
 			selector := args[0]
 			caption, _ := cmd.Flags().GetString("caption")
 			replyTo, _ := cmd.Flags().GetInt64("reply-to")
+			if err := validateOptionalPositiveInt32(replyTo, "--reply-to"); err != nil {
+				return emitDispatchedFailure(cmd, name, err)
+			}
 			silent, _ := cmd.Flags().GetBool("silent")
 			filename, _ := cmd.Flags().GetString("filename")
 			maxSize, _ := cmd.Flags().GetInt64("max-size-mb")

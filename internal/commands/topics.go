@@ -79,6 +79,9 @@ func topicCreateCommand(cfg CommandsConfig) *cobra.Command {
 				return emitDispatchedFailure(cmd, "topic-create", safety.NewBadArgs("topic title cannot be empty"))
 			}
 			iconColor, _ := cmd.Flags().GetInt("icon-color")
+			if err := validateNonNegativeNativeInt32(iconColor, "--icon-color"); err != nil {
+				return emitDispatchedFailure(cmd, "topic-create", err)
+			}
 			iconEmojiID, _ := cmd.Flags().GetInt64("icon-emoji-id")
 			payload := map[string]any{"title": title, "icon_color": iconColor, "icon_emoji_id": iconEmojiID}
 			return runWrite(cmd, "topic-create", "channels.CreateForumTopic", args[0], cfg, payload,
@@ -104,7 +107,7 @@ func topicEditCommand(cfg CommandsConfig) *cobra.Command {
 		Args:         cobra.ExactArgs(2),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			topicID, err := parsePositiveDecimal(args[1], "topic-id")
+			topicID, err := parsePositiveInt32Decimal(args[1], "topic-id")
 			if err != nil {
 				return emitDispatchedFailure(cmd, "topic-edit", err)
 			}
@@ -143,7 +146,7 @@ func topicPinCommand(cfg CommandsConfig, pinned bool) *cobra.Command {
 		Args:         cobra.ExactArgs(2),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			topicID, err := parsePositiveDecimal(args[1], "topic-id")
+			topicID, err := parsePositiveInt32Decimal(args[1], "topic-id")
 			if err != nil {
 				return emitDispatchedFailure(cmd, name, err)
 			}
