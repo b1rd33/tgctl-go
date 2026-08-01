@@ -20,6 +20,9 @@ type FakeClient struct {
 	Calls        []string
 	Sent         []SendMessageReq
 	Uploads      []UploadFileReq
+	Albums       []UploadAlbumReq
+	AlbumResp    UploadAlbumResp
+	AlbumErr     error
 	Downloads    []DownloadMediaReq
 	DownloadResp DownloadMediaResp
 	DownloadErr  error
@@ -115,6 +118,16 @@ func (f *FakeClient) UploadFile(_ context.Context, req UploadFileReq) (UploadFil
 		id = int64(3000 + len(f.Uploads))
 	}
 	return UploadFileResp{MessageID: id, Date: "2026-05-08T12:00:00"}, nil
+}
+
+func (f *FakeClient) UploadAlbum(_ context.Context, req UploadAlbumReq) (UploadAlbumResp, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.record("UploadAlbum"); err != nil {
+		return UploadAlbumResp{}, err
+	}
+	f.Albums = append(f.Albums, req)
+	return f.AlbumResp, f.AlbumErr
 }
 
 func (f *FakeClient) DownloadMedia(_ context.Context, req DownloadMediaReq) (DownloadMediaResp, error) {

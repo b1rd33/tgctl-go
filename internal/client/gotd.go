@@ -29,6 +29,7 @@ import (
 // session file flushes cleanly.
 type GotdClient struct {
 	api               *tg.Client
+	albumAPI          albumUploadAPI
 	backfillAPI       backfillHistoryAPI
 	mediaAPI          mediaDownloadAPI
 	fileDownloader    fileDownloader
@@ -38,6 +39,15 @@ type GotdClient struct {
 	done              chan error
 	db                *sql.DB // per-account entity cache; may be nil for ephemeral clients
 	events            chan ListenEvent
+}
+
+// albumUploadAPI is the narrow Telegram surface needed by UploadAlbum. It is
+// kept beside GotdClient so standalone command-documentation builds that list
+// the core client source files still include the interface definition.
+type albumUploadAPI interface {
+	uploader.Client
+	MessagesUploadMedia(context.Context, *tg.MessagesUploadMediaRequest) (tg.MessageMediaClass, error)
+	MessagesSendMultiMedia(context.Context, *tg.MessagesSendMultiMediaRequest) (tg.UpdatesClass, error)
 }
 
 type backfillHistoryAPI interface {

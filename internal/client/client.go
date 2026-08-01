@@ -4,9 +4,11 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/b1rd33/tgctl-go/internal/media"
+	"github.com/gotd/td/tg"
 )
 
 // User mirrors the subset of fields tgcli.commands.auth uses.
@@ -41,6 +43,7 @@ type UploadFileReq struct {
 	ChatID            int64
 	Path              string
 	Kind              string
+	MediaType         string
 	Caption           string
 	ReplyTo           int64
 	Silent            bool
@@ -51,6 +54,83 @@ type UploadFileReq struct {
 type UploadFileResp struct {
 	MessageID int64
 	Date      string
+}
+
+// UploadAlbumItem is one ordered local media file in an album. Version one
+// accepts photo and video items; Telegram creates one message per item.
+type UploadAlbumItem struct {
+	Path              string
+	Kind              string
+	MediaType         string
+	Caption           string
+	Filename          string
+	SupportsStreaming bool
+}
+
+// UploadAlbumReq describes one album upload. Peer may be supplied by callers
+// that already resolved it; normal production callers should provide ChatID
+// and let the account entity cache resolve the peer.
+type UploadAlbumReq struct {
+	ChatID            int64
+	Peer              tg.InputPeerClass
+	Items             []UploadAlbumItem
+	Caption           string
+	ReplyTo           int64
+	Silent            bool
+	SupportsStreaming bool
+	MaxBytes          int64
+	MaxSizeMB         int64
+}
+
+// UploadAlbumRequest is the descriptive name for UploadAlbumReq.
+type UploadAlbumRequest = UploadAlbumReq
+
+type UploadAlbumItemResp struct {
+	Position        int    `json:"position"`
+	MessageID       int64  `json:"message_id"`
+	MediaType       string `json:"media_type"`
+	SourcePath      string `json:"source_path"`
+	CaptionPlaced   bool   `json:"caption_placed"`
+	CaptionPosition int    `json:"caption_position,omitempty"`
+	GroupedID       int64  `json:"grouped_id,omitempty"`
+}
+
+// UploadAlbumItemResponse is the descriptive name for UploadAlbumItemResp.
+type UploadAlbumItemResponse = UploadAlbumItemResp
+
+type UploadAlbumResp struct {
+	ChatID     int64                 `json:"chat_id"`
+	MessageIDs []int64               `json:"message_ids"`
+	GroupedID  int64                 `json:"grouped_id,omitempty"`
+	Items      []UploadAlbumItemResp `json:"items"`
+}
+
+// UploadAlbumResponse is the descriptive name for UploadAlbumResp.
+type UploadAlbumResponse = UploadAlbumResp
+
+// AlbumUploadError preserves the operation stage and item position without
+// exposing request credentials or private Telegram payloads.
+type AlbumUploadError struct {
+	Stage    string
+	Position int
+	Err      error
+}
+
+func (e *AlbumUploadError) Error() string {
+	if e == nil {
+		return "album upload failed"
+	}
+	if e.Position >= 0 {
+		return fmt.Sprintf("album %s failed for item %d: %v", e.Stage, e.Position, e.Err)
+	}
+	return fmt.Sprintf("album %s failed: %v", e.Stage, e.Err)
+}
+
+func (e *AlbumUploadError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
 }
 
 // DownloadMediaReq identifies one Telegram message whose file attachment
@@ -340,6 +420,7 @@ type Client interface {
 	GetMe(ctx context.Context) (User, error)
 	SendMessage(ctx context.Context, req SendMessageReq) (SendMessageResp, error)
 	UploadFile(ctx context.Context, req UploadFileReq) (UploadFileResp, error)
+	UploadAlbum(ctx context.Context, req UploadAlbumReq) (UploadAlbumResp, error)
 	DownloadMedia(ctx context.Context, req DownloadMediaReq) (DownloadMediaResp, error)
 	EditMessage(ctx context.Context, req EditMessageReq) error
 	Forward(ctx context.Context, req ForwardReq) (ForwardResp, error)
