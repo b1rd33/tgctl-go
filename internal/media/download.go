@@ -845,7 +845,7 @@ func (d *Destination) finishCommit() error {
 }
 
 func (d *Destination) finishPublishedError(publishErr error) error {
-	joined := errors.Join(publishErr, d.finishCommit())
+	joined := errors.Join(ErrDestinationCommitted, publishErr, d.finishCommit())
 	if errors.Is(joined, ErrCleanupIncomplete) {
 		d.state = destinationCleanupIncomplete
 		d.terminalErr = joined

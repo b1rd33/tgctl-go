@@ -1232,8 +1232,8 @@ func TestDestinationOverwriteRollbackFailureIsStableCleanupIncomplete(t *testing
 	}
 
 	commitErr := d.Commit()
-	if !errors.Is(commitErr, ErrDestinationChanged) || !errors.Is(commitErr, ErrCleanupIncomplete) || !errors.Is(commitErr, rollbackErr) {
-		t.Fatalf("Commit error = %v, want changed, cleanup, and rollback errors", commitErr)
+	if !errors.Is(commitErr, ErrDestinationCommitted) || !errors.Is(commitErr, ErrDestinationChanged) || !errors.Is(commitErr, ErrCleanupIncomplete) || !errors.Is(commitErr, rollbackErr) {
+		t.Fatalf("Commit error = %v, want committed, changed, cleanup, and rollback errors", commitErr)
 	}
 	if got, err := os.ReadFile(final); err != nil || string(got) != "attacker" {
 		t.Fatalf("partial public state changed: content=%q err=%v", got, err)
@@ -1327,8 +1327,8 @@ func TestDestinationPostPublishIdentityLossIsStableCleanupIncomplete(t *testing.
 		return nil
 	}
 	commitErr := d.Commit()
-	if !errors.Is(commitErr, ErrDestinationChanged) || !errors.Is(commitErr, ErrCleanupIncomplete) {
-		t.Fatalf("Commit error = %v, want changed and cleanup errors", commitErr)
+	if !errors.Is(commitErr, ErrDestinationCommitted) || !errors.Is(commitErr, ErrDestinationChanged) || !errors.Is(commitErr, ErrCleanupIncomplete) {
+		t.Fatalf("Commit error = %v, want committed, changed, and cleanup errors", commitErr)
 	}
 	if got, err := os.ReadFile(d.FinalPath); err != nil || string(got) != "attacker" {
 		t.Fatalf("attacker final changed: content=%q err=%v", got, err)
@@ -1354,8 +1354,8 @@ func TestDestinationDisplacedUnlinkFailureIsStableCleanupIncomplete(t *testing.T
 	injected := errors.New("injected displaced unlink failure")
 	d.ops.remove = func(*anchoredDir, string) error { return injected }
 	commitErr := d.Commit()
-	if !errors.Is(commitErr, ErrCleanupIncomplete) || !errors.Is(commitErr, injected) {
-		t.Fatalf("Commit error = %v, want cleanup and unlink errors", commitErr)
+	if !errors.Is(commitErr, ErrDestinationCommitted) || !errors.Is(commitErr, ErrCleanupIncomplete) || !errors.Is(commitErr, injected) {
+		t.Fatalf("Commit error = %v, want committed, cleanup, and unlink errors", commitErr)
 	}
 	if got, err := os.ReadFile(final); err != nil || string(got) != "download" {
 		t.Fatalf("published final content=%q err=%v", got, err)
