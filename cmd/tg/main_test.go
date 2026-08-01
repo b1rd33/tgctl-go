@@ -29,6 +29,17 @@ func buildTGProcess(t *testing.T) string {
 	return path
 }
 
+func buildTGProcessWithVersion(t *testing.T, version string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "tg")
+	ldflags := "-X github.com/b1rd33/tgctl-go/internal/commands.Version=" + version
+	cmd := exec.Command("go", "build", "-ldflags", ldflags, "-o", path, ".")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("build tg with version %q: %v\n%s", version, err, out)
+	}
+	return path
+}
+
 func seedLegacyState(t *testing.T, root string) legacyState {
 	t.Helper()
 	files := map[string][]byte{
@@ -84,6 +95,36 @@ func runTGProcessResult(t *testing.T, binary, root string, env []string, args ..
 		t.Fatalf("tg %v: %v\n%s", args, err, out)
 	}
 	return string(out), exitErr.ExitCode()
+}
+
+func TestProcessLinkerInjectedPrereleaseVersion(t *testing.T) {
+	const want = "v0.0.0-rc.offline+build.7"
+	binary := buildTGProcessWithVersion(t, want)
+	root := t.TempDir()
+	env := withoutStartupSafetyEnv(os.Environ())
+
+	flagOut, flagCode := runTGProcessResult(t, binary, root, env, "--version")
+	if flagCode != 0 {
+		t.Fatalf("--version code=%d\n%s", flagCode, flagOut)
+	}
+	jsonOut, jsonCode := runTGProcessResult(t, binary, root, env, "version", "--json")
+	if jsonCode != 0 {
+		t.Fatalf("version --json code=%d\n%s", jsonCode, jsonOut)
+	}
+	var envelope struct {
+		Data struct {
+			Version string `json:"version"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(jsonOut), &envelope); err != nil {
+		t.Fatalf("decode version envelope: %v\n%s", err, jsonOut)
+	}
+	if got := strings.TrimSpace(flagOut); got != want {
+		t.Fatalf("--version = %q, want %q", got, want)
+	}
+	if got := envelope.Data.Version; got != want {
+		t.Fatalf("version --json = %q, want %q", got, want)
+	}
 }
 
 func withoutEnv(environ []string, key string) []string {

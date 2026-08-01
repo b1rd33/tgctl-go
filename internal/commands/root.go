@@ -80,12 +80,125 @@ func registerVersion(root *cobra.Command) {
 }
 
 func semverVersion() string {
-	if strings.HasPrefix(Version, "v") {
-		if i := strings.IndexByte(Version, '-'); i > 0 {
-			return Version[:i]
-		}
+	if base, _, ok := parseGitDescribe(Version); ok {
+		return base
 	}
 	return Version
+}
+
+// parseGitDescribe recognizes the output shape produced by
+// `git describe --tags --dirty --always` when the nearest tag is a
+// v-prefixed semantic version. A plain SemVer prerelease is intentionally not
+// split merely because it contains a hyphen.
+func parseGitDescribe(value string) (base, commit string, ok bool) {
+	described := value
+	if strings.HasSuffix(described, "-dirty") {
+		described = strings.TrimSuffix(described, "-dirty")
+	}
+	commitSeparator := strings.LastIndex(described, "-g")
+	if commitSeparator < 0 {
+		return "", "", false
+	}
+	commit = described[commitSeparator+2:]
+	beforeCommit := described[:commitSeparator]
+	countSeparator := strings.LastIndexByte(beforeCommit, '-')
+	if countSeparator < 0 {
+		return "", "", false
+	}
+	base = beforeCommit[:countSeparator]
+	count := beforeCommit[countSeparator+1:]
+	if !strings.HasPrefix(base, "v") || !isSemanticVersion(base) || !allDecimal(count) || len(commit) < 4 || !allHex(commit) {
+		return "", "", false
+	}
+	return base, commit, true
+}
+
+func isSemanticVersion(value string) bool {
+	if strings.HasPrefix(value, "v") {
+		value = strings.TrimPrefix(value, "v")
+	}
+	if value == "" || strings.Count(value, "+") > 1 {
+		return false
+	}
+	if beforeBuild, build, found := strings.Cut(value, "+"); found {
+		if !validIdentifiers(build, false) {
+			return false
+		}
+		value = beforeBuild
+	}
+	if beforePrerelease, prerelease, found := strings.Cut(value, "-"); found {
+		if !validIdentifiers(prerelease, true) {
+			return false
+		}
+		value = beforePrerelease
+	}
+	core := strings.Split(value, ".")
+	if len(core) != 3 {
+		return false
+	}
+	for _, part := range core {
+		if !validCoreNumber(part) {
+			return false
+		}
+	}
+	return true
+}
+
+func validCoreNumber(value string) bool {
+	return allDecimal(value) && (len(value) == 1 || value[0] != '0')
+}
+
+func validIdentifiers(value string, prerelease bool) bool {
+	for _, identifier := range strings.Split(value, ".") {
+		if identifier == "" {
+			return false
+		}
+		numeric := true
+		for _, char := range []byte(identifier) {
+			if !isASCIIDigit(char) {
+				numeric = false
+			}
+			if !isASCIIDigit(char) && !isASCIIAlpha(char) && char != '-' {
+				return false
+			}
+		}
+		if prerelease && numeric && len(identifier) > 1 && identifier[0] == '0' {
+			return false
+		}
+	}
+	return true
+}
+
+func allDecimal(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, char := range []byte(value) {
+		if !isASCIIDigit(char) {
+			return false
+		}
+	}
+	return true
+}
+
+func allHex(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, char := range []byte(value) {
+		if !isASCIIDigit(char) && (char < 'a' || char > 'f') && (char < 'A' || char > 'F') {
+			return false
+		}
+	}
+	return true
+}
+
+func isASCIIDigit(char byte) bool {
+	return char >= '0' && char <= '9'
+}
+
+func isASCIIAlpha(char byte) bool {
+	return char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z'
 }
 
 func shortCommit() string {
@@ -95,11 +208,7 @@ func shortCommit() string {
 		}
 		return rev
 	}
-	if i := strings.LastIndex(Version, "-g"); i >= 0 {
-		commit := Version[i+2:]
-		if j := strings.IndexByte(commit, '-'); j >= 0 {
-			commit = commit[:j]
-		}
+	if _, commit, ok := parseGitDescribe(Version); ok {
 		return commit
 	}
 	if !strings.HasPrefix(Version, "v") && Version != "dev" {
