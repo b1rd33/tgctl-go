@@ -102,8 +102,8 @@ func TestRootVersionFlagUsesInjectedVersion(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
-	if got := stdout.String(); got != "v0.1.0\n" {
-		t.Fatalf("stdout = %q, want v0.1.0", got)
+	if got := stdout.String(); got != "v0.1.0-2-gabcdef0\n" {
+		t.Fatalf("stdout = %q, want unmarked version unchanged", got)
 	}
 }
 
@@ -119,9 +119,9 @@ func TestSemverVersionPreservesReleasesAndRecognizesGitDescribe(t *testing.T) {
 		{name: "prerelease with git-like identifier", version: "v1.2.3-alpha-gold", want: "v1.2.3-alpha-gold"},
 		{name: "build metadata", version: "v1.2.3+build.5", want: "v1.2.3+build.5"},
 		{name: "prerelease and build metadata", version: "v1.2.3-rc.1+build.5", want: "v1.2.3-rc.1+build.5"},
-		{name: "git describe", version: "v1.2.3-12-gabcdef0", want: "v1.2.3"},
-		{name: "git describe prerelease tag", version: "v1.2.3-rc.1-12-gabcdef0", want: "v1.2.3-rc.1"},
-		{name: "dirty git describe", version: "v1.2.3-12-gabcdef0-dirty", want: "v1.2.3"},
+		{name: "unmarked describe-shaped semver", version: "v1.2.3-12-gabcdef0", want: "v1.2.3-12-gabcdef0"},
+		{name: "unmarked described prerelease tag", version: "v1.2.3-rc.1-12-gabcdef0", want: "v1.2.3-rc.1-12-gabcdef0"},
+		{name: "unmarked dirty description", version: "v1.2.3-12-gabcdef0-dirty", want: "v1.2.3-12-gabcdef0-dirty"},
 		{name: "dev", version: "dev", want: "dev"},
 		{name: "empty", version: "", want: ""},
 		{name: "bare commit", version: "abcdef0", want: "abcdef0"},
@@ -146,10 +146,44 @@ func TestSemverVersionPreservesReleasesAndRecognizesGitDescribe(t *testing.T) {
 	}
 }
 
+func TestSemverVersionOnlyNormalizesMarkedGitDescribe(t *testing.T) {
+	tests := []struct {
+		name    string
+		version string
+		want    string
+	}{
+		{name: "release base", version: "v1.2.3-12-gabcdef0", want: "v1.2.3"},
+		{name: "prerelease base", version: "v1.2.3-rc.1-12-gabcdef0", want: "v1.2.3-rc.1"},
+		{name: "build metadata base", version: "v1.2.3+build.5-12-gabcdef0", want: "v1.2.3+build.5"},
+		{name: "dirty", version: "v1.2.3-12-gabcdef0-dirty", want: "v1.2.3"},
+		{name: "bare clean", version: "ABCDEF0", want: "ABCDEF0"},
+		{name: "bare dirty", version: "ABCDEF0-dirty", want: "ABCDEF0-dirty"},
+		{name: "zero distance rejected", version: "v1.2.3-0-gabcdef0", want: "v1.2.3-0-gabcdef0"},
+		{name: "leading zero distance rejected", version: "v1.2.3-01-gabcdef0", want: "v1.2.3-01-gabcdef0"},
+		{name: "malformed preserved", version: "v1.2-12-gabcdef0", want: "v1.2-12-gabcdef0"},
+		{name: "dev", version: "dev", want: "dev"},
+		{name: "empty", version: "", want: ""},
+	}
+
+	oldVersion, oldSource := Version, VersionSource
+	defer func() { Version, VersionSource = oldVersion, oldSource }()
+	VersionSource = "git-describe"
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Version = tt.version
+			if got := semverVersion(); got != tt.want {
+				t.Fatalf("semverVersion() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestVersionCommandAndBuiltinFlagAgree(t *testing.T) {
-	old := Version
+	old, oldCommit, oldSource := Version, Commit, VersionSource
 	Version = "v1.2.3-rc.1+build.5"
-	defer func() { Version = old }()
+	Commit = ""
+	VersionSource = "release"
+	defer func() { Version, Commit, VersionSource = old, oldCommit, oldSource }()
 
 	var flagOut bytes.Buffer
 	flagRoot := NewRootCommand()
@@ -171,6 +205,7 @@ func TestVersionCommandAndBuiltinFlagAgree(t *testing.T) {
 	var envelope struct {
 		Data struct {
 			Version string `json:"version"`
+			Commit  string `json:"commit"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(jsonOut.Bytes(), &envelope); err != nil {
@@ -179,41 +214,90 @@ func TestVersionCommandAndBuiltinFlagAgree(t *testing.T) {
 	if got, want := strings.TrimSpace(flagOut.String()), envelope.Data.Version; got != want {
 		t.Fatalf("--version = %q, version --json = %q", got, want)
 	}
+
+	var humanOut bytes.Buffer
+	humanRoot := NewRootCommand()
+	humanRoot.SetOut(&humanOut)
+	humanRoot.SetErr(io.Discard)
+	humanRoot.SetArgs([]string{"version", "--human"})
+	if code := ExecuteRoot(humanRoot); code != 0 {
+		t.Fatalf("version --human exit code = %d, want 0", code)
+	}
+	var humanData struct {
+		Version string `json:"version"`
+		Commit  string `json:"commit"`
+	}
+	if err := json.Unmarshal(humanOut.Bytes(), &humanData); err != nil {
+		t.Fatalf("decode human version output: %v\n%s", err, humanOut.String())
+	}
+	if got, want := humanData.Version, envelope.Data.Version; got != want {
+		t.Fatalf("version --human = %q, version --json = %q", got, want)
+	}
+	if got, want := humanData.Commit, envelope.Data.Commit; got != want {
+		t.Fatalf("version --human commit = %q, version --json commit = %q", got, want)
+	}
 }
 
 func TestShortCommitFallback(t *testing.T) {
 	tests := []struct {
-		name    string
-		version string
-		want    string
+		name           string
+		version        string
+		explicitCommit string
+		source         string
+		want           string
 	}{
-		{name: "described release", version: "v1.2.3-12-gabcdef0", want: "abcdef0"},
-		{name: "described prerelease", version: "v1.2.3-rc.1-12-gabcdef0", want: "abcdef0"},
-		{name: "described build metadata", version: "v1.2.3+build.5-12-gabcdef0", want: "abcdef0"},
-		{name: "dirty description", version: "v1.2.3-12-gabcdef0-dirty", want: "abcdef0"},
-		{name: "mixed case hex", version: "v1.2.3-12-gAbCdEf0", want: "AbCdEf0"},
-		{name: "nondecimal count", version: "v1.2.3-many-gabcdef0", want: ""},
-		{name: "nonhex commit", version: "v1.2.3-12-gnothex", want: ""},
-		{name: "malformed version", version: "v1.2-12-gabcdef0", want: ""},
+		{name: "unmarked described release", version: "v1.2.3-12-gabcdef0", want: ""},
+		{name: "described release", version: "v1.2.3-12-gabcdef0", source: "git-describe", want: "abcdef0"},
+		{name: "described prerelease", version: "v1.2.3-rc.1-12-gabcdef0", source: "git-describe", want: "abcdef0"},
+		{name: "described build metadata", version: "v1.2.3+build.5-12-gabcdef0", source: "git-describe", want: "abcdef0"},
+		{name: "dirty description", version: "v1.2.3-12-gabcdef0-dirty", source: "git-describe", want: "abcdef0"},
+		{name: "mixed case hex", version: "v1.2.3-12-gAbCdEf0", source: "git-describe", want: "AbCdEf0"},
+		{name: "bare clean", version: "ABCDEF0", source: "git-describe", want: "ABCDEF0"},
+		{name: "bare dirty", version: "ABCDEF0-dirty", source: "git-describe", want: "ABCDEF0"},
+		{name: "zero distance", version: "v1.2.3-0-gabcdef0", source: "git-describe", want: ""},
+		{name: "leading zero distance", version: "v1.2.3-01-gabcdef0", source: "git-describe", want: ""},
+		{name: "nondecimal count", version: "v1.2.3-many-gabcdef0", source: "git-describe", want: ""},
+		{name: "nonhex commit", version: "v1.2.3-12-gnothex", source: "git-describe", want: ""},
+		{name: "malformed version", version: "v1.2-12-gabcdef0", source: "git-describe", want: ""},
 		{name: "valid prerelease", version: "v1.2.3-rc.1", want: ""},
 		{name: "valid release with build metadata", version: "v1.2.3+build.5", want: ""},
-		{name: "opaque", version: "release-candidate", want: "release-candidate"},
+		{name: "unmarked opaque", version: "release-candidate", want: ""},
 		{name: "dev", version: "dev", want: ""},
 		{name: "empty", version: "", want: ""},
-		{name: "bare commit", version: "abcdef0", want: "abcdef0"},
+		{name: "unmarked bare commit", version: "abcdef0", want: ""},
+		{name: "explicit commit", version: "v1.2.3", explicitCommit: "1234567890abcdef", want: "1234567890ab"},
 	}
 
 	if revision := vcsRevision(); revision != "" {
 		t.Fatalf("unit test binary unexpectedly embeds vcs.revision %q; fallback would be masked", revision)
 	}
-	old := Version
-	defer func() { Version = old }()
+	old, oldCommit, oldSource := Version, Commit, VersionSource
+	defer func() { Version, Commit, VersionSource = old, oldCommit, oldSource }()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			Version = tt.version
+			Commit = tt.explicitCommit
+			VersionSource = tt.source
 			if got := shortCommit(); got != tt.want {
 				t.Fatalf("shortCommit() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestSelectShortCommitPrecedence(t *testing.T) {
+	const (
+		described = "v1.2.3-12-gabcdef0"
+		explicit  = "1111111111111111"
+		revision  = "2222222222222222"
+	)
+	if got, want := selectShortCommit(described, explicit, "git-describe", revision), "111111111111"; got != want {
+		t.Fatalf("explicit commit precedence = %q, want %q", got, want)
+	}
+	if got, want := selectShortCommit(described, "", "git-describe", revision), "222222222222"; got != want {
+		t.Fatalf("build-info revision precedence = %q, want %q", got, want)
+	}
+	if got, want := selectShortCommit(described, "", "git-describe", ""), "abcdef0"; got != want {
+		t.Fatalf("git-describe fallback = %q, want %q", got, want)
 	}
 }

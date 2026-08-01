@@ -80,16 +80,69 @@ func registerVersion(root *cobra.Command) {
 }
 
 func semverVersion() string {
-	if base, _, ok := parseGitDescribe(Version); ok {
-		return base
+	if VersionSource == "git-describe" {
+		if base, _, ok := parseGitDescribe(Version); ok {
+			return base
+		}
 	}
 	return Version
 }
 
-// parseGitDescribe recognizes the output shape produced by
+func shortCommit() string {
+	return selectShortCommit(Version, Commit, VersionSource, vcsRevision())
+}
+
+func selectShortCommit(version, explicitCommit, source, revision string) string {
+	if explicitCommit != "" {
+		return shortenRevision(explicitCommit)
+	}
+	if revision != "" {
+		return shortenRevision(revision)
+	}
+	if source != "git-describe" {
+		return ""
+	}
+	if _, commit, ok := parseGitDescribe(version); ok {
+		return commit
+	}
+	if commit, ok := parseBareGitDescribe(version); ok {
+		return commit
+	}
+	return ""
+}
+
+func shortenRevision(revision string) string {
+	if len(revision) > 12 {
+		return revision[:12]
+	}
+	return revision
+}
+
+func parseBareGitDescribe(value string) (commit string, ok bool) {
+	commit = strings.TrimSuffix(value, "-dirty")
+	if len(commit) < 4 || !allHex(commit) {
+		return "", false
+	}
+	return commit, true
+}
+
+func vcsRevision() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return ""
+	}
+	for _, setting := range info.Settings {
+		if setting.Key == "vcs.revision" {
+			return setting.Value
+		}
+	}
+	return ""
+}
+
+// parseGitDescribe recognizes the long output shape produced by
 // `git describe --tags --dirty --always` when the nearest tag is a
-// v-prefixed semantic version. A plain SemVer prerelease is intentionally not
-// split merely because it contains a hyphen.
+// v-prefixed semantic version. Callers must separately verify that the value
+// has explicit git-describe provenance.
 func parseGitDescribe(value string) (base, commit string, ok bool) {
 	described := value
 	if strings.HasSuffix(described, "-dirty") {
@@ -107,12 +160,18 @@ func parseGitDescribe(value string) (base, commit string, ok bool) {
 	}
 	base = beforeCommit[:countSeparator]
 	count := beforeCommit[countSeparator+1:]
-	if !strings.HasPrefix(base, "v") || !isSemanticVersion(base) || !allDecimal(count) || len(commit) < 4 || !allHex(commit) {
+	if !strings.HasPrefix(base, "v") || !isSemanticVersion(base) || !canonicalPositiveDecimal(count) || len(commit) < 4 || !allHex(commit) {
 		return "", "", false
 	}
 	return base, commit, true
 }
 
+func canonicalPositiveDecimal(value string) bool {
+	return allDecimal(value) && value[0] != '0'
+}
+
+// The helpers below validate the SemVer base of marked git-describe output.
+// Unmarked Version values are never validated or normalized.
 func isSemanticVersion(value string) bool {
 	if strings.HasPrefix(value, "v") {
 		value = strings.TrimPrefix(value, "v")
@@ -199,35 +258,6 @@ func isASCIIDigit(char byte) bool {
 
 func isASCIIAlpha(char byte) bool {
 	return char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z'
-}
-
-func shortCommit() string {
-	if rev := vcsRevision(); rev != "" {
-		if len(rev) > 12 {
-			return rev[:12]
-		}
-		return rev
-	}
-	if _, commit, ok := parseGitDescribe(Version); ok {
-		return commit
-	}
-	if !strings.HasPrefix(Version, "v") && Version != "dev" {
-		return Version
-	}
-	return ""
-}
-
-func vcsRevision() string {
-	info, ok := debug.ReadBuildInfo()
-	if !ok {
-		return ""
-	}
-	for _, setting := range info.Settings {
-		if setting.Key == "vcs.revision" {
-			return setting.Value
-		}
-	}
-	return ""
 }
 
 func ExecuteRoot(root *cobra.Command) int {

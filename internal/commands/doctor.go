@@ -13,8 +13,13 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
-// Version is the build version string. Set via -ldflags at release time.
-var Version = "dev"
+// Build identity values are set via -ldflags. Version is the source value;
+// VersionSource explicitly opts into source-specific display interpretation.
+var (
+	Version       = "dev"
+	Commit        = ""
+	VersionSource = ""
+)
 
 func registerDoctor(root *cobra.Command, m *accounts.Manager) {
 	cmd := &cobra.Command{

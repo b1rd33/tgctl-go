@@ -18,7 +18,11 @@ builds:
       - goos: windows
         goarch: arm64
     ldflags:
-      - -s -w -X github.com/b1rd33/tgctl-go/internal/commands.Version={{.Version}}
+      - >-
+        -s -w
+        -X github.com/b1rd33/tgctl-go/internal/commands.Version={{.Version}}
+        -X github.com/b1rd33/tgctl-go/internal/commands.Commit={{.Commit}}
+        -X github.com/b1rd33/tgctl-go/internal/commands.VersionSource=release
 
 archives:
   - format: tar.gz
