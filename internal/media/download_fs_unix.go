@@ -17,6 +17,7 @@ type fileIdentity struct {
 type anchoredEntry struct {
 	identity fileIdentity
 	regular  bool
+	size     int64
 }
 
 type anchoredDir struct {
@@ -47,6 +48,7 @@ func (d *anchoredDir) lstat(name string) (anchoredEntry, error) {
 	return anchoredEntry{
 		identity: fileIdentity{device: uint64(stat.Dev), inode: stat.Ino},
 		regular:  stat.Mode&unix.S_IFMT == unix.S_IFREG,
+		size:     stat.Size,
 	}, nil
 }
 
@@ -58,6 +60,7 @@ func snapshotOpenFile(file *os.File) (anchoredEntry, error) {
 	return anchoredEntry{
 		identity: fileIdentity{device: uint64(stat.Dev), inode: stat.Ino},
 		regular:  stat.Mode&unix.S_IFMT == unix.S_IFREG,
+		size:     stat.Size,
 	}, nil
 }
 

@@ -32,6 +32,24 @@ var (
 	ErrInvalidLimit               = errors.New("download size limit must not be negative")
 )
 
+// DestinationExistsError reports a no-overwrite collision that was proven to
+// be a regular file using the destination's anchored directory descriptor.
+// FinalPath is the safe logical path; Size is captured from that same no-follow
+// inspection. Callers must not restat FinalPath to classify the collision.
+type DestinationExistsError struct {
+	FinalPath string
+	Size      int64
+}
+
+func (e *DestinationExistsError) Error() string {
+	if e == nil {
+		return ErrDestinationExists.Error()
+	}
+	return fmt.Sprintf("%s: %s", ErrDestinationExists, e.FinalPath)
+}
+
+func (e *DestinationExistsError) Unwrap() error { return ErrDestinationExists }
+
 type destinationState uint8
 
 const (
@@ -555,11 +573,11 @@ func validateFinalTarget(dir *anchoredDir, name, displayPath string, overwrite b
 		}
 		return targetSnapshot{}, fmt.Errorf("inspect download destination: %w", err)
 	}
-	if !overwrite {
-		return targetSnapshot{}, fmt.Errorf("%w: %s", ErrDestinationExists, displayPath)
-	}
 	if !info.regular {
 		return targetSnapshot{}, fmt.Errorf("%w: %s", ErrUnsafeDestination, displayPath)
+	}
+	if !overwrite {
+		return targetSnapshot{}, &DestinationExistsError{FinalPath: displayPath, Size: info.size}
 	}
 	return targetSnapshot{exists: true, identity: info.identity}, nil
 }
@@ -647,7 +665,7 @@ func (d *Destination) publishAbsent(hook func(), collisionSentinel error) (bool,
 			if errors.Is(collisionSentinel, ErrDestinationChanged) {
 				publishErr = d.targetRaceError()
 			} else {
-				publishErr = fmt.Errorf("%w: %s", collisionSentinel, d.FinalPath)
+				publishErr = inspectDestinationCollision(d.dir, d.finalName, d.FinalPath)
 			}
 		}
 		return false, errors.Join(
@@ -659,6 +677,23 @@ func (d *Destination) publishAbsent(hook func(), collisionSentinel error) (bool,
 		return true, errors.Join(ErrCleanupIncomplete, fmt.Errorf("download published but final identity changed: %w", err))
 	}
 	return true, nil
+}
+
+func inspectDestinationCollision(dir *anchoredDir, name, displayPath string) error {
+	entry, err := dir.lstat(name)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("%w: colliding destination disappeared: %s", ErrDestinationChanged, displayPath)
+		}
+		return errors.Join(
+			fmt.Errorf("%w: %s", ErrDestinationChanged, displayPath),
+			fmt.Errorf("inspect colliding destination: %w", err),
+		)
+	}
+	if !entry.regular {
+		return fmt.Errorf("%w: %s", ErrUnsafeDestination, displayPath)
+	}
+	return &DestinationExistsError{FinalPath: displayPath, Size: entry.size}
 }
 
 func (d *Destination) publishOverwrite() (bool, error) {

@@ -169,10 +169,42 @@ func TestOpenDestinationRejectsExistingFinalWithoutOverwrite(t *testing.T) {
 	if err := os.WriteFile(final, []byte("old"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := OpenDestination(dir, "report.pdf", false); !errors.Is(err, ErrDestinationExists) {
+	_, err := OpenDestination(dir, "report.pdf", false)
+	if !errors.Is(err, ErrDestinationExists) {
 		t.Fatalf("OpenDestination error = %v, want ErrDestinationExists", err)
 	}
+	var collision *DestinationExistsError
+	if !errors.As(err, &collision) || collision.FinalPath != final || collision.Size != 3 {
+		t.Fatalf("collision = %#v from %v, want anchored path=%q size=3", collision, err, final)
+	}
 	assertNoParts(t, dir)
+}
+
+func TestOpenDestinationUnsafeCollisionHasNoSafeSnapshot(t *testing.T) {
+	for _, kind := range []string{"directory", "symlink"} {
+		t.Run(kind, func(t *testing.T) {
+			dir := t.TempDir()
+			final := filepath.Join(dir, "unsafe.bin")
+			if kind == "directory" {
+				if err := os.Mkdir(final, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				referent := filepath.Join(t.TempDir(), "referent")
+				if err := os.WriteFile(referent, []byte("victim"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(referent, final); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, err := OpenDestination(dir, "unsafe.bin", false)
+			var collision *DestinationExistsError
+			if !errors.Is(err, ErrUnsafeDestination) || errors.As(err, &collision) {
+				t.Fatalf("error = %v collision=%#v, want unsafe without safe snapshot", err, collision)
+			}
+		})
+	}
 }
 
 func TestOpenDestinationFailurePreservesDirectoryCloseError(t *testing.T) {
@@ -190,6 +222,10 @@ func TestOpenDestinationFailurePreservesDirectoryCloseError(t *testing.T) {
 	_, err := openDestinationWithOps(dir, "result.bin", false, ops)
 	if !errors.Is(err, ErrDestinationExists) || !errors.Is(err, ErrCleanupIncomplete) || !errors.Is(err, injected) {
 		t.Fatalf("OpenDestination error = %v, want exists, cleanup, and close errors", err)
+	}
+	var collision *DestinationExistsError
+	if !errors.As(err, &collision) || collision.FinalPath != final || collision.Size != 3 {
+		t.Fatalf("collision = %#v from %v, want preserved anchored snapshot", collision, err)
 	}
 	if got, readErr := os.ReadFile(final); readErr != nil || string(got) != "old" {
 		t.Fatalf("existing final changed: content=%q err=%v", got, readErr)
@@ -375,8 +411,13 @@ func TestDestinationCommitWithoutOverwriteDoesNotClobberRacedFinal(t *testing.T)
 	if err := os.WriteFile(d.FinalPath, []byte("winner"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.Commit(); !errors.Is(err, ErrDestinationExists) {
-		t.Fatalf("Commit error = %v, want ErrDestinationExists", err)
+	commitErr := d.Commit()
+	if !errors.Is(commitErr, ErrDestinationExists) {
+		t.Fatalf("Commit error = %v, want ErrDestinationExists", commitErr)
+	}
+	var collision *DestinationExistsError
+	if !errors.As(commitErr, &collision) || collision.FinalPath != d.FinalPath || collision.Size != 6 {
+		t.Fatalf("collision = %#v from %v, want anchored winner size=6", collision, commitErr)
 	}
 	got, err := os.ReadFile(d.FinalPath)
 	if err != nil {
@@ -389,6 +430,35 @@ func TestDestinationCommitWithoutOverwriteDoesNotClobberRacedFinal(t *testing.T)
 	if err := d.Abort(); err != nil {
 		t.Fatalf("Abort after failed Commit should be idempotent: %v", err)
 	}
+}
+
+func TestDestinationCommitUnsafeCollisionHasNoSafeSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	d, err := OpenDestination(dir, "race.bin", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.File.Write([]byte("download")); err != nil {
+		t.Fatal(err)
+	}
+	referent := filepath.Join(t.TempDir(), "referent")
+	if err := os.WriteFile(referent, []byte("victim"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d.ops.beforeAbsentPublish = func() {
+		if err := os.Symlink(referent, d.FinalPath); err != nil {
+			t.Fatal(err)
+		}
+	}
+	commitErr := d.Commit()
+	var collision *DestinationExistsError
+	if !errors.Is(commitErr, ErrUnsafeDestination) || errors.As(commitErr, &collision) {
+		t.Fatalf("error = %v collision=%#v, want unsafe without safe snapshot", commitErr, collision)
+	}
+	if got, err := os.ReadFile(referent); err != nil || string(got) != "victim" {
+		t.Fatalf("referent changed: %q %v", got, err)
+	}
+	assertNoParts(t, dir)
 }
 
 func TestDestinationAbsentPublishDoesNotClobberTargetAppearingAfterCapture(t *testing.T) {
@@ -1188,6 +1258,10 @@ func TestDestinationAbsentRestoreFailurePreservesWinnerAndPrivatePart(t *testing
 	commitErr := d.Commit()
 	if !errors.Is(commitErr, ErrDestinationExists) || !errors.Is(commitErr, ErrCleanupIncomplete) || !errors.Is(commitErr, restoreErr) {
 		t.Fatalf("Commit error = %v, want exists, cleanup, and restore errors", commitErr)
+	}
+	var collision *DestinationExistsError
+	if !errors.As(commitErr, &collision) || collision.FinalPath != d.FinalPath || collision.Size != 6 {
+		t.Fatalf("collision = %#v from %v, want preserved anchored winner snapshot", collision, commitErr)
 	}
 	if got, err := os.ReadFile(d.FinalPath); err != nil || string(got) != "winner" {
 		t.Fatalf("winner changed: content=%q err=%v", got, err)

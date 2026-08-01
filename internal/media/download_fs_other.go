@@ -14,6 +14,7 @@ type fileIdentity struct {
 type anchoredEntry struct {
 	identity fileIdentity
 	regular  bool
+	size     int64
 }
 
 type anchoredDir struct{}
@@ -35,7 +36,7 @@ func snapshotOpenFile(file *os.File) (anchoredEntry, error) {
 	if err != nil {
 		return anchoredEntry{}, err
 	}
-	return anchoredEntry{identity: fileIdentity{info: info}, regular: info.Mode().IsRegular()}, nil
+	return anchoredEntry{identity: fileIdentity{info: info}, regular: info.Mode().IsRegular(), size: info.Size()}, nil
 }
 
 func sameFileIdentity(a, b fileIdentity) bool {

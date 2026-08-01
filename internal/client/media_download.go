@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -144,16 +143,24 @@ func (g *GotdClient) DownloadMedia(ctx context.Context, req DownloadMediaReq) (D
 
 	destination, err := opener.Open(absOutputDir, extracted.Filename, req.Overwrite)
 	if err != nil {
-		if !req.Overwrite && errors.Is(err, media.ErrDestinationExists) && !errors.Is(err, media.ErrCleanupIncomplete) {
-			return existingDownloadResponse(resp, filepath.Join(absOutputDir, safeName), err)
+		var collision *media.DestinationExistsError
+		if !req.Overwrite && errors.As(err, &collision) {
+			return collisionDownloadResponse(resp, err)
 		}
 		return DownloadMediaResp{}, err
 	}
 
 	limitWriter := &media.LimitWriter{W: destination, Max: req.MaxBytes}
-	transferErr := downloader.Download(ctx, extracted.File.Location, limitWriter)
-	if transferErr == nil {
-		transferErr = ctx.Err()
+	rawTransferErr := downloader.Download(ctx, extracted.File.Location, limitWriter)
+	ctxErr := ctx.Err()
+	var transferErr error
+	if rawTransferErr != nil {
+		transferErr = mapRPCErr(rawTransferErr)
+		if ctxErr != nil {
+			transferErr = errors.Join(transferErr, ctxErr)
+		}
+	} else {
+		transferErr = ctxErr
 	}
 	if transferErr == nil && extracted.SizeKnown && limitWriter.N != extracted.Size {
 		if limitWriter.N < extracted.Size {
@@ -162,13 +169,17 @@ func (g *GotdClient) DownloadMedia(ctx context.Context, req DownloadMediaReq) (D
 			transferErr = fmt.Errorf("downloaded %d bytes, authoritative size is %d", limitWriter.N, extracted.Size)
 		}
 	}
+	if transferErr == nil {
+		transferErr = ctx.Err()
+	}
 	if transferErr != nil {
 		return DownloadMediaResp{}, abortDownload(destination, transferErr)
 	}
 
 	if err := destination.Commit(); err != nil {
-		if !req.Overwrite && errors.Is(err, media.ErrDestinationExists) && !errors.Is(err, media.ErrCleanupIncomplete) {
-			return existingDownloadResponse(resp, destination.FinalPath(), err)
+		var collision *media.DestinationExistsError
+		if !req.Overwrite && errors.As(err, &collision) {
+			return collisionDownloadResponse(resp, err)
 		}
 		return DownloadMediaResp{}, abortDownload(destination, err)
 	}
@@ -185,16 +196,16 @@ func abortDownload(destination downloadDestination, primary error) error {
 	return errors.Join(primary, cleanupErr)
 }
 
-func existingDownloadResponse(resp DownloadMediaResp, finalPath string, collisionErr error) (DownloadMediaResp, error) {
-	info, err := os.Lstat(finalPath)
-	if err != nil {
-		return DownloadMediaResp{}, errors.Join(collisionErr, fmt.Errorf("inspect existing download: %w", err))
+func collisionDownloadResponse(resp DownloadMediaResp, collisionErr error) (DownloadMediaResp, error) {
+	if errors.Is(collisionErr, media.ErrCleanupIncomplete) {
+		return DownloadMediaResp{}, collisionErr
 	}
-	if !info.Mode().IsRegular() {
-		return DownloadMediaResp{}, errors.Join(collisionErr, fmt.Errorf("%w: %s", media.ErrUnsafeDestination, finalPath))
+	var collision *media.DestinationExistsError
+	if !errors.As(collisionErr, &collision) {
+		return DownloadMediaResp{}, collisionErr
 	}
-	resp.Path = finalPath
-	resp.Bytes = info.Size()
+	resp.Path = collision.FinalPath
+	resp.Bytes = collision.Size
 	resp.Skipped = true
 	return resp, nil
 }

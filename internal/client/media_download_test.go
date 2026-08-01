@@ -21,6 +21,7 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/store"
 	"github.com/gotd/td/telegram/query/messages"
 	"github.com/gotd/td/tg"
+	"github.com/gotd/td/tgerr"
 )
 
 func TestDownloadMediaContractAndFake(t *testing.T) {
@@ -638,6 +639,55 @@ func TestGotdDownloadMediaExistingRegularSkipsWithoutDownloading(t *testing.T) {
 	assertNoDownloadArtifacts(t, outputDir)
 }
 
+func TestGotdDownloadMediaInitialCollisionUsesAnchoredSnapshotAfterSwap(t *testing.T) {
+	for _, swapKind := range []string{"final", "parent"} {
+		t.Run(swapKind, func(t *testing.T) {
+			message := documentMessageWithSize(34, -1, "text/plain", &tg.DocumentAttributeFilename{FileName: "existing.txt"})
+			g, outputDir, downloader := downloadTestClient(t, message, []byte("unused"))
+			if err := os.MkdirAll(outputDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			final := filepath.Join(outputDir, "existing.txt")
+			if err := os.WriteFile(final, []byte("old"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			victim := filepath.Join(t.TempDir(), "victim")
+			if err := os.WriteFile(victim, []byte("outside victim data"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			g.destinationOpener = swapAfterCollisionOpener{swap: func() { swapCollisionPath(t, swapKind, outputDir, final) }}
+
+			got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 34, OutputDir: outputDir})
+			if err != nil || !got.Skipped || got.Path != final || got.Bytes != 3 {
+				t.Fatalf("response=%#v error=%v, want anchored original size=3", got, err)
+			}
+			if downloader.Calls() != 0 {
+				t.Fatalf("downloader calls = %d", downloader.Calls())
+			}
+			assertFileState(t, victim, "outside victim data", 0o600)
+		})
+	}
+}
+
+func TestGotdDownloadMediaCollisionCleanupFailureIsNotSkipped(t *testing.T) {
+	message := documentMessageWithSize(39, -1, "text/plain", &tg.DocumentAttributeFilename{FileName: "existing.txt"})
+	g, _, downloader := downloadTestClient(t, message, []byte("unused"))
+	cleanupErr := errors.New("close anchored directory failed")
+	g.destinationOpener = fakeDestinationOpener{err: errors.Join(
+		&media.DestinationExistsError{FinalPath: "/logical/existing.txt", Size: 3},
+		media.ErrCleanupIncomplete,
+		cleanupErr,
+	)}
+	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 39, OutputDir: t.TempDir()})
+	var collision *media.DestinationExistsError
+	if got.Skipped || !errors.As(err, &collision) || !errors.Is(err, media.ErrCleanupIncomplete) || !errors.Is(err, cleanupErr) {
+		t.Fatalf("response=%#v error=%v collision=%#v, want collision+cleanup error without skip", got, err, collision)
+	}
+	if downloader.Calls() != 0 {
+		t.Fatalf("downloader calls = %d", downloader.Calls())
+	}
+}
+
 func TestGotdDownloadMediaOverwriteSuccessAndFailuresPreserveOriginal(t *testing.T) {
 	transferErr := errors.New("transfer failed")
 	for _, tc := range []struct {
@@ -731,6 +781,74 @@ func TestGotdDownloadMediaCollisionDuringTransferReturnsSafeSkip(t *testing.T) {
 	}
 	assertFileState(t, final, "winner", 0o640)
 	assertNoDownloadArtifacts(t, outputDir)
+}
+
+func TestGotdDownloadMediaCommitCollisionUsesAnchoredSnapshotAfterSwap(t *testing.T) {
+	for _, swapKind := range []string{"final", "parent"} {
+		t.Run(swapKind, func(t *testing.T) {
+			message := documentMessageWithSize(35, -1, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "race.bin"})
+			outputDir := filepath.Join(t.TempDir(), "downloads")
+			final := filepath.Join(outputDir, "race.bin")
+			victim := filepath.Join(t.TempDir(), "victim")
+			if err := os.WriteFile(victim, []byte("outside victim data"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			downloader := &recordingFileDownloader{chunks: [][]byte{[]byte("loser")}, afterWrite: func() error {
+				return os.WriteFile(final, []byte("winner"), 0o600)
+			}}
+			g, _, _ := downloadTestClientAt(t, message, downloader, outputDir)
+			g.destinationOpener = swapCommitCollisionOpener{swap: func() { swapCollisionPath(t, swapKind, outputDir, final) }}
+
+			got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 35, OutputDir: outputDir})
+			if err != nil || !got.Skipped || got.Path != final || got.Bytes != 6 {
+				t.Fatalf("response=%#v error=%v, want anchored winner size=6", got, err)
+			}
+			assertFileState(t, victim, "outside victim data", 0o600)
+		})
+	}
+}
+
+func TestGotdDownloadMediaMapsTransferRPCErrors(t *testing.T) {
+	message := documentMessageWithSize(36, -1, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "rpc.bin"})
+	g, outputDir, _ := downloadTestClientWithDownloader(t, message, &recordingFileDownloader{err: tgerr.New(420, "FLOOD_WAIT_7")})
+	_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 36, OutputDir: outputDir})
+	var floodWait *safety.FloodWait
+	if !errors.As(err, &floodWait) || floodWait.Seconds != 7 {
+		t.Fatalf("error = %T %v, want FloodWait(7)", err, err)
+	}
+	assertDownloadDirClean(t, outputDir, "rpc.bin")
+}
+
+func TestGotdDownloadMediaJoinsConcurrentCancellationAndMappedTransferError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	message := documentMessageWithSize(37, -1, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "cancel-rpc.bin"})
+	downloader := &recordingFileDownloader{
+		chunks:     [][]byte{[]byte("partial")},
+		afterWrite: func() error { cancel(); return nil },
+		err:        tgerr.New(420, "FLOOD_WAIT_8"),
+	}
+	g, outputDir, _ := downloadTestClientWithDownloader(t, message, downloader)
+	_, err := g.DownloadMedia(ctx, DownloadMediaReq{ChatID: 321, MessageID: 37, OutputDir: outputDir})
+	var floodWait *safety.FloodWait
+	if !errors.As(err, &floodWait) || floodWait.Seconds != 8 || !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %T %v, want FloodWait(8) joined with canceled", err, err)
+	}
+	assertDownloadDirClean(t, outputDir, "cancel-rpc.bin")
+}
+
+func TestGotdDownloadMediaCancellationAfterSuccessfulStreamAbortsBeforeCommit(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	message := documentMessageWithSize(38, 4, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "cancel-after.bin"})
+	downloader := &recordingFileDownloader{
+		chunks:     [][]byte{[]byte("data")},
+		afterWrite: func() error { cancel(); return nil },
+	}
+	g, outputDir, _ := downloadTestClientWithDownloader(t, message, downloader)
+	_, err := g.DownloadMedia(ctx, DownloadMediaReq{ChatID: 321, MessageID: 38, OutputDir: outputDir})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want context.Canceled", err)
+	}
+	assertDownloadDirClean(t, outputDir, "cancel-after.bin")
 }
 
 func TestGotdDownloadMediaRelativeOutputAndTraversalNameStayContained(t *testing.T) {
@@ -991,6 +1109,64 @@ type fakeDestinationOpener struct {
 
 func (o fakeDestinationOpener) Open(string, string, bool) (downloadDestination, error) {
 	return o.destination, o.err
+}
+
+type swapAfterCollisionOpener struct{ swap func() }
+
+func (o swapAfterCollisionOpener) Open(dir, name string, overwrite bool) (downloadDestination, error) {
+	destination, err := (atomicDestinationOpener{}).Open(dir, name, overwrite)
+	if errors.Is(err, media.ErrDestinationExists) {
+		o.swap()
+	}
+	return destination, err
+}
+
+type swapCommitCollisionOpener struct{ swap func() }
+
+func (o swapCommitCollisionOpener) Open(dir, name string, overwrite bool) (downloadDestination, error) {
+	destination, err := (atomicDestinationOpener{}).Open(dir, name, overwrite)
+	if err != nil {
+		return nil, err
+	}
+	return &swapCommitCollisionDestination{downloadDestination: destination, swap: o.swap}, nil
+}
+
+type swapCommitCollisionDestination struct {
+	downloadDestination
+	swap func()
+}
+
+func (d *swapCommitCollisionDestination) Commit() error {
+	err := d.downloadDestination.Commit()
+	if errors.Is(err, media.ErrDestinationExists) {
+		d.swap()
+	}
+	return err
+}
+
+func swapCollisionPath(t *testing.T, kind, outputDir, final string) {
+	t.Helper()
+	switch kind {
+	case "final":
+		if err := os.Rename(final, final+".anchored"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(final, []byte("replacement path data"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	case "parent":
+		if err := os.Rename(outputDir, outputDir+".anchored"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(outputDir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(final, []byte("replacement path data"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	default:
+		t.Fatalf("unknown swap kind %q", kind)
+	}
 }
 
 func photoMessage(id int64) *tg.Message {
