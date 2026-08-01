@@ -9,7 +9,10 @@ import (
 // FakeClient is the test double for the Client interface. It records every
 // call and lets tests assert on the captured arguments.
 type FakeClient struct {
-	downloadMu sync.Mutex
+	// mu protects all fields during FakeClient method calls. Test setup may
+	// populate the public configuration fields before concurrent use; callers
+	// must not mutate those fields directly while calls are in flight.
+	mu sync.Mutex
 
 	Me           User
 	NextErr      error
@@ -59,6 +62,7 @@ type FakeClient struct {
 	NextMessageID int64
 }
 
+// record is called only while mu is held by the public fake method.
 func (f *FakeClient) record(name string) error {
 	f.Calls = append(f.Calls, name)
 	if f.NextErr != nil {
@@ -70,6 +74,8 @@ func (f *FakeClient) record(name string) error {
 }
 
 func (f *FakeClient) GetMe(_ context.Context) (User, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("GetMe"); err != nil {
 		return User{}, err
 	}
@@ -80,6 +86,8 @@ func (f *FakeClient) GetMe(_ context.Context) (User, error) {
 }
 
 func (f *FakeClient) SendMessage(_ context.Context, req SendMessageReq) (SendMessageResp, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("SendMessage"); err != nil {
 		return SendMessageResp{}, err
 	}
@@ -92,6 +100,8 @@ func (f *FakeClient) SendMessage(_ context.Context, req SendMessageReq) (SendMes
 }
 
 func (f *FakeClient) UploadFile(_ context.Context, req UploadFileReq) (UploadFileResp, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("UploadFile"); err != nil {
 		return UploadFileResp{}, err
 	}
@@ -104,8 +114,8 @@ func (f *FakeClient) UploadFile(_ context.Context, req UploadFileReq) (UploadFil
 }
 
 func (f *FakeClient) DownloadMedia(_ context.Context, req DownloadMediaReq) (DownloadMediaResp, error) {
-	f.downloadMu.Lock()
-	defer f.downloadMu.Unlock()
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("DownloadMedia"); err != nil {
 		return DownloadMediaResp{}, err
 	}
@@ -114,6 +124,8 @@ func (f *FakeClient) DownloadMedia(_ context.Context, req DownloadMediaReq) (Dow
 }
 
 func (f *FakeClient) EditMessage(_ context.Context, req EditMessageReq) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("EditMessage"); err != nil {
 		return err
 	}
@@ -122,6 +134,8 @@ func (f *FakeClient) EditMessage(_ context.Context, req EditMessageReq) error {
 }
 
 func (f *FakeClient) Forward(_ context.Context, req ForwardReq) (ForwardResp, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("Forward"); err != nil {
 		return ForwardResp{}, err
 	}
@@ -134,6 +148,8 @@ func (f *FakeClient) Forward(_ context.Context, req ForwardReq) (ForwardResp, er
 }
 
 func (f *FakeClient) Pin(_ context.Context, req PinReq) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("Pin"); err != nil {
 		return err
 	}
@@ -142,6 +158,8 @@ func (f *FakeClient) Pin(_ context.Context, req PinReq) error {
 }
 
 func (f *FakeClient) React(_ context.Context, req ReactReq) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("React"); err != nil {
 		return err
 	}
@@ -150,6 +168,8 @@ func (f *FakeClient) React(_ context.Context, req ReactReq) error {
 }
 
 func (f *FakeClient) MarkRead(_ context.Context, req MarkReadReq) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("MarkRead"); err != nil {
 		return err
 	}
@@ -158,6 +178,8 @@ func (f *FakeClient) MarkRead(_ context.Context, req MarkReadReq) error {
 }
 
 func (f *FakeClient) DeleteMessages(_ context.Context, req DeleteMessagesReq) (DeleteMessagesResp, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("DeleteMessages"); err != nil {
 		return DeleteMessagesResp{}, err
 	}
@@ -166,6 +188,8 @@ func (f *FakeClient) DeleteMessages(_ context.Context, req DeleteMessagesReq) (D
 }
 
 func (f *FakeClient) LeaveChat(_ context.Context, req LeaveChatReq) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("LeaveChat"); err != nil {
 		return err
 	}
@@ -174,6 +198,8 @@ func (f *FakeClient) LeaveChat(_ context.Context, req LeaveChatReq) error {
 }
 
 func (f *FakeClient) BlockUser(_ context.Context, req BlockUserReq) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("BlockUser"); err != nil {
 		return err
 	}
@@ -182,6 +208,8 @@ func (f *FakeClient) BlockUser(_ context.Context, req BlockUserReq) error {
 }
 
 func (f *FakeClient) UnblockUser(_ context.Context, req BlockUserReq) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("UnblockUser"); err != nil {
 		return err
 	}
@@ -190,6 +218,8 @@ func (f *FakeClient) UnblockUser(_ context.Context, req BlockUserReq) error {
 }
 
 func (f *FakeClient) ListSessions(_ context.Context) ([]SessionRef, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("ListSessions"); err != nil {
 		return nil, err
 	}
@@ -197,6 +227,8 @@ func (f *FakeClient) ListSessions(_ context.Context) ([]SessionRef, error) {
 }
 
 func (f *FakeClient) TerminateSession(_ context.Context, req TerminateSessionReq) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("TerminateSession"); err != nil {
 		return err
 	}
@@ -205,6 +237,8 @@ func (f *FakeClient) TerminateSession(_ context.Context, req TerminateSessionReq
 }
 
 func (f *FakeClient) DiscoverDialogs(_ context.Context, limit int) ([]ChatInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("DiscoverDialogs"); err != nil {
 		return nil, err
 	}
@@ -213,6 +247,8 @@ func (f *FakeClient) DiscoverDialogs(_ context.Context, limit int) ([]ChatInfo, 
 }
 
 func (f *FakeClient) SyncContacts(_ context.Context) ([]ContactInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("SyncContacts"); err != nil {
 		return nil, err
 	}
@@ -221,6 +257,8 @@ func (f *FakeClient) SyncContacts(_ context.Context) ([]ContactInfo, error) {
 }
 
 func (f *FakeClient) BackfillMessages(_ context.Context, req BackfillReq) ([]BackfillMessage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("BackfillMessages"); err != nil {
 		return nil, err
 	}
@@ -229,6 +267,8 @@ func (f *FakeClient) BackfillMessages(_ context.Context, req BackfillReq) ([]Bac
 }
 
 func (f *FakeClient) ListTopics(_ context.Context, chatID int64, limit int, query string) ([]TopicInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("ListTopics"); err != nil {
 		return nil, err
 	}
@@ -236,6 +276,8 @@ func (f *FakeClient) ListTopics(_ context.Context, chatID int64, limit int, quer
 }
 
 func (f *FakeClient) CreateTopic(_ context.Context, req CreateTopicReq) (CreateTopicResp, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("CreateTopic"); err != nil {
 		return CreateTopicResp{}, err
 	}
@@ -248,6 +290,8 @@ func (f *FakeClient) CreateTopic(_ context.Context, req CreateTopicReq) (CreateT
 }
 
 func (f *FakeClient) EditTopic(_ context.Context, req EditTopicReq) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("EditTopic"); err != nil {
 		return err
 	}
@@ -256,6 +300,8 @@ func (f *FakeClient) EditTopic(_ context.Context, req EditTopicReq) error {
 }
 
 func (f *FakeClient) PinTopic(_ context.Context, req PinTopicReq) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("PinTopic"); err != nil {
 		return err
 	}
@@ -264,6 +310,8 @@ func (f *FakeClient) PinTopic(_ context.Context, req PinTopicReq) error {
 }
 
 func (f *FakeClient) ListFolders(_ context.Context) ([]FolderInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("ListFolders"); err != nil {
 		return nil, err
 	}
@@ -271,6 +319,8 @@ func (f *FakeClient) ListFolders(_ context.Context) ([]FolderInfo, error) {
 }
 
 func (f *FakeClient) UpdateFolder(_ context.Context, req FolderUpdateReq) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("UpdateFolder"); err != nil {
 		return err
 	}
@@ -279,6 +329,8 @@ func (f *FakeClient) UpdateFolder(_ context.Context, req FolderUpdateReq) error 
 }
 
 func (f *FakeClient) DeleteFolder(_ context.Context, id int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("DeleteFolder"); err != nil {
 		return err
 	}
@@ -287,6 +339,8 @@ func (f *FakeClient) DeleteFolder(_ context.Context, id int64) error {
 }
 
 func (f *FakeClient) ReorderFolders(_ context.Context, ids []int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("ReorderFolders"); err != nil {
 		return err
 	}
@@ -296,6 +350,8 @@ func (f *FakeClient) ReorderFolders(_ context.Context, ids []int64) error {
 }
 
 func (f *FakeClient) ListPinnedDialogs(_ context.Context, chatID int64) ([]ChatInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("ListPinnedDialogs"); err != nil {
 		return nil, err
 	}
@@ -304,6 +360,8 @@ func (f *FakeClient) ListPinnedDialogs(_ context.Context, chatID int64) ([]ChatI
 }
 
 func (f *FakeClient) AdminAction(_ context.Context, req AdminActionReq) (InviteLinkResp, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("AdminAction"); err != nil {
 		return InviteLinkResp{}, err
 	}
@@ -312,6 +370,8 @@ func (f *FakeClient) AdminAction(_ context.Context, req AdminActionReq) (InviteL
 }
 
 func (f *FakeClient) ListChatMembers(_ context.Context, chatID int64, limit int) ([]MemberInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("ListChatMembers"); err != nil {
 		return nil, err
 	}
@@ -319,6 +379,8 @@ func (f *FakeClient) ListChatMembers(_ context.Context, chatID int64, limit int)
 }
 
 func (f *FakeClient) GetChatsInfo(_ context.Context, ids []int64) ([]ChatInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("GetChatsInfo"); err != nil {
 		return nil, err
 	}
@@ -333,6 +395,8 @@ func (f *FakeClient) GetChatsInfo(_ context.Context, ids []int64) ([]ChatInfo, e
 }
 
 func (f *FakeClient) ListenOnce(_ context.Context) (ListenEvent, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := f.record("ListenOnce"); err != nil {
 		return ListenEvent{}, err
 	}
@@ -352,6 +416,8 @@ func (f *FakeClient) ListenOnce(_ context.Context) (ListenEvent, error) {
 }
 
 func (f *FakeClient) Close() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.Closed = true
 	return nil
 }

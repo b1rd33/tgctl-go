@@ -120,6 +120,15 @@ func extractDownloadMedia(message *tg.Message) (extractedDownloadMedia, error) {
 		if !ok || photo == nil {
 			return extractedDownloadMedia{}, safety.NewBadArgs("message has no downloadable photo")
 		}
+		if err := validateNoTypedNil("photo sizes", photo.Sizes); err != nil {
+			return extractedDownloadMedia{}, err
+		}
+		if err := validateNoTypedNil("photo video sizes", photo.VideoSizes); err != nil {
+			return extractedDownloadMedia{}, err
+		}
+		if media.Video != nil && isTypedNil(media.Video) {
+			return extractedDownloadMedia{}, safety.NewBadArgs("photo contains a malformed video document")
+		}
 		file, ok := (messages.Elem{Msg: message}).File()
 		if !ok {
 			return extractedDownloadMedia{}, safety.NewBadArgs("message photo has no downloadable file")
@@ -139,8 +148,23 @@ func extractDownloadMedia(message *tg.Message) (extractedDownloadMedia, error) {
 		if !ok || document == nil {
 			return extractedDownloadMedia{}, safety.NewBadArgs("message has no downloadable document")
 		}
+		if err := validateNoTypedNil("document attributes", document.Attributes); err != nil {
+			return extractedDownloadMedia{}, err
+		}
+		if err := validateNoTypedNil("document thumbnails", document.Thumbs); err != nil {
+			return extractedDownloadMedia{}, err
+		}
+		if err := validateNoTypedNil("document video thumbnails", document.VideoThumbs); err != nil {
+			return extractedDownloadMedia{}, err
+		}
+		if err := validateNoTypedNil("alternative documents", media.AltDocuments); err != nil {
+			return extractedDownloadMedia{}, err
+		}
+		if media.VideoCover != nil && isTypedNil(media.VideoCover) {
+			return extractedDownloadMedia{}, safety.NewBadArgs("document contains a malformed video cover")
+		}
 
-		mediaType, filename, err := classifyDocument(document.Attributes)
+		mediaType, filename, err := classifyDocument(media, document.Attributes)
 		if err != nil {
 			return extractedDownloadMedia{}, err
 		}
@@ -166,8 +190,13 @@ func extractDownloadMedia(message *tg.Message) (extractedDownloadMedia, error) {
 	}
 }
 
-func classifyDocument(attributes []tg.DocumentAttributeClass) (mediaType, filename string, err error) {
+func classifyDocument(media *tg.MessageMediaDocument, attributes []tg.DocumentAttributeClass) (mediaType, filename string, err error) {
 	var roundVideo, video, voice, audio, sticker, animated bool
+	if media != nil {
+		roundVideo = media.Round
+		video = media.Video
+		voice = media.Voice
+	}
 	for _, attribute := range attributes {
 		if isTypedNil(attribute) {
 			return "", "", safety.NewBadArgs("document contains a malformed attribute")
@@ -190,23 +219,34 @@ func classifyDocument(attributes []tg.DocumentAttributeClass) (mediaType, filena
 		}
 	}
 
+	// Telegram's semantic attributes outrank its generic content flags. Round
+	// video is the one exception because it is itself the most specific form.
 	switch {
 	case roundVideo:
 		mediaType = "video_note"
-	case video:
-		mediaType = "video"
-	case voice:
-		mediaType = "voice"
-	case audio:
-		mediaType = "audio"
 	case sticker:
 		mediaType = "sticker"
 	case animated:
 		mediaType = "animation"
+	case voice:
+		mediaType = "voice"
+	case video:
+		mediaType = "video"
+	case audio:
+		mediaType = "audio"
 	default:
 		mediaType = "document"
 	}
 	return mediaType, filename, nil
+}
+
+func validateNoTypedNil[T any](name string, values []T) error {
+	for _, value := range values {
+		if isTypedNil(any(value)) {
+			return safety.NewBadArgs("%s contain a malformed value", name)
+		}
+	}
+	return nil
 }
 
 func isTypedNil(value any) bool {

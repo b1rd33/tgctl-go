@@ -50,15 +50,35 @@ func TestDownloadMediaContractAndFake(t *testing.T) {
 }
 
 func TestFakeClientDownloadMediaConcurrentRecording(t *testing.T) {
-	fake := &FakeClient{}
+	fake := &FakeClient{Me: User{ID: 1}, ListenEvents: []ListenEvent{{UpdateKind: "message"}}}
 	const calls = 32
 	var wg sync.WaitGroup
 	for i := 0; i < calls; i++ {
-		wg.Add(1)
+		wg.Add(6)
 		go func(id int64) {
 			defer wg.Done()
 			_, _ = fake.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 1, MessageID: id})
 		}(int64(i + 1))
+		go func(id int64) {
+			defer wg.Done()
+			_, _ = fake.SendMessage(context.Background(), SendMessageReq{ChatID: 1, Text: "concurrent"})
+		}(int64(i + 1))
+		go func() {
+			defer wg.Done()
+			_, _ = fake.GetMe(context.Background())
+		}()
+		go func() {
+			defer wg.Done()
+			_, _ = fake.ListFolders(context.Background())
+		}()
+		go func() {
+			defer wg.Done()
+			_, _ = fake.ListenOnce(context.Background())
+		}()
+		go func() {
+			defer wg.Done()
+			_ = fake.React(context.Background(), ReactReq{ChatID: 1, MessageID: 1})
+		}()
 	}
 	wg.Wait()
 	if len(fake.Downloads) != calls {
@@ -149,22 +169,54 @@ func TestExtractDownloadMediaClassification(t *testing.T) {
 }
 
 func TestExtractDownloadMediaAttributePrecedenceIsOrderIndependent(t *testing.T) {
-	attrs := []tg.DocumentAttributeClass{
-		&tg.DocumentAttributeAnimated{},
-		&tg.DocumentAttributeFilename{FileName: "mixed.bin"},
-		&tg.DocumentAttributeSticker{},
-		&tg.DocumentAttributeAudio{Voice: true},
-		&tg.DocumentAttributeVideo{},
-		&tg.DocumentAttributeVideo{RoundMessage: true},
+	tests := []struct {
+		name  string
+		attrs []tg.DocumentAttributeClass
+		want  string
+	}{
+		{name: "animation beats generic video", attrs: []tg.DocumentAttributeClass{&tg.DocumentAttributeAnimated{}, &tg.DocumentAttributeVideo{}}, want: "animation"},
+		{name: "sticker beats generic video", attrs: []tg.DocumentAttributeClass{&tg.DocumentAttributeSticker{}, &tg.DocumentAttributeVideo{}}, want: "sticker"},
+		{name: "sticker beats animation", attrs: []tg.DocumentAttributeClass{&tg.DocumentAttributeSticker{}, &tg.DocumentAttributeAnimated{}}, want: "sticker"},
+		{name: "round video beats sticker and animation", attrs: []tg.DocumentAttributeClass{&tg.DocumentAttributeVideo{RoundMessage: true}, &tg.DocumentAttributeSticker{}, &tg.DocumentAttributeAnimated{}}, want: "video_note"},
+		{name: "voice beats generic audio", attrs: []tg.DocumentAttributeClass{&tg.DocumentAttributeAudio{}, &tg.DocumentAttributeAudio{Voice: true}}, want: "voice"},
 	}
-	for _, ordered := range [][]tg.DocumentAttributeClass{attrs, reverseAttributes(attrs)} {
-		got, err := extractDownloadMedia(documentMessage(21, "application/octet-stream", ordered...))
-		if err != nil {
-			t.Fatal(err)
+	for _, tt := range tests {
+		for _, ordered := range [][]tg.DocumentAttributeClass{tt.attrs, reverseAttributes(tt.attrs)} {
+			t.Run(tt.name, func(t *testing.T) {
+				got, err := extractDownloadMedia(documentMessage(21, "application/octet-stream", ordered...))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got.MediaType != tt.want {
+					t.Fatalf("metadata = %#v, want %s", got, tt.want)
+				}
+			})
 		}
-		if got.MediaType != "video_note" || got.Filename != "mixed.bin" {
-			t.Fatalf("metadata = %#v, want video_note and Telegram filename", got)
-		}
+	}
+}
+
+func TestExtractDownloadMediaUsesMediaFlagsAsSemanticFallback(t *testing.T) {
+	tests := []struct {
+		name string
+		set  func(*tg.MessageMediaDocument)
+		want string
+	}{
+		{name: "round", set: func(m *tg.MessageMediaDocument) { m.Round = true }, want: "video_note"},
+		{name: "voice", set: func(m *tg.MessageMediaDocument) { m.Voice = true }, want: "voice"},
+		{name: "video", set: func(m *tg.MessageMediaDocument) { m.Video = true }, want: "video"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			message := documentMessage(22, "application/octet-stream")
+			tt.set(message.Media.(*tg.MessageMediaDocument))
+			got, err := extractDownloadMedia(message)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.MediaType != tt.want {
+				t.Fatalf("media type = %q, want %q", got.MediaType, tt.want)
+			}
+		})
 	}
 }
 
@@ -175,6 +227,23 @@ func TestExtractDownloadMediaMalformedIsBadArgsWithoutPanic(t *testing.T) {
 	var typedNilDocument *tg.Document
 	var typedNilPhoto *tg.Photo
 	var typedNilFilename *tg.DocumentAttributeFilename
+	var typedNilPhotoSize *tg.PhotoSize
+	var typedNilCachedSize *tg.PhotoCachedSize
+	var typedNilProgressiveSize *tg.PhotoSizeProgressive
+	var typedNilPathSize *tg.PhotoPathSize
+	var typedNilDocumentThumb *tg.PhotoSize
+	var typedNilVideoThumb *tg.VideoSize
+	var typedNilAltDocument *tg.Document
+	var typedNilVideoCover *tg.Photo
+	validSize := &tg.PhotoSize{Type: "x", W: 100, H: 100, Size: 42}
+	documentWithNilThumb := documentMessage(2, "application/pdf")
+	documentWithNilThumb.Media.(*tg.MessageMediaDocument).Document.(*tg.Document).Thumbs = []tg.PhotoSizeClass{typedNilDocumentThumb}
+	documentWithNilVideoThumb := documentMessage(3, "video/mp4", &tg.DocumentAttributeVideo{})
+	documentWithNilVideoThumb.Media.(*tg.MessageMediaDocument).Document.(*tg.Document).VideoThumbs = []tg.VideoSizeClass{typedNilVideoThumb}
+	documentWithNilAlt := documentMessage(4, "video/mp4", &tg.DocumentAttributeVideo{})
+	documentWithNilAlt.Media.(*tg.MessageMediaDocument).AltDocuments = []tg.DocumentClass{typedNilAltDocument}
+	documentWithNilCover := documentMessage(5, "video/mp4", &tg.DocumentAttributeVideo{})
+	documentWithNilCover.Media.(*tg.MessageMediaDocument).VideoCover = typedNilVideoCover
 
 	tests := []struct {
 		name string
@@ -192,6 +261,14 @@ func TestExtractDownloadMediaMalformedIsBadArgsWithoutPanic(t *testing.T) {
 		{name: "typed nil photo", msg: &tg.Message{Media: &tg.MessageMediaPhoto{Photo: typedNilPhoto}}},
 		{name: "photo without downloadable size", msg: &tg.Message{Media: &tg.MessageMediaPhoto{Photo: &tg.Photo{ID: 1}}}},
 		{name: "typed nil attribute", msg: documentMessage(1, "application/pdf", typedNilFilename)},
+		{name: "typed nil photo size", msg: photoMessageWithSizes(1, validSize, typedNilPhotoSize)},
+		{name: "typed nil cached size", msg: photoMessageWithSizes(1, validSize, typedNilCachedSize)},
+		{name: "typed nil progressive size", msg: photoMessageWithSizes(1, validSize, typedNilProgressiveSize)},
+		{name: "other typed nil photo size", msg: photoMessageWithSizes(1, validSize, typedNilPathSize)},
+		{name: "typed nil document thumb", msg: documentWithNilThumb},
+		{name: "typed nil document video thumb", msg: documentWithNilVideoThumb},
+		{name: "typed nil alternative document", msg: documentWithNilAlt},
+		{name: "typed nil video cover", msg: documentWithNilCover},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -343,9 +420,11 @@ func TestGotdDownloadMediaResolvesExtractsThenStopsWithoutFilesystemMutation(t *
 }
 
 func photoMessage(id int64) *tg.Message {
-	return &tg.Message{Media: &tg.MessageMediaPhoto{Photo: &tg.Photo{
-		ID: id, Sizes: []tg.PhotoSizeClass{&tg.PhotoSize{Type: "x", W: 100, H: 100, Size: 42}},
-	}}}
+	return photoMessageWithSizes(id, &tg.PhotoSize{Type: "x", W: 100, H: 100, Size: 42})
+}
+
+func photoMessageWithSizes(id int64, sizes ...tg.PhotoSizeClass) *tg.Message {
+	return &tg.Message{Media: &tg.MessageMediaPhoto{Photo: &tg.Photo{ID: id, Sizes: sizes}}}
 }
 
 func documentMessage(id int64, mime string, attrs ...tg.DocumentAttributeClass) *tg.Message {
