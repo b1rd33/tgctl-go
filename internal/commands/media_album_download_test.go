@@ -155,6 +155,72 @@ func TestDownloadAlbumOverwriteBypassesCachedArtifactSkip(t *testing.T) {
 	}
 }
 
+func TestDownloadAlbumClientCloseFailureIsCommittedWithBoundedRecovery(t *testing.T) {
+	cfg, fake, dir := setupWriteEnv(t)
+	mediaType := "photo"
+	seedAlbumRows(t, filepath.Join(dir, "telegram.sqlite"),
+		store.Message{ChatID: 1, MessageID: 101, GroupedID: 802, Date: "2026-08-01T00:00:01Z", HasMedia: true, MediaType: &mediaType},
+		store.Message{ChatID: 1, MessageID: 102, GroupedID: 802, Date: "2026-08-01T00:00:02Z", HasMedia: true, MediaType: &mediaType},
+	)
+	output := filepath.Join(dir, "album-close")
+	if err := os.MkdirAll(output, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	fake.DownloadResponses = []client.DownloadMediaResp{
+		albumArtifact(t, output, 101, "photo"),
+		albumArtifact(t, output, 102, "photo"),
+	}
+	fake.CloseErr = errors.New("client close failed")
+	out, code := runRoot(t, cfg, "download-album", "1", "--grouped-id", "802", "--output", output, "--allow-write", "--json")
+	if code == 0 {
+		t.Fatalf("code=%d, want committed failure\nout=%s", code, out)
+	}
+	for _, fragment := range []string{`"committed":true`, `"chat_id":1`, `"item_count":2`, `"message_ids":[101,102]`} {
+		if !strings.Contains(out, fragment) {
+			t.Fatalf("output missing %s: %s", fragment, out)
+		}
+	}
+	if containsAny(out, output, "client close failed") {
+		t.Fatalf("unsafe close recovery output: %s", out)
+	}
+}
+
+func TestDownloadAlbumDurableAuditFailureIsCommittedWithBoundedRecovery(t *testing.T) {
+	cfg, fake, dir := setupWriteEnv(t)
+	paths := cfg.Paths.(stubPaths)
+	blocker := filepath.Join(dir, "audit-blocker")
+	if err := os.WriteFile(blocker, []byte("block"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	paths.audit = filepath.Join(blocker, "audit.log")
+	cfg.Paths = paths
+	mediaType := "photo"
+	seedAlbumRows(t, filepath.Join(dir, "telegram.sqlite"),
+		store.Message{ChatID: 1, MessageID: 111, GroupedID: 803, Date: "2026-08-01T00:00:01Z", HasMedia: true, MediaType: &mediaType},
+		store.Message{ChatID: 1, MessageID: 112, GroupedID: 803, Date: "2026-08-01T00:00:02Z", HasMedia: true, MediaType: &mediaType},
+	)
+	output := filepath.Join(dir, "album-audit")
+	if err := os.MkdirAll(output, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	fake.DownloadResponses = []client.DownloadMediaResp{
+		albumArtifact(t, output, 111, "photo"),
+		albumArtifact(t, output, 112, "photo"),
+	}
+	out, code := runRoot(t, cfg, "download-album", "1", "--grouped-id", "803", "--output", output, "--allow-write", "--json")
+	if code != 1 || !strings.Contains(out, `"committed":true`) {
+		t.Fatalf("code=%d out=%s", code, out)
+	}
+	for _, fragment := range []string{`"chat_id":1`, `"item_count":2`, `"message_ids":[111,112]`} {
+		if !strings.Contains(out, fragment) {
+			t.Fatalf("output missing %s: %s", fragment, out)
+		}
+	}
+	if containsAny(out, output, blocker) {
+		t.Fatalf("unsafe audit recovery output: %s", out)
+	}
+}
+
 func TestDownloadAlbumRejectsAmbiguousAnchorBeforePathsOrClient(t *testing.T) {
 	paths := &downloadGatePaths{root: t.TempDir()}
 	calls := 0

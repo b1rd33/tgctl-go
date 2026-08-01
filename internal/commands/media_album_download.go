@@ -105,7 +105,7 @@ func downloadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 			recoveryExtras := map[string]any{}
 			code := dispatch.Run(name, dispatch.Options{
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
-				AuditPath: auditPath, Args: auditArgs, CommittedExtras: recoveryExtras,
+				AuditPath: auditPath, Args: auditArgs, DurableAudit: !wargs.DryRun, CommittedExtras: recoveryExtras,
 			}, func(ctx context.Context) (any, error) {
 				readDB, err := openAlbumDB(paths.dbPath, wargs.DryRun)
 				if err != nil {
@@ -208,7 +208,6 @@ func downloadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 					_ = telegramClient.Close()
 					return nil, err
 				}
-				defer cacheDB.Close()
 				canceled := false
 				cacheFinalizationFailed := false
 				for i, row := range rows {
@@ -273,18 +272,25 @@ func downloadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 						result.Downloaded++
 					}
 				}
-				if closeErr := telegramClient.Close(); closeErr != nil {
-					result.Partial = true
+				clientCloseErr := telegramClient.Close()
+				cacheCloseErr := cacheDB.Close()
+				if clientCloseErr != nil || cacheCloseErr != nil {
+					setAlbumRecoveryExtras(recoveryExtras, chatID, rows, result)
+					return nil, safety.NewCommittedWriteWithExtras(
+						"album media committed but finalization failed; do not retry blindly",
+						errors.New("album media finalization failed"), recoveryExtras,
+					)
 				}
 				if canceled {
 					return nil, context.Canceled
 				}
 				if cacheFinalizationFailed {
-					recoveryExtras["chat_id"] = chatID
-					recoveryExtras["item_count"] = result.ItemCount
-					recoveryExtras["failed"] = result.Failed
+					setAlbumRecoveryExtras(recoveryExtras, chatID, rows, result)
 					return nil, safety.NewCommittedWriteWithExtras("album media committed but local cache finalization failed; do not retry blindly", errors.New("local cache finalization failed"), recoveryExtras)
 				}
+				// Keep bounded recovery metadata available if dispatch later finds
+				// that the durable audit append failed after the media/cache commit.
+				setAlbumRecoveryExtras(recoveryExtras, chatID, rows, result)
 				return result, nil
 			})
 			storeExitCode(cmd, code)
@@ -298,6 +304,37 @@ func downloadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 	cmd.Flags().Bool("overwrite", false, "Overwrite existing media files")
 	addDownloadAlbumWriteFlags(cmd)
 	return cmd
+}
+
+const maxAlbumRecoveryMessageIDs = 10
+
+// setAlbumRecoveryExtras records only bounded identifiers and counters after
+// media files or cache rows have committed. Paths, captions, and raw client
+// errors are intentionally excluded from committed envelopes and audit lines.
+func setAlbumRecoveryExtras(extras map[string]any, chatID int64, rows []store.Message, result downloadAlbumResult) {
+	extras["chat_id"] = chatID
+	extras["item_count"] = len(rows)
+	ids := make([]int64, 0, minInt(len(rows), maxAlbumRecoveryMessageIDs))
+	for _, row := range rows {
+		if len(ids) == maxAlbumRecoveryMessageIDs {
+			break
+		}
+		ids = append(ids, row.MessageID)
+	}
+	extras["message_ids"] = ids
+	if result.GroupedID != 0 {
+		extras["grouped_id"] = result.GroupedID
+	}
+	extras["downloaded"] = result.Downloaded
+	extras["skipped"] = result.Skipped
+	extras["failed"] = result.Failed
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func addDownloadAlbumWriteFlags(cmd *cobra.Command) {
