@@ -13,6 +13,7 @@ docs-commands:
 	output="$$(mktemp docs/.commands.md.tmp.XXXXXX)"; \
 	go build -ldflags "-X github.com/b1rd33/tgctl-go/internal/commands.Version=$(VERSION)" -o "$$work/tg" ./cmd/tg; \
 	TGCTL_DOCS_BINARY="$$work/tg" go run ./tools/gen_commands_md/main.go > "$$output"; \
+	chmod 0644 "$$output"; \
 	mv "$$output" docs/commands.md
 
 docs-commands-check:

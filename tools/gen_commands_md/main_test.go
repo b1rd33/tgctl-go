@@ -132,6 +132,15 @@ func TestDocsCommandsTargetsBuildCurrentSourceWithoutRepositoryBinary(t *testing
 				if !bytes.Equal(after, before) {
 					t.Fatal("docs-commands-check modified docs/commands.md")
 				}
+				if target == "docs-commands" {
+					info, err := os.Stat(reference)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if got := info.Mode().Perm(); got != 0o644 {
+						t.Fatalf("published mode = %04o, want 0644", got)
+					}
+				}
 				entries, err := os.ReadDir(temporaryRoot)
 				if err != nil {
 					t.Fatal(err)
@@ -148,6 +157,44 @@ func TestDocsCommandsTargetsBuildCurrentSourceWithoutRepositoryBinary(t *testing
 				}
 			})
 		}
+	}
+}
+
+func TestDocsCommandsCreatesMissingReferenceWithRepositoryMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Make recipe uses a POSIX shell")
+	}
+	if _, err := exec.LookPath("make"); err != nil {
+		t.Skip("make is not installed")
+	}
+
+	repository := copyTrackedRepository(t)
+	reference := filepath.Join(repository, "docs", "commands.md")
+	want, err := os.ReadFile(reference)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(reference); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("make", "docs-commands")
+	cmd.Dir = repository
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("standalone docs-commands: %v\n%s", err, output)
+	}
+	got, err := os.ReadFile(reference)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatal("newly generated command reference differs from current source")
+	}
+	info, err := os.Stat(reference)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Fatalf("new reference mode = %04o, want 0644", got)
 	}
 }
 
