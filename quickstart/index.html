@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -725,41 +725,68 @@
 
 <h1 id="quickstart">Quickstart<a class="headerlink" href="#quickstart" title="Permanent link">&para;</a></h1>
 <p>Five commands to feel out the surface.</p>
+<p>Examples use synthetic environment placeholders. Set these from your own
+account before running them:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_ACCOUNT_NAME</span><span class="o">=</span><span class="s2">&quot;test&quot;</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_CHAT_ID</span><span class="o">=</span><span class="s2">&quot;&lt;chat-id-from-your-own-account&gt;&quot;</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_MESSAGE_ID</span><span class="o">=</span><span class="s2">&quot;&lt;message-id-containing-media&gt;&quot;</span>
+</span></code></pre></div>
 <h2 id="1-sync-a-fast-view-of-your-dialogs">1. Sync a fast view of your dialogs<a class="headerlink" href="#1-sync-a-fast-view-of-your-dialogs" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>tg<span class="w"> </span>discover
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_ACCOUNT_NAME</span><span class="s2">&quot;</span><span class="w"> </span>discover<span class="w"> </span>--allow-write
 </span></code></pre></div>
 <p>Pulls every chat you have access to (DMs, groups, channels) into the
 local SQLite cache. Just metadata — names, types, ids — not messages.
 Fast.</p>
 <h2 id="2-populate-the-entity-cache">2. Populate the entity cache<a class="headerlink" href="#2-populate-the-entity-cache" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>tg<span class="w"> </span>backfill-entities
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_ACCOUNT_NAME</span><span class="s2">&quot;</span><span class="w"> </span>backfill-entities<span class="w"> </span>--allow-write
 </span></code></pre></div>
-<p>This stores Telegram access hashes in <code>accounts/default/telegram.sqlite</code>
+<p>This stores Telegram access hashes in
+<code>accounts/&lt;account-name&gt;/telegram.sqlite</code>
 so chat-id-keyed writes work without resolving a username first.</p>
 <h2 id="3-pull-recent-messages">3. Pull recent messages<a class="headerlink" href="#3-pull-recent-messages" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>tg<span class="w"> </span>backfill<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--max-messages<span class="w"> </span><span class="m">100</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_ACCOUNT_NAME</span><span class="s2">&quot;</span><span class="w"> </span>backfill<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_CHAT_ID</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--max-messages<span class="w"> </span><span class="m">100</span><span class="w"> </span>--allow-write
 </span></code></pre></div>
-<p>Pulls recent messages from your own chat into local SQLite. Use your
-own <code>user_id</code> for Saved Messages, or replace it with another
-<code>&lt;your-chat-id&gt;</code>.</p>
+<p>Pulls recent messages from your selected account into local SQLite. Set
+<code>TG_CHAT_ID</code> to a chat ID from your own account. <code>backfill</code> changes the
+local cache, so it requires <code>--allow-write</code>.</p>
 <p>For media:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>tg<span class="w"> </span>backfill<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--max-messages<span class="w"> </span><span class="m">100</span><span class="w"> </span>--download-media
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_ACCOUNT_NAME</span><span class="s2">&quot;</span><span class="w"> </span>backfill<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_CHAT_ID</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--max-messages<span class="w"> </span><span class="m">100</span><span class="w"> </span>--download-media<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--max-media-size-mb<span class="w"> </span><span class="m">100</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
-<p>Adds photos / voice notes / video / document files into
-<code>accounts/default/media/&lt;chat_id&gt;/</code>.</p>
+<p>Adds supported file media into
+<code>accounts/&lt;account-name&gt;/media/&lt;chat-id&gt;/</code>. An item that exceeds the
+per-file limit is counted as failed with a safe warning while the remaining
+backfill continues. Use <code>--overwrite-media</code> only when replacing existing
+files is intentional.</p>
+<p>To download a single message's media instead:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_ACCOUNT_NAME</span><span class="s2">&quot;</span><span class="w"> </span>download-media<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="s2">&quot;</span><span class="nv">$TG_CHAT_ID</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_MESSAGE_ID</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--allow-write<span class="w"> </span>--max-size-mb<span class="w"> </span><span class="m">100</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><code>TG_ACCOUNT_NAME</code>, <code>TG_CHAT_ID</code>, and <code>TG_MESSAGE_ID</code> are deliberately
+synthetic placeholders that you set from your own account. The default output
+is account-scoped; <code>--output &lt;directory&gt;</code> selects another directory. Files are
+written through a private part file and published atomically. Without
+<code>--overwrite</code>, an anchored regular file already at the final name is returned
+as <code>skipped: true</code>; this is not a content-hash comparison. With <code>--overwrite</code>,
+the CLI uses a safe atomic replacement or fails without a non-atomic fallback.</p>
 <h2 id="4-search-what-youve-cached">4. Search what you've cached<a class="headerlink" href="#4-search-what-youve-cached" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>tg<span class="w"> </span>search<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="s2">&quot;shipping&quot;</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">20</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_ACCOUNT_NAME</span><span class="s2">&quot;</span><span class="w"> </span>search<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_CHAT_ID</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;shipping&quot;</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">20</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p>Substring search across cached message text. Returns a JSON envelope
 with hits, chat ids, dates, and message ids.</p>
 <h2 id="5-send-a-message">5. Send a message<a class="headerlink" href="#5-send-a-message" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>tg<span class="w"> </span>send<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="s2">&quot;hello from tgctl-go&quot;</span><span class="w"> </span>--allow-write
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_ACCOUNT_NAME</span><span class="s2">&quot;</span><span class="w"> </span>send<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_CHAT_ID</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="s2">&quot;hello from tgctl-go&quot;</span><span class="w"> </span>--allow-write
 </span></code></pre></div>
 <p>The <code>--allow-write</code> flag is required for any message that hits
 Telegram. Without it the command exits with a clear error — this is
 the <a href="../safety/">write gate</a>.</p>
 <p>For multi-line text:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nb">printf</span><span class="w"> </span><span class="s1">&#39;line one\nline two\n&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tg<span class="w"> </span>send<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>-<span class="w"> </span>--allow-write
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nb">printf</span><span class="w"> </span><span class="s1">&#39;line one\nline two\n&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tg<span class="w"> </span>--account<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_ACCOUNT_NAME</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>send<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_CHAT_ID</span><span class="s2">&quot;</span><span class="w"> </span>-<span class="w"> </span>--allow-write
 </span></code></pre></div>
 <h2 id="what-now">What now?<a class="headerlink" href="#what-now" title="Permanent link">&para;</a></h2>
 <ul>
@@ -771,19 +798,28 @@ the <a href="../safety/">write gate</a>.</p>
 <h2 id="agent-ready-first-run">Agent-ready first run<a class="headerlink" href="#agent-ready-first-run" title="Permanent link">&para;</a></h2>
 <p>Use an isolated account name while testing agents. <code>accounts-add</code> is a
 command; <code>--account test</code> is the global flag that selects that account.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>tg<span class="w"> </span>accounts-add<span class="w"> </span><span class="nb">test</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>login
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>me
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>backfill-entities
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>discover<span class="w"> </span>--allow-write
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>stats
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>send<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="s2">&quot;hello from test account&quot;</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>tg<span class="w"> </span>accounts-add<span class="w"> </span><span class="nb">test</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>login
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>me
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>backfill-entities<span class="w"> </span>--allow-write
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>discover<span class="w"> </span>--allow-write
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>stats
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>send<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_CHAT_ID</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;hello from the sandbox account&quot;</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p>If login fails with <code>TG_API_ID and TG_API_HASH must be set</code>, run the
 command from the directory containing <code>.env</code>, or export the variables.
 See <a href="../install/#troubleshooting">Install</a>.</p>
 <p>For agents, keep <code>--account test</code> explicit instead of switching the
 default account. That makes every subprocess call self-contained.</p>
+<p>Account selection is deterministic: <code>--account</code> wins over <code>TG_ACCOUNT</code>,
+which wins over the persisted <code>accounts/.current</code> selector, followed by the
+<code>default</code> fallback.</p>
+<p><code>--read-only</code> (or <code>TG_READONLY=1</code>) is stronger than omitting
+<code>--allow-write</code>: it blocks Telegram writes and local state writes or creation,
+including account paths, databases, sessions, and audit logs.</p>
+<p>If a bulk media backfill reports an error with <code>committed: true</code>, inspect its
+bounded recovery metadata and the reported paths before retrying. Some files
+may already be durable even though database or client finalization failed.</p>
 
 
 
@@ -873,7 +909,7 @@ default account. That makes every subprocess call self-contained.</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "search.highlight", "search.share", "search.suggest", "content.code.copy", "content.code.annotate", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

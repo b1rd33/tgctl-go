@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -876,7 +876,7 @@ with isolated stores per account.</p>
 <li>gotd <code>tg.session</code> (auth token)</li>
 <li><code>telegram.sqlite</code> (cached messages)</li>
 <li><code>audit.log</code> (write trail)</li>
-<li><code>media/</code> (downloaded photos / voice / video / documents)</li>
+<li><code>media/</code> (downloaded file-backed Telegram media)</li>
 <li><code>tg.session.lock</code> (concurrent-process guard)</li>
 </ul>
 <p>This means a write you make as <code>work</code> cannot leak into <code>personal</code>'s
@@ -900,8 +900,9 @@ doesn't affect the other.</p>
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>└── ...
 </span></code></pre></div>
 <p>If you don't use <code>accounts-add</code>, everything lives at
-<code>accounts/default/</code>. The account name <code>default</code> is reserved
-and auto-created on first run.</p>
+<code>accounts/default/</code>. The account name <code>default</code> is reserved and is
+auto-created by the first permitted writable operation. Read-only mode never
+creates it.</p>
 <h2 id="commands">Commands<a class="headerlink" href="#commands" title="Permanent link">&para;</a></h2>
 <h3 id="tg-accounts-add-name"><code>tg accounts-add &lt;name&gt;</code><a class="headerlink" href="#tg-accounts-add-name" title="Permanent link">&para;</a></h3>
 <p>Creates a new isolated account directory.</p>
@@ -935,34 +936,34 @@ an explicit <code>--account</code> uses this one.</p>
 <h3 id="tg-accounts-remove-name"><code>tg accounts-remove &lt;name&gt;</code><a class="headerlink" href="#tg-accounts-remove-name" title="Permanent link">&para;</a></h3>
 <p>Delete an account directory. Permanent — back up the files first
 if you want them.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>tg<span class="w"> </span>accounts-remove<span class="w"> </span>old-test-account
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>tg<span class="w"> </span>accounts-remove<span class="w"> </span>old-test-account<span class="w"> </span>--confirm<span class="w"> </span>old-test-account
 </span></code></pre></div>
 <h3 id="tg-import-telethon-session-path"><code>tg import-telethon-session &lt;path&gt;</code><a class="headerlink" href="#tg-import-telethon-session-path" title="Permanent link">&para;</a></h3>
 <p>Adopt a Python <code>tgctl</code> / Telethon session as the current Go account's
 session.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>tg<span class="w"> </span>import-telethon-session<span class="w"> </span>~/path/to/tg-cli/accounts/default/tg.session
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>tg<span class="w"> </span>import-telethon-session<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TELETHON_SESSION_PATH</span><span class="s2">&quot;</span>
 </span></code></pre></div>
 <p>Run <code>tg me</code> after import to verify the adopted account.</p>
 <h2 id="selecting-an-account-at-command-time">Selecting an account at command time<a class="headerlink" href="#selecting-an-account-at-command-time" title="Permanent link">&para;</a></h2>
-<p>Three precedence rules, highest first:</p>
+<p>Account selection has one exact precedence order, highest first:</p>
 <ol>
 <li><code>--account &lt;name&gt;</code> flag on the command</li>
 <li><code>TG_ACCOUNT=&lt;name&gt;</code> environment variable</li>
 <li>The current selector at <code>accounts/.current</code></li>
 <li>Falls back to <code>default</code></li>
 </ol>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>tg<span class="w"> </span>--account<span class="w"> </span>work<span class="w"> </span>send<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="w"> </span>--allow-write
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>tg<span class="w"> </span>--account<span class="w"> </span>work<span class="w"> </span>send<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_CHAT_ID</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="w"> </span>--allow-write
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nv">TG_ACCOUNT</span><span class="o">=</span>work<span class="w"> </span>tg<span class="w"> </span>me
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>tg<span class="w"> </span>accounts-use<span class="w"> </span>work<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>tg<span class="w"> </span>me
 </span></code></pre></div>
 <h2 id="test-account-walkthrough">Test account walkthrough<a class="headerlink" href="#test-account-walkthrough" title="Permanent link">&para;</a></h2>
 <p>For agent development, create a separate account directory and keep the
 account selector explicit:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nb">cd</span><span class="w"> </span>/Users/christiannikolov/Projects/tgctl-go
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nb">cd</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TGCTL_GO_CHECKOUT</span><span class="s2">&quot;</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>tg<span class="w"> </span>accounts-add<span class="w"> </span><span class="nb">test</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>login
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>me
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>backfill-entities
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>backfill-entities<span class="w"> </span>--allow-write
 </span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>discover<span class="w"> </span>--allow-write
 </span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>stats
 </span></code></pre></div>
@@ -973,8 +974,8 @@ account selector explicit:</p>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>accounts/test/media/
 </span></code></pre></div>
 <p>Then test self-chat read/write:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>send<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="s2">&quot;hello from test account&quot;</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>show<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">5</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>send<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_CHAT_ID</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;hello from the sandbox account&quot;</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>show<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_CHAT_ID</span><span class="s2">&quot;</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">5</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p>If you rely on <code>.env</code>, run these from the directory containing <code>.env</code>.
 If you run from <code>~/accounts/test</code> or another directory, export
@@ -982,6 +983,17 @@ If you run from <code>~/accounts/test</code> or another directory, export
 <p>Agents should usually use <code>--account test</code> on every call. Use
 <code>accounts-use test</code> only for interactive shell work where changing the
 default account is intentional.</p>
+<p>The default destination for <code>download-media</code> and media-enabled <code>backfill</code> is
+also selected-account scoped:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>accounts/&lt;account-name&gt;/media/&lt;chat-id&gt;/
+</span></code></pre></div>
+<p><code>download-media --output &lt;directory&gt;</code> overrides that destination for one
+call. Account selection still controls which session, cache, and audit log are
+used.</p>
+<p><code>--read-only</code> and <code>TG_READONLY=1</code> prevent both Telegram writes and local-state
+writes or creation. They therefore do not create a missing account directory,
+database, session, audit log, or media directory, even if <code>--allow-write</code> is
+also present.</p>
 <h2 id="recommended-use-cases">Recommended use cases<a class="headerlink" href="#recommended-use-cases" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Personal + business split</strong> — keep work DMs in <code>accounts/work/</code> and your
@@ -1088,7 +1100,7 @@ default account is intentional.</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "search.highlight", "search.share", "search.suggest", "content.code.copy", "content.code.annotate", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

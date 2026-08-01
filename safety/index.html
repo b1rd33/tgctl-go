@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -462,10 +462,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#the-pipeline" class="md-nav__link">
+  <a href="#telegram-side-write-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The pipeline
+        Telegram-side write pipeline
       
     </span>
   </a>
@@ -576,6 +576,17 @@
     <span class="md-ellipsis">
       
         Handling FloodWait
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dry-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dry-run
       
     </span>
   </a>
@@ -682,10 +693,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#the-pipeline" class="md-nav__link">
+  <a href="#telegram-side-write-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The pipeline
+        Telegram-side write pipeline
       
     </span>
   </a>
@@ -803,6 +814,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#dry-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dry-run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#see-also" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -839,49 +861,101 @@ agent that sends, forwards, or deletes the wrong thing has real
 consequences — friends DM'd in error, messages permanently gone,
 chats abandoned. The safety model is designed for that threat:
 <em>the operator is a script that may be wrong</em>.</p>
-<h2 id="the-pipeline">The pipeline<a class="headerlink" href="#the-pipeline" title="Permanent link">&para;</a></h2>
-<p>Every write command passes through these gates in order:</p>
+<h2 id="telegram-side-write-pipeline">Telegram-side write pipeline<a class="headerlink" href="#telegram-side-write-pipeline" title="Permanent link">&para;</a></h2>
+<p>Ordinary Telegram-side write commands use the shared <code>writes.Run</code> pipeline in
+this order:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>parse args
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>   ↓
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>write gate: --allow-write or TG_READONLY rejection
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>write gate: --read-only rejection, then --allow-write requirement
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>   ↓
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>destructive gate (if applicable): typed --confirm &lt;id&gt;
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>idempotency lookup: a committed replay returns before resolution
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>   ↓
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>fuzzy gate: --fuzzy required for non-int / non-@username selectors
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>selector gate: --fuzzy if needed, then resolve from the local cache
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>   ↓
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>dry-run short-circuit: print would-do envelope, exit 0
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>   ↓
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>local rate limiter (token bucket: 20 outbound / 60s default)
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>local sliding-window limiter: 20 outbound writes / 60s default
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>   ↓
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>audit_pre: NDJSON entry with shared request_id
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>   ↓
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>Telegram call
 </span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>   ↓
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>audit_post: NDJSON entry with same request_id + result
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>idempotency record
 </span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>   ↓
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>emit success / fail envelope
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>final dispatch audit + success / fail envelope
 </span></code></pre></div>
+<p>Typed destructive commands add an earlier read-only preflight: enforce the
+write and fuzzy gates, select the account, resolve the target once from the
+cache, and validate <code>--confirm</code>. The pipeline then consumes that immutable
+target rather than resolving again. Confirmation therefore precedes dry-run,
+idempotency replay, audit writes, writable database or session access, and
+Telegram client construction.</p>
+<p>Local mutation commands such as <code>backfill</code> and <code>download-media</code> do <strong>not</strong> use
+this full Telegram-write pipeline. They select an account, enforce
+<code>--read-only</code> and <code>--allow-write</code>, and perform command-specific validation.
+Operations that reach dispatch finalize through a durable outcome audit, so an
+append failure is surfaced rather than ignored. These commands do not inherit
+the pipeline's idempotency lookup, dry-run,
+outbound-write limiter, or Telegram pre-call audit.</p>
 <h2 id="write-gate-allow-write">Write gate (<code>--allow-write</code>)<a class="headerlink" href="#write-gate-allow-write" title="Permanent link">&para;</a></h2>
-<p>Any command that hits Telegram requires <code>--allow-write</code> per
-invocation.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>tg<span class="w"> </span>send<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="s2">&quot;hi&quot;</span><span class="w">                  </span><span class="c1"># → exit 6: WRITE_DISALLOWED</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>tg<span class="w"> </span>send<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="s2">&quot;hi&quot;</span><span class="w"> </span>--allow-write<span class="w">    </span><span class="c1"># → sends</span>
+<p>Every Telegram-side write and every command that mutates the local cache
+requires <code>--allow-write</code> per invocation. Read commands do not.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_ACCOUNT_NAME</span><span class="s2">&quot;</span><span class="w"> </span>send<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_CHAT_ID</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;hi&quot;</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># → exit 6: WRITE_DISALLOWED</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_ACCOUNT_NAME</span><span class="s2">&quot;</span><span class="w"> </span>send<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_CHAT_ID</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;hi&quot;</span><span class="w"> </span>--allow-write
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># → sends</span>
 </span></code></pre></div>
 <p>To globally lock down a session against any write:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_READONLY</span><span class="o">=</span><span class="m">1</span>
 </span></code></pre></div>
-<p>This rejects writes even with <code>--allow-write</code> flagged. Use this in
-scripts that are supposed to be pure-read.</p>
+<p>This rejects writes even with <code>--allow-write</code> flagged. It also prevents local
+state mutation or creation: account directories, SQLite databases and
+migrations, session state, audit logs, and startup migrations remain untouched.
+Telegram reads use read-only session storage.</p>
+<p><code>--allow-write</code> is permission for the requested operation. For example,
+<code>backfill</code> and <code>download-media</code> require it because they update local state.</p>
 <h2 id="destructive-gate-typed-confirm-id">Destructive gate (typed <code>--confirm &lt;id&gt;</code>)<a class="headerlink" href="#destructive-gate-typed-confirm-id" title="Permanent link">&para;</a></h2>
-<p>Destructive commands (<code>delete-msg</code>, <code>leave-chat</code>, <code>block-user</code>,
-<code>promote</code>, <code>demote</code>, <code>ban-from-chat</code>, <code>kick</code>, <code>terminate-session</code>)
-require <code>--confirm &lt;id&gt;</code> matching the <strong>resolved</strong> id, not just a flag.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>tg<span class="w"> </span>delete-msg<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="m">99</span><span class="w"> </span>--allow-write<span class="w">                    </span><span class="c1"># → exit 7: NEEDS_CONFIRM</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>tg<span class="w"> </span>delete-msg<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="m">99</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">1240314255</span>
+<p>Destructive commands require <code>--confirm &lt;id&gt;</code> matching their typed target,
+not just a flag. Confirmation is checked before dry-run, idempotency replay,
+audit writes, writable database/session access, or creation of a Telegram
+client.</p>
+<table>
+<thead>
+<tr>
+<th>Commands</th>
+<th>Confirmation target</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>delete-msg</code>, <code>leave-chat</code>, <code>promote</code>, <code>demote</code></td>
+<td>resolved <code>chat_id</code></td>
+</tr>
+<tr>
+<td><code>block-user</code>, <code>unblock-user</code>, <code>ban-from-chat</code>, <code>kick</code></td>
+<td>resolved <code>user_id</code></td>
+</tr>
+<tr>
+<td><code>folder-delete</code></td>
+<td><code>folder_id</code></td>
+</tr>
+<tr>
+<td><code>terminate-session</code></td>
+<td><code>session_hash</code></td>
+</tr>
+</tbody>
+</table>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_ACCOUNT_NAME</span><span class="s2">&quot;</span><span class="w"> </span>delete-msg<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_CHAT_ID</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_MESSAGE_ID</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--allow-write
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># → exit 7: NEEDS_CONFIRM</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_ACCOUNT_NAME</span><span class="s2">&quot;</span><span class="w"> </span>delete-msg<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_CHAT_ID</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_MESSAGE_ID</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_CHAT_ID</span><span class="s2">&quot;</span>
 </span></code></pre></div>
-<p>This catches the "agent meant to delete in Hamid's chat but resolver
-matched Hamburg supergroup" failure mode that bare-flag confirms
-allow.</p>
+<p>Omitting confirmation returns <code>NEEDS_CONFIRM</code> (exit 7). Supplying a value
+that does not match the resolved target returns <code>BAD_ARGS</code> (exit 2). Both are
+checked before Telegram or local-state writes.</p>
+<p>This catches the failure mode where an agent intended one chat but a fuzzy
+selector resolved to another.</p>
 <h2 id="fuzzy-gate-fuzzy">Fuzzy gate (<code>--fuzzy</code>)<a class="headerlink" href="#fuzzy-gate-fuzzy" title="Permanent link">&para;</a></h2>
 <p>Chat selectors resolve via three strategies in order:</p>
 <ol>
@@ -890,38 +964,48 @@ allow.</p>
 <li><strong>Fuzzy substring on cached chat title</strong> — allowed for reads,
    <strong>rejected for writes unless <code>--fuzzy</code> is passed</strong></li>
 </ol>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>tg<span class="w"> </span>show<span class="w"> </span>Hambu<span class="w"> </span>--limit<span class="w"> </span><span class="m">5</span><span class="w">                    </span><span class="c1"># ← reads OK with fuzzy match</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>tg<span class="w"> </span>send<span class="w"> </span>Hambu<span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="w"> </span>--allow-write<span class="w">          </span><span class="c1"># ← exit 2 BAD_ARGS without --fuzzy</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>tg<span class="w"> </span>send<span class="w"> </span>Hambu<span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="w"> </span>--allow-write<span class="w"> </span>--fuzzy<span class="w">  </span><span class="c1"># ← OK</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_ACCOUNT_NAME</span><span class="s2">&quot;</span><span class="w"> </span>show<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_TITLE_FRAGMENT</span><span class="s2">&quot;</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">5</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_ACCOUNT_NAME</span><span class="s2">&quot;</span><span class="w"> </span>send<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_TITLE_FRAGMENT</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="w"> </span>--allow-write
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># → exit 2: BAD_ARGS without --fuzzy</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_ACCOUNT_NAME</span><span class="s2">&quot;</span><span class="w"> </span>send<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_TITLE_FRAGMENT</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--allow-write<span class="w"> </span>--fuzzy
 </span></code></pre></div>
 <p>The point is to make agents commit to fuzzy resolution at call site
 rather than silently accepting whatever the title-match returned.
 For reads it doesn't matter; for writes you can't recover.</p>
 <h2 id="idempotency-keys">Idempotency keys<a class="headerlink" href="#idempotency-keys" title="Permanent link">&para;</a></h2>
-<p>Every write command accepts <code>--idempotency-key &lt;name&gt;</code>. If the same
-key + same command was previously committed, the cached result
-envelope is returned <strong>without</strong> re-calling Telegram.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>tg<span class="w"> </span>send<span class="w"> </span><span class="m">1240314255</span><span class="w"> </span><span class="s2">&quot;ack&quot;</span><span class="w"> </span>--allow-write<span class="w"> </span>--idempotency-key<span class="w"> </span>reply-99-2026-05-09
+<p>Telegram write commands that expose <code>--idempotency-key &lt;name&gt;</code> cache committed
+results. If the same key and command are retried, the cached result envelope is
+returned <strong>without</strong> re-calling Telegram.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_ACCOUNT_NAME</span><span class="s2">&quot;</span><span class="w"> </span>send<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_CHAT_ID</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;ack&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--allow-write<span class="w"> </span>--idempotency-key<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_IDEMPOTENCY_KEY</span><span class="s2">&quot;</span>
 </span></code></pre></div>
 <p>Use case: an LLM-drafted reply pipeline that retries after
 <code>FLOOD_WAIT</code> (<code>exit 5</code>). The first attempt sends; the retry sees
 the cached envelope and returns the prior <code>message_id</code> — no double-send.</p>
 <p>The cache is per-account, in <code>accounts/&lt;name&gt;/telegram.sqlite</code>'s
 <code>tg_idempotency</code> table. Same key reused for a <em>different</em> command
-raises <code>BAD_ARGS</code>.</p>
+raises <code>BAD_ARGS</code>. For typed-confirmation commands, the key is also bound to
+the stable operation identity: resolved peer plus confirmation slot/value.
+Reusing it for another destination or confirmed target raises <code>BAD_ARGS</code>
+instead of replaying the earlier operation.</p>
 <h2 id="audit-log">Audit log<a class="headerlink" href="#audit-log" title="Permanent link">&para;</a></h2>
-<p>Every write generates <strong>two NDJSON entries</strong> in <code>audit.log</code>:</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span><span class="nt">&quot;ts&quot;</span><span class="p">:</span><span class="s2">&quot;2026-05-09T11:18:21Z&quot;</span><span class="p">,</span><span class="nt">&quot;phase&quot;</span><span class="p">:</span><span class="s2">&quot;before&quot;</span><span class="p">,</span><span class="nt">&quot;request_id&quot;</span><span class="p">:</span><span class="s2">&quot;req-abc&quot;</span><span class="p">,</span><span class="nt">&quot;cmd&quot;</span><span class="p">:</span><span class="s2">&quot;send&quot;</span><span class="p">,</span><span class="nt">&quot;actor&quot;</span><span class="p">:</span><span class="s2">&quot;agent&quot;</span><span class="p">,</span><span class="nt">&quot;resolved_chat_id&quot;</span><span class="p">:</span><span class="mi">1240314255</span><span class="p">,</span><span class="nt">&quot;args&quot;</span><span class="p">:{},</span><span class="nt">&quot;dry_run&quot;</span><span class="p">:</span><span class="kc">false</span><span class="p">}</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="p">{</span><span class="nt">&quot;ts&quot;</span><span class="p">:</span><span class="s2">&quot;2026-05-09T11:18:22Z&quot;</span><span class="p">,</span><span class="nt">&quot;phase&quot;</span><span class="p">:</span><span class="s2">&quot;after&quot;</span><span class="p">,</span><span class="nt">&quot;request_id&quot;</span><span class="p">:</span><span class="s2">&quot;req-abc&quot;</span><span class="p">,</span><span class="nt">&quot;cmd&quot;</span><span class="p">:</span><span class="s2">&quot;send&quot;</span><span class="p">,</span><span class="nt">&quot;result&quot;</span><span class="p">:</span><span class="s2">&quot;ok&quot;</span><span class="p">,</span><span class="nt">&quot;message_id&quot;</span><span class="p">:</span><span class="mi">99</span><span class="p">}</span>
+<p>Telegram writes using the shared write pipeline generate a pre-call entry and a
+final dispatch entry in <code>audit.log</code>:</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span><span class="nt">&quot;ts&quot;</span><span class="p">:</span><span class="s2">&quot;&lt;timestamp&gt;&quot;</span><span class="p">,</span><span class="nt">&quot;phase&quot;</span><span class="p">:</span><span class="s2">&quot;before&quot;</span><span class="p">,</span><span class="nt">&quot;request_id&quot;</span><span class="p">:</span><span class="s2">&quot;req-example&quot;</span><span class="p">,</span><span class="nt">&quot;cmd&quot;</span><span class="p">:</span><span class="s2">&quot;send&quot;</span><span class="p">,</span><span class="nt">&quot;resolved_chat_id&quot;</span><span class="p">:</span><span class="s2">&quot;&lt;your-chat-id&gt;&quot;</span><span class="p">,</span><span class="nt">&quot;payload_preview&quot;</span><span class="p">:{},</span><span class="nt">&quot;dry_run&quot;</span><span class="p">:</span><span class="kc">false</span><span class="p">}</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="p">{</span><span class="nt">&quot;ts&quot;</span><span class="p">:</span><span class="s2">&quot;&lt;timestamp&gt;&quot;</span><span class="p">,</span><span class="nt">&quot;request_id&quot;</span><span class="p">:</span><span class="s2">&quot;req-example&quot;</span><span class="p">,</span><span class="nt">&quot;cmd&quot;</span><span class="p">:</span><span class="s2">&quot;send&quot;</span><span class="p">,</span><span class="nt">&quot;args&quot;</span><span class="p">:{</span><span class="nt">&quot;chat&quot;</span><span class="p">:</span><span class="s2">&quot;&lt;your-chat-id&gt;&quot;</span><span class="p">,</span><span class="nt">&quot;dry_run&quot;</span><span class="p">:</span><span class="kc">false</span><span class="p">},</span><span class="nt">&quot;result&quot;</span><span class="p">:</span><span class="s2">&quot;ok&quot;</span><span class="p">}</span>
 </span></code></pre></div>
 <p>The pre-call entry is written <em>before</em> the Telegram call, so even if
 the call hangs / crashes / times out, you know what was attempted.
-The post-call entry shares the same <code>request_id</code> so retries are
-linkable.</p>
+The final entry shares the same <code>request_id</code> so retries are linkable. Local
+cache and media commands do not use the Telegram pre-call pipeline; they record
+their final dispatch outcome. <code>download-media</code> and <code>backfill</code>
+treat failure to finalize that audit record after a committed artifact as a
+partial committed error instead of silently reporting success.</p>
 <p><code>audit.log</code> lives at <code>accounts/&lt;name&gt;/audit.log</code> and is append-only.
 File permissions are 0600 (owner-only read/write).</p>
 <h2 id="local-rate-limiter">Local rate limiter<a class="headerlink" href="#local-rate-limiter" title="Permanent link">&para;</a></h2>
-<p>A token bucket caps outbound Telegram writes at 20 per 60 seconds
+<p>A sliding window caps outbound Telegram writes at 20 per 60 seconds
 by default. Hitting it raises <code>LOCAL_RATE_LIMIT</code> with a
 <code>retry_after_seconds</code> field. This is your guard against an agent
 loop that runs away.</p>
@@ -1040,12 +1124,19 @@ field in the error envelope:</p>
 process) is meant to keep you well below the server budget, but burst
 patterns, account age, and chat type all affect what Telegram
 considers acceptable.</p>
+<h2 id="dry-run">Dry-run<a class="headerlink" href="#dry-run" title="Permanent link">&para;</a></h2>
+<p>Commands that expose <code>--dry-run</code> still enforce <code>--allow-write</code>,
+<code>--read-only</code>, fuzzy-selector, and typed-confirmation checks. After those gates,
+dry-run returns the resolved payload without contacting Telegram. Commands such
+as <code>download-media</code> and <code>backfill</code> do not currently expose <code>--dry-run</code>; check
+the command's <code>--help</code> rather than assuming the flag is universal.</p>
 <p>A safe agent loop:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nv">out</span><span class="o">={</span><span class="s2">&quot;ok&quot;</span>:false,<span class="s2">&quot;command&quot;</span>:<span class="s2">&quot;send&quot;</span>,<span class="s2">&quot;request_id&quot;</span>:<span class="s2">&quot;req-45fec014&quot;</span>,<span class="s2">&quot;error&quot;</span>:<span class="o">{</span><span class="s2">&quot;code&quot;</span>:<span class="s2">&quot;NOT_FOUND&quot;</span>,<span class="s2">&quot;message&quot;</span>:<span class="s2">&quot;chat_id 1240314255 not in DB&quot;</span><span class="o">}}</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="k">if</span><span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="s2">&quot;&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;FLOOD_WAIT&quot;</span><span class="w"> </span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="k">then</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>sleep<span class="w"> </span><span class="s2">&quot;&quot;</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span><span class="c1"># retry with the same --idempotency-key</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="k">fi</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nv">out</span><span class="o">=</span><span class="k">$(</span>tg<span class="w"> </span>--account<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_ACCOUNT_NAME</span><span class="s2">&quot;</span><span class="w"> </span>send<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_CHAT_ID</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;status&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>--allow-write<span class="w"> </span>--idempotency-key<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_IDEMPOTENCY_KEY</span><span class="s2">&quot;</span><span class="w"> </span>--json<span class="k">)</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">true</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="k">if</span><span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.error.code // empty&#39;</span><span class="w"> </span><span class="o">&lt;&lt;&lt;</span><span class="s2">&quot;</span><span class="nv">$out</span><span class="s2">&quot;</span><span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;FLOOD_WAIT&quot;</span><span class="w"> </span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="k">then</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>sleep<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.error.retry_after_seconds&#39;</span><span class="w"> </span><span class="o">&lt;&lt;&lt;</span><span class="s2">&quot;</span><span class="nv">$out</span><span class="s2">&quot;</span><span class="k">)</span><span class="s2">&quot;</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span><span class="c1"># retry with the same --idempotency-key</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="k">fi</span>
 </span></code></pre></div>
 <p>Pair this with <code>--idempotency-key</code> so the retry is safe even if the
 original request actually landed before the FloodWait fired.</p>
@@ -1144,7 +1235,7 @@ original request actually landed before the FloodWait fired.</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "search.highlight", "search.share", "search.suggest", "content.code.copy", "content.code.annotate", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>
