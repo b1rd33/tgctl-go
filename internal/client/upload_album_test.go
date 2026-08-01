@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,6 +20,8 @@ type albumRPCFake struct {
 	uploadMediaErrAt int
 	failUploadMedia  bool
 	uploadMediaResp  []tg.MessageMediaClass
+	afterUploadMedia func()
+	rawSendResponse  bool
 	sendResp         tg.UpdatesClass
 	sendErr          error
 	partErr          error
@@ -48,7 +51,14 @@ func (f *albumRPCFake) MessagesUploadMedia(_ context.Context, req *tg.MessagesUp
 		return nil, errors.New("uploadMedia failed")
 	}
 	if i < len(f.uploadMediaResp) {
-		return f.uploadMediaResp[i], nil
+		resp := f.uploadMediaResp[i]
+		if f.afterUploadMedia != nil {
+			f.afterUploadMedia()
+		}
+		return resp, nil
+	}
+	if f.afterUploadMedia != nil {
+		f.afterUploadMedia()
 	}
 	return &tg.MessageMediaDocument{Video: true, Document: &tg.Document{ID: int64(i + 1)}}, nil
 }
@@ -56,6 +66,9 @@ func (f *albumRPCFake) MessagesUploadMedia(_ context.Context, req *tg.MessagesUp
 func (f *albumRPCFake) MessagesSendMultiMedia(_ context.Context, req *tg.MessagesSendMultiMediaRequest) (tg.UpdatesClass, error) {
 	f.calls = append(f.calls, "send-multi-media")
 	f.sendReq = req
+	if f.rawSendResponse {
+		return f.sendResp, f.sendErr
+	}
 	return bindAlbumUpdates(f.sendResp, req.MultiMedia), f.sendErr
 }
 
@@ -144,8 +157,72 @@ func TestUploadAlbumPrevalidatesEveryFileBeforeTransport(t *testing.T) {
 	}
 }
 
+func TestUploadAlbumAcceptsExactTwoAndTenItems(t *testing.T) {
+	for _, count := range []int{2, 10} {
+		t.Run(fmt.Sprintf("items-%d", count), func(t *testing.T) {
+			names := make([]string, count)
+			for i := range names {
+				if i%2 == 0 {
+					names[i] = fmt.Sprintf("%02d.jpg", i)
+				} else {
+					names[i] = fmt.Sprintf("%02d.mp4", i)
+				}
+			}
+			paths := writeAlbumFixtures(t, names...)
+			items := make([]UploadAlbumItem, count)
+			mediaResp := make([]tg.MessageMediaClass, count)
+			ids := make([]int, count)
+			for i := range paths {
+				kind := "photo"
+				if i%2 == 1 {
+					kind = "video"
+				}
+				items[i] = UploadAlbumItem{Path: paths[i], Kind: kind}
+				if kind == "photo" {
+					mediaResp[i] = &tg.MessageMediaPhoto{Photo: &tg.Photo{ID: int64(i + 1)}}
+				} else {
+					mediaResp[i] = &tg.MessageMediaDocument{Video: true, Document: &tg.Document{ID: int64(i + 1)}}
+				}
+				ids[i] = i + 100
+			}
+			api := &albumRPCFake{uploadMediaResp: mediaResp, sendResp: albumUpdates(ids...)}
+			resp, err := (&GotdClient{albumAPI: api}).UploadAlbum(context.Background(), UploadAlbumReq{ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, Items: items})
+			if err != nil || len(resp.Items) != count || len(resp.MessageIDs) != count {
+				t.Fatalf("count=%d response=%#v err=%v", count, resp, err)
+			}
+		})
+	}
+}
+
+func TestUploadAlbumVideoOnly(t *testing.T) {
+	paths := writeAlbumFixtures(t, "one.mp4", "two.mp4")
+	api := &albumRPCFake{uploadMediaResp: []tg.MessageMediaClass{
+		&tg.MessageMediaDocument{Video: true, Document: &tg.Document{ID: 1}},
+		&tg.MessageMediaDocument{Video: true, Document: &tg.Document{ID: 2}},
+	}, sendResp: albumUpdates(501, 502)}
+	resp, err := (&GotdClient{albumAPI: api}).UploadAlbum(context.Background(), UploadAlbumReq{ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, Items: []UploadAlbumItem{{Path: paths[0], Kind: "video"}, {Path: paths[1], Kind: "video"}}})
+	if err != nil || len(resp.Items) != 2 || resp.Items[0].MediaType != "video" || resp.Items[1].MediaType != "video" {
+		t.Fatalf("response=%#v err=%v", resp, err)
+	}
+}
+
+func TestUploadAlbumRejectsUnsupportedAndOversizedBeforeTransport(t *testing.T) {
+	paths := writeAlbumFixtures(t, "one.jpg", "two.jpg")
+	for name, req := range map[string]UploadAlbumReq{
+		"unsupported": {ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, Items: []UploadAlbumItem{{Path: paths[0], Kind: "document"}, {Path: paths[1], Kind: "photo"}}},
+		"oversized":   {ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, MaxBytes: 1, Items: []UploadAlbumItem{{Path: paths[0], Kind: "photo"}, {Path: paths[1], Kind: "photo"}}},
+	} {
+		api := &albumRPCFake{}
+		_, err := (&GotdClient{albumAPI: api}).UploadAlbum(context.Background(), req)
+		if err == nil || len(api.calls) != 0 {
+			t.Fatalf("%s err=%v calls=%#v", name, err, api.calls)
+		}
+	}
+}
+
 func TestUploadAlbumUploadsInOrderAndMapsUpdates(t *testing.T) {
 	paths := writeAlbumFixtures(t, "one.jpg", "two.mp4")
+	originalFirst := filepath.Dir(paths[0]) + string(filepath.Separator) + "." + string(filepath.Separator) + filepath.Base(paths[0])
 	api := &albumRPCFake{
 		uploadMediaResp: []tg.MessageMediaClass{
 			&tg.MessageMediaPhoto{Photo: &tg.Photo{ID: 11}},
@@ -153,8 +230,8 @@ func TestUploadAlbumUploadsInOrderAndMapsUpdates(t *testing.T) {
 		},
 		sendResp: albumUpdates(501, 502),
 	}
-	resp, err := (&GotdClient{albumAPI: api}).UploadAlbum(context.Background(), UploadAlbumReq{ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, ReplyTo: 9, Silent: true, Items: []UploadAlbumItem{
-		{Path: paths[0], Kind: "photo", Caption: "album caption"}, {Path: paths[1], Kind: "video"},
+	resp, err := (&GotdClient{albumAPI: api}).UploadAlbum(context.Background(), UploadAlbumReq{ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, ReplyTo: 9, Silent: true, SupportsStreaming: true, Items: []UploadAlbumItem{
+		{Path: originalFirst, Kind: "photo", Caption: "album caption"}, {Path: paths[1], Kind: "video"},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -180,8 +257,33 @@ func TestUploadAlbumUploadsInOrderAndMapsUpdates(t *testing.T) {
 	if _, ok := api.sendReq.MultiMedia[1].Media.(*tg.InputMediaDocument); !ok {
 		t.Fatalf("video media=%T", api.sendReq.MultiMedia[1].Media)
 	}
+	if got := resp.Items[0].SourcePath; got != originalFirst {
+		t.Fatalf("source path=%q, want caller path %q", got, originalFirst)
+	}
+	videoUpload, ok := api.uploadMedia[1].(*tg.InputMediaUploadedDocument)
+	if !ok {
+		t.Fatalf("uploaded video media=%T", api.uploadMedia[1])
+	}
+	streaming := false
+	for _, attr := range videoUpload.Attributes {
+		if video, ok := attr.(*tg.DocumentAttributeVideo); ok {
+			streaming = video.SupportsStreaming
+		}
+	}
+	if !streaming {
+		t.Fatal("album-level streaming option was not applied")
+	}
 	if got := api.calls[len(api.calls)-1]; got != "send-multi-media" {
 		t.Fatalf("calls=%v", api.calls)
+	}
+	wantCalls := []string{"upload-part", "upload-media", "upload-part", "upload-media", "send-multi-media"}
+	if len(api.calls) != len(wantCalls) {
+		t.Fatalf("call count=%v want %v", api.calls, wantCalls)
+	}
+	for i := range wantCalls {
+		if api.calls[i] != wantCalls[i] {
+			t.Fatalf("call order=%v want %v", api.calls, wantCalls)
+		}
 	}
 }
 
@@ -230,6 +332,22 @@ func TestUploadAlbumRejectsMissingMapping(t *testing.T) {
 	}
 }
 
+func TestUploadAlbumRejectsDuplicateMapping(t *testing.T) {
+	paths := writeAlbumFixtures(t, "one.jpg", "two.jpg")
+	api := &albumRPCFake{
+		uploadMediaResp: []tg.MessageMediaClass{
+			&tg.MessageMediaPhoto{Photo: &tg.Photo{ID: 11}}, &tg.MessageMediaPhoto{Photo: &tg.Photo{ID: 22}},
+		},
+		sendResp: &tg.Updates{Updates: []tg.UpdateClass{
+			&tg.UpdateMessageID{ID: 701, RandomID: 100}, &tg.UpdateMessageID{ID: 702, RandomID: 100},
+		}}, rawSendResponse: true,
+	}
+	_, err := (&GotdClient{albumAPI: api}).UploadAlbum(context.Background(), UploadAlbumReq{ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, Items: []UploadAlbumItem{{Path: paths[0], Kind: "photo"}, {Path: paths[1], Kind: "photo"}}})
+	if err == nil || !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
 func TestUploadAlbumUploadMediaAndConversionFailuresDoNotSend(t *testing.T) {
 	paths := writeAlbumFixtures(t, "one.jpg", "two.jpg")
 	base := UploadAlbumReq{ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, Items: []UploadAlbumItem{{Path: paths[0], Kind: "photo"}, {Path: paths[1], Kind: "photo"}}}
@@ -270,5 +388,21 @@ func TestUploadAlbumCancelledBeforeNetwork(t *testing.T) {
 	_, err := (&GotdClient{albumAPI: api}).UploadAlbum(ctx, UploadAlbumReq{ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, Items: []UploadAlbumItem{{Path: paths[0], Kind: "photo"}, {Path: paths[1], Kind: "photo"}}})
 	if err == nil || !strings.Contains(err.Error(), "cancel") || len(api.calls) != 0 {
 		t.Fatalf("err=%v calls=%#v", err, api.calls)
+	}
+}
+
+func TestUploadAlbumCancellationStopsBeforeNextItemAndFinalSend(t *testing.T) {
+	paths := writeAlbumFixtures(t, "one.jpg", "two.jpg")
+	ctx, cancel := context.WithCancel(context.Background())
+	api := &albumRPCFake{
+		uploadMediaResp:  []tg.MessageMediaClass{&tg.MessageMediaPhoto{Photo: &tg.Photo{ID: 11}}},
+		afterUploadMedia: cancel,
+	}
+	_, err := (&GotdClient{albumAPI: api}).UploadAlbum(ctx, UploadAlbumReq{ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, Items: []UploadAlbumItem{{Path: paths[0], Kind: "photo"}, {Path: paths[1], Kind: "photo"}}})
+	if err == nil || !strings.Contains(err.Error(), "cancel") {
+		t.Fatalf("err=%v", err)
+	}
+	if len(api.calls) != 2 || api.calls[0] != "upload-part" || api.calls[1] != "upload-media" {
+		t.Fatalf("calls=%#v", api.calls)
 	}
 }

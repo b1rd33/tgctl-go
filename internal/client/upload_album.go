@@ -39,8 +39,9 @@ func (g *GotdClient) uploadAlbumAPI() (albumUploadAPI, error) {
 
 type validatedAlbumItem struct {
 	UploadAlbumItem
-	path string
-	kind string
+	sourcePath string
+	path       string
+	kind       string
 }
 
 func validateAlbumItems(req UploadAlbumReq) ([]validatedAlbumItem, int64, error) {
@@ -65,6 +66,7 @@ func validateAlbumItems(req UploadAlbumReq) ([]validatedAlbumItem, int64, error)
 	}
 	items := make([]validatedAlbumItem, len(req.Items))
 	for i, item := range req.Items {
+		sourcePath := item.Path
 		kind := strings.ToLower(strings.TrimSpace(item.Kind))
 		if kind == "" {
 			kind = strings.ToLower(strings.TrimSpace(item.MediaType))
@@ -120,7 +122,7 @@ func validateAlbumItems(req UploadAlbumReq) ([]validatedAlbumItem, int64, error)
 			item.Filename = filepath.Base(path)
 		}
 		item.Filename = media.SanitizeDownloadName(item.Filename)
-		items[i] = validatedAlbumItem{UploadAlbumItem: item, path: path, kind: kind}
+		items[i] = validatedAlbumItem{UploadAlbumItem: item, sourcePath: sourcePath, path: path, kind: kind}
 	}
 	return items, maxBytes, nil
 }
@@ -269,7 +271,7 @@ func extractAlbumResponse(u tg.UpdatesClass, randomIDs []int64, items []validate
 			return UploadAlbumResp{}, errors.New("response is missing album message ID mapping")
 		}
 		resp.MessageIDs[i] = id
-		item := UploadAlbumItemResp{Position: i, MessageID: id, MediaType: items[i].kind, SourcePath: items[i].path, CaptionPlaced: items[i].Caption != ""}
+		item := UploadAlbumItemResp{Position: i, MessageID: id, MediaType: items[i].kind, SourcePath: items[i].sourcePath, CaptionPlaced: items[i].Caption != ""}
 		if item.CaptionPlaced {
 			item.CaptionPosition = i
 		}
