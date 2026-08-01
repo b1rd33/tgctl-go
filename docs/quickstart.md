@@ -2,10 +2,19 @@
 
 Five commands to feel out the surface.
 
+Examples use synthetic environment placeholders. Set these from your own
+account before running them:
+
+```bash
+export TG_ACCOUNT_NAME="test"
+export TG_CHAT_ID="<chat-id-from-your-own-account>"
+export TG_MESSAGE_ID="<message-id-containing-media>"
+```
+
 ## 1. Sync a fast view of your dialogs
 
 ```bash
-tg discover
+tg --account "$TG_ACCOUNT_NAME" discover --allow-write
 ```
 
 Pulls every chat you have access to (DMs, groups, channels) into the
@@ -15,35 +24,58 @@ Fast.
 ## 2. Populate the entity cache
 
 ```bash
-tg backfill-entities
+tg --account "$TG_ACCOUNT_NAME" backfill-entities --allow-write
 ```
 
-This stores Telegram access hashes in `accounts/default/telegram.sqlite`
+This stores Telegram access hashes in
+`accounts/<account-name>/telegram.sqlite`
 so chat-id-keyed writes work without resolving a username first.
 
 ## 3. Pull recent messages
 
 ```bash
-tg backfill 1240314255 --max-messages 100
+tg --account "$TG_ACCOUNT_NAME" backfill "$TG_CHAT_ID" \
+  --max-messages 100 --allow-write
 ```
 
-Pulls recent messages from your own chat into local SQLite. Use your
-own `user_id` for Saved Messages, or replace it with another
-`<your-chat-id>`.
+Pulls recent messages from your selected account into local SQLite. Set
+`TG_CHAT_ID` to a chat ID from your own account. `backfill` changes the
+local cache, so it requires `--allow-write`.
 
 For media:
 
 ```bash
-tg backfill 1240314255 --max-messages 100 --download-media
+tg --account "$TG_ACCOUNT_NAME" backfill "$TG_CHAT_ID" \
+  --max-messages 100 --download-media \
+  --max-media-size-mb 100 --allow-write --json
 ```
 
-Adds photos / voice notes / video / document files into
-`accounts/default/media/<chat_id>/`.
+Adds supported file media into
+`accounts/<account-name>/media/<chat-id>/`. An item that exceeds the
+per-file limit is counted as failed with a safe warning while the remaining
+backfill continues. Use `--overwrite-media` only when replacing existing
+files is intentional.
+
+To download a single message's media instead:
+
+```bash
+tg --account "$TG_ACCOUNT_NAME" download-media \
+  "$TG_CHAT_ID" "$TG_MESSAGE_ID" \
+  --allow-write --max-size-mb 100 --json
+```
+
+`TG_ACCOUNT_NAME`, `TG_CHAT_ID`, and `TG_MESSAGE_ID` are deliberately
+synthetic placeholders that you set from your own account. The default output
+is account-scoped; `--output <directory>` selects another directory. Files are
+written through a private part file and published atomically. Without
+`--overwrite`, an anchored regular file already at the final name is returned
+as `skipped: true`; this is not a content-hash comparison. With `--overwrite`,
+the CLI uses a safe atomic replacement or fails without a non-atomic fallback.
 
 ## 4. Search what you've cached
 
 ```bash
-tg search 1240314255 "shipping" --limit 20 --json
+tg --account "$TG_ACCOUNT_NAME" search "$TG_CHAT_ID" "shipping" --limit 20 --json
 ```
 
 Substring search across cached message text. Returns a JSON envelope
@@ -52,7 +84,8 @@ with hits, chat ids, dates, and message ids.
 ## 5. Send a message
 
 ```bash
-tg send 1240314255 "hello from tgctl-go" --allow-write
+tg --account "$TG_ACCOUNT_NAME" send "$TG_CHAT_ID" \
+  "hello from tgctl-go" --allow-write
 ```
 
 The `--allow-write` flag is required for any message that hits
@@ -62,7 +95,8 @@ the [write gate](safety.md).
 For multi-line text:
 
 ```bash
-printf 'line one\nline two\n' | tg send 1240314255 - --allow-write
+printf 'line one\nline two\n' | tg --account "$TG_ACCOUNT_NAME" \
+  send "$TG_CHAT_ID" - --allow-write
 ```
 
 ## What now?
@@ -81,10 +115,10 @@ command; `--account test` is the global flag that selects that account.
 tg accounts-add test
 tg --account test login
 tg --account test me
-tg --account test backfill-entities
+tg --account test backfill-entities --allow-write
 tg --account test discover --allow-write
 tg --account test stats
-tg --account test send 1240314255 "hello from test account" --allow-write --json
+tg --account test send "$TG_CHAT_ID" "hello from the sandbox account" --allow-write --json
 ```
 
 If login fails with `TG_API_ID and TG_API_HASH must be set`, run the
@@ -93,3 +127,15 @@ See [Install](install.md#troubleshooting).
 
 For agents, keep `--account test` explicit instead of switching the
 default account. That makes every subprocess call self-contained.
+
+Account selection is deterministic: `--account` wins over `TG_ACCOUNT`,
+which wins over the persisted `accounts/.current` selector, followed by the
+`default` fallback.
+
+`--read-only` (or `TG_READONLY=1`) is stronger than omitting
+`--allow-write`: it blocks Telegram writes and local state writes or creation,
+including account paths, databases, sessions, and audit logs.
+
+If a bulk media backfill reports an error with `committed: true`, inspect its
+bounded recovery metadata and the reported paths before retrying. Some files
+may already be durable even though database or client finalization failed.

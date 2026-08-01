@@ -10,7 +10,7 @@ Each account gets its own:
 - gotd `tg.session` (auth token)
 - `telegram.sqlite` (cached messages)
 - `audit.log` (write trail)
-- `media/` (downloaded photos / voice / video / documents)
+- `media/` (downloaded file-backed Telegram media)
 - `tg.session.lock` (concurrent-process guard)
 
 This means a write you make as `work` cannot leak into `personal`'s
@@ -38,8 +38,9 @@ doesn't affect the other.
 ```
 
 If you don't use `accounts-add`, everything lives at
-`accounts/default/`. The account name `default` is reserved
-and auto-created on first run.
+`accounts/default/`. The account name `default` is reserved and is
+auto-created by the first permitted writable operation. Read-only mode never
+creates it.
 
 ## Commands
 
@@ -112,14 +113,14 @@ Adopt a Python `tgctl` / Telethon session as the current Go account's
 session.
 
 ```bash
-tg import-telethon-session ~/path/to/tg-cli/accounts/default/tg.session
+tg import-telethon-session "$TELETHON_SESSION_PATH"
 ```
 
 Run `tg me` after import to verify the adopted account.
 
 ## Selecting an account at command time
 
-Three precedence rules, highest first:
+Account selection has one exact precedence order, highest first:
 
 1. `--account <name>` flag on the command
 2. `TG_ACCOUNT=<name>` environment variable
@@ -127,7 +128,7 @@ Three precedence rules, highest first:
 4. Falls back to `default`
 
 ```bash
-tg --account work send 1240314255 "..." --allow-write
+tg --account work send "$TG_CHAT_ID" "..." --allow-write
 TG_ACCOUNT=work tg me
 tg accounts-use work && tg me
 ```
@@ -138,11 +139,11 @@ For agent development, create a separate account directory and keep the
 account selector explicit:
 
 ```bash
-cd /Users/christiannikolov/Projects/tgctl-go
+cd "$TGCTL_GO_CHECKOUT"
 tg accounts-add test
 tg --account test login
 tg --account test me
-tg --account test backfill-entities
+tg --account test backfill-entities --allow-write
 tg --account test discover --allow-write
 tg --account test stats
 ```
@@ -159,8 +160,8 @@ accounts/test/media/
 Then test self-chat read/write:
 
 ```bash
-tg --account test send 1240314255 "hello from test account" --allow-write --json
-tg --account test show 1240314255 --limit 5 --json
+tg --account test send "$TG_CHAT_ID" "hello from the sandbox account" --allow-write --json
+tg --account test show "$TG_CHAT_ID" --limit 5 --json
 ```
 
 If you rely on `.env`, run these from the directory containing `.env`.
@@ -170,6 +171,22 @@ If you run from `~/accounts/test` or another directory, export
 Agents should usually use `--account test` on every call. Use
 `accounts-use test` only for interactive shell work where changing the
 default account is intentional.
+
+The default destination for `download-media` and media-enabled `backfill` is
+also selected-account scoped:
+
+```text
+accounts/<account-name>/media/<chat-id>/
+```
+
+`download-media --output <directory>` overrides that destination for one
+call. Account selection still controls which session, cache, and audit log are
+used.
+
+`--read-only` and `TG_READONLY=1` prevent both Telegram writes and local-state
+writes or creation. They therefore do not create a missing account directory,
+database, session, audit log, or media directory, even if `--allow-write` is
+also present.
 
 ## Recommended use cases
 

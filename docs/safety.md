@@ -13,7 +13,7 @@ Every write command passes through these gates in order:
 ```
 parse args
    ↓
-write gate: --allow-write or TG_READONLY rejection
+write gate: --read-only rejection, then --allow-write requirement
    ↓
 selector gate: --fuzzy required for title selectors; resolve from the cache read-only
    ↓
@@ -34,12 +34,14 @@ emit success / fail envelope
 
 ## Write gate (`--allow-write`)
 
-Any command that hits Telegram requires `--allow-write` per
-invocation.
+Every Telegram-side write and every command that mutates the local cache
+requires `--allow-write` per invocation. Read commands do not.
 
 ```bash
-tg send 1240314255 "hi"                  # → exit 6: WRITE_DISALLOWED
-tg send 1240314255 "hi" --allow-write    # → sends
+tg --account "$TG_ACCOUNT_NAME" send "$TG_CHAT_ID" "hi"
+# → exit 6: WRITE_DISALLOWED
+tg --account "$TG_ACCOUNT_NAME" send "$TG_CHAT_ID" "hi" --allow-write
+# → sends
 ```
 
 To globally lock down a session against any write:
@@ -48,8 +50,13 @@ To globally lock down a session against any write:
 export TG_READONLY=1
 ```
 
-This rejects writes even with `--allow-write` flagged. Use this in
-scripts that are supposed to be pure-read.
+This rejects writes even with `--allow-write` flagged. It also prevents local
+state mutation or creation: account directories, SQLite databases and
+migrations, session state, audit logs, and startup migrations remain untouched.
+Telegram reads use read-only session storage.
+
+`--allow-write` is permission for the requested operation. For example,
+`backfill` and `download-media` require it because they update local state.
 
 ## Destructive gate (typed `--confirm <id>`)
 
@@ -66,13 +73,19 @@ client.
 | `terminate-session` | `session_hash` |
 
 ```bash
-tg delete-msg 1240314255 99 --allow-write                    # → exit 7: NEEDS_CONFIRM
-tg delete-msg 1240314255 99 --allow-write --confirm 1240314255
+tg --account "$TG_ACCOUNT_NAME" delete-msg "$TG_CHAT_ID" "$TG_MESSAGE_ID" \
+  --allow-write
+# → exit 7: NEEDS_CONFIRM
+tg --account "$TG_ACCOUNT_NAME" delete-msg "$TG_CHAT_ID" "$TG_MESSAGE_ID" \
+  --allow-write --confirm "$TG_CHAT_ID"
 ```
 
-This catches the "agent meant to delete in Hamid's chat but resolver
-matched Hamburg supergroup" failure mode that bare-flag confirms
-allow.
+Omitting confirmation returns `NEEDS_CONFIRM` (exit 7). Supplying a value
+that does not match the resolved target returns `BAD_ARGS` (exit 2). Both are
+checked before Telegram or local-state writes.
+
+This catches the failure mode where an agent intended one chat but a fuzzy
+selector resolved to another.
 
 ## Fuzzy gate (`--fuzzy`)
 
@@ -84,9 +97,11 @@ Chat selectors resolve via three strategies in order:
    **rejected for writes unless `--fuzzy` is passed**
 
 ```bash
-tg show Hambu --limit 5                    # ← reads OK with fuzzy match
-tg send Hambu "..." --allow-write          # ← exit 2 BAD_ARGS without --fuzzy
-tg send Hambu "..." --allow-write --fuzzy  # ← OK
+tg --account "$TG_ACCOUNT_NAME" show "$TG_TITLE_FRAGMENT" --limit 5
+tg --account "$TG_ACCOUNT_NAME" send "$TG_TITLE_FRAGMENT" "..." --allow-write
+# → exit 2: BAD_ARGS without --fuzzy
+tg --account "$TG_ACCOUNT_NAME" send "$TG_TITLE_FRAGMENT" "..." \
+  --allow-write --fuzzy
 ```
 
 The point is to make agents commit to fuzzy resolution at call site
@@ -95,12 +110,13 @@ For reads it doesn't matter; for writes you can't recover.
 
 ## Idempotency keys
 
-Every write command accepts `--idempotency-key <name>`. If the same
-key + same command was previously committed, the cached result
-envelope is returned **without** re-calling Telegram.
+Telegram write commands that expose `--idempotency-key <name>` cache committed
+results. If the same key and command are retried, the cached result envelope is
+returned **without** re-calling Telegram.
 
 ```bash
-tg send 1240314255 "ack" --allow-write --idempotency-key reply-99-2026-05-09
+tg --account "$TG_ACCOUNT_NAME" send "$TG_CHAT_ID" "ack" \
+  --allow-write --idempotency-key "$TG_IDEMPOTENCY_KEY"
 ```
 
 Use case: an LLM-drafted reply pipeline that retries after
@@ -116,17 +132,21 @@ instead of replaying the earlier operation.
 
 ## Audit log
 
-Every write generates **two NDJSON entries** in `audit.log`:
+Telegram writes using the shared write pipeline generate a pre-call entry and a
+final dispatch entry in `audit.log`:
 
 ```json
-{"ts":"2026-05-09T11:18:21Z","phase":"before","request_id":"req-abc","cmd":"send","actor":"agent","resolved_chat_id":1240314255,"args":{},"dry_run":false}
-{"ts":"2026-05-09T11:18:22Z","phase":"after","request_id":"req-abc","cmd":"send","result":"ok","message_id":99}
+{"ts":"<timestamp>","phase":"before","request_id":"req-example","cmd":"send","resolved_chat_id":"<your-chat-id>","payload_preview":{},"dry_run":false}
+{"ts":"<timestamp>","request_id":"req-example","cmd":"send","args":{"chat":"<your-chat-id>","dry_run":false},"result":"ok"}
 ```
 
 The pre-call entry is written *before* the Telegram call, so even if
 the call hangs / crashes / times out, you know what was attempted.
-The post-call entry shares the same `request_id` so retries are
-linkable.
+The final entry shares the same `request_id` so retries are linkable. Local
+cache and media commands do not use the Telegram pre-call pipeline; they record
+their final dispatch outcome. `download-media` and `backfill`
+treat failure to finalize that audit record after a committed artifact as a
+partial committed error instead of silently reporting success.
 
 `audit.log` lives at `accounts/<name>/audit.log` and is append-only.
 File permissions are 0600 (owner-only read/write).
@@ -195,12 +215,21 @@ process) is meant to keep you well below the server budget, but burst
 patterns, account age, and chat type all affect what Telegram
 considers acceptable.
 
+## Dry-run
+
+Commands that expose `--dry-run` still enforce `--allow-write`,
+`--read-only`, fuzzy-selector, and typed-confirmation checks. After those gates,
+dry-run returns the resolved payload without contacting Telegram. Commands such
+as `download-media` and `backfill` do not currently expose `--dry-run`; check
+the command's `--help` rather than assuming the flag is universal.
+
 A safe agent loop:
 
 ```bash
-out={"ok":false,"command":"send","request_id":"req-45fec014","error":{"code":"NOT_FOUND","message":"chat_id 1240314255 not in DB"}}
-if [ "" = "FLOOD_WAIT" ]; then
-  sleep ""
+out=$(tg --account "$TG_ACCOUNT_NAME" send "$TG_CHAT_ID" "status" \
+  --allow-write --idempotency-key "$TG_IDEMPOTENCY_KEY" --json) || true
+if [ "$(jq -r '.error.code // empty' <<<"$out")" = "FLOOD_WAIT" ]; then
+  sleep "$(jq -r '.error.retry_after_seconds' <<<"$out")"
   # retry with the same --idempotency-key
 fi
 ```

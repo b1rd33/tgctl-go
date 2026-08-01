@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `download-media` downloads one message's supported file media to an
+  account-scoped or explicit destination with atomic publication, collision
+  handling, overwrite opt-in, per-file size limits, cache persistence, durable
+  audit entries, and recovery metadata for partial commits.
+- `backfill --download-media` streams supported media while paginating history,
+  records stable Telegram media identity, and reports exact downloaded,
+  skipped, and failed counters with bounded warnings and recovery metadata.
+
+### Changed
+
+- Account selection now consistently uses explicit `--account`, then
+  `TG_ACCOUNT`, then the persisted current selector, then `default`.
+- `--read-only` now prevents both Telegram writes and local-state mutation or
+  creation, including account paths, databases, migrations, sessions, and
+  audit logs.
+- Local-cache commands require the write gate, backfill caps and throttling are
+  validated, and typed confirmations distinguish missing confirmation
+  (`NEEDS_CONFIRM`, exit 7) from mismatches (`BAD_ARGS`, exit 2).
+- The generated command reference is checked against live Cobra help to prevent
+  documented flags and command output from drifting.
+
+### Planned (not implemented)
+
+- Album v1 is roadmap work: ordered 2–10 item photo/video upload,
+  `grouped_id` preservation, album-aware download/grouping, and extraction of
+  all resulting message IDs. No album command is available in this release.
+
 ## v0.1.4 — 2026-05-11
 
 ### Added

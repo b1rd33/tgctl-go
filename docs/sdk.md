@@ -14,7 +14,7 @@ Pass `--json` to force machine output:
 
 ```bash
 tg me --json
-tg send 1240314255 "hello" --allow-write --json
+tg --account "$TG_ACCOUNT_NAME" send "$TG_CHAT_ID" "hello" --allow-write --json
 ```
 
 Success:
@@ -25,7 +25,7 @@ Success:
   "command": "send",
   "request_id": "req-abc12345",
   "data": {
-    "message_id": 30350
+    "message_id": "<new-message-id>"
   },
   "warnings": []
 }
@@ -51,11 +51,11 @@ Use `jq` for routing and assertions:
 
 ```bash
 msg_id=$(
-  tg send 1240314255 "ack" --allow-write --json |
+  tg --account "$TG_ACCOUNT_NAME" send "$TG_CHAT_ID" "ack" --allow-write --json |
     jq -r '.data.message_id'
 )
 
-tg get-msg 1240314255 "$msg_id" --json |
+tg --account "$TG_ACCOUNT_NAME" get-msg "$TG_CHAT_ID" "$msg_id" --json |
   jq -e '.ok == true and .data.message.message_id == '"$msg_id"
 ```
 
@@ -65,10 +65,12 @@ Any language can call `tg` and parse the envelope.
 
 ```python
 import json
+import os
 import subprocess
 
 result = subprocess.run(
-    ["tg", "show", "1240314255", "--limit", "5", "--json"],
+    ["tg", "--account", os.environ["TG_ACCOUNT_NAME"], "show",
+     os.environ["TG_CHAT_ID"], "--limit", "5", "--json"],
     text=True,
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE,
@@ -85,10 +87,10 @@ For an agent, make every call explicit: account, JSON output, write
 gate, and idempotency key.
 
 ```bash
-tg --account test backfill-entities --json
-tg --account test backfill 1240314255 --max-messages 100 --allow-write --json
-tg --account test search 1240314255 "order" --limit 20 --json
-tg --account test send 1240314255 "agent draft reply" \
+tg --account test backfill-entities --allow-write --json
+tg --account test backfill "$TG_CHAT_ID" --max-messages 100 --allow-write --json
+tg --account test search "$TG_CHAT_ID" "order" --limit 20 --json
+tg --account test send "$TG_CHAT_ID" "agent draft reply" \
   --allow-write \
   --idempotency-key "agent-reply-001" \
   --json
@@ -97,6 +99,48 @@ tg --account test send 1240314255 "agent draft reply" \
 Reads do not need `--allow-write`. Local DB writes (`discover`,
 `backfill`, `sync-contacts`, `listen`) and Telegram writes do. Treat
 `request_id` as the correlation key for logs and audit entries.
+
+Account selection is `--account`, then `TG_ACCOUNT`, then the persisted
+`accounts/.current` selector, then `default`. Agents should pass `--account`
+explicitly on every subprocess call. `--read-only` (or `TG_READONLY=1`) blocks
+Telegram writes and all local-state writes or creation, even when
+`--allow-write` is present.
+
+## Media subprocesses
+
+For one message:
+
+The `TG_*` variables below are synthetic placeholders populated from your own
+account and destination.
+
+```bash
+tg --account "$TG_ACCOUNT_NAME" download-media \
+  "$TG_CHAT_ID" "$TG_MESSAGE_ID" \
+  --output "$TG_MEDIA_OUTPUT_DIR" \
+  --max-size-mb 100 --allow-write --json
+```
+
+For a capped bulk backfill into the selected account's default media tree:
+
+```bash
+tg --account "$TG_ACCOUNT_NAME" backfill "$TG_CHAT_ID" \
+  --max-messages 250 --download-media --max-media-size-mb 100 \
+  --allow-write --json
+```
+
+Supported current types are photo, video, video note, voice, audio, sticker,
+animation, and generic document. Photos use Telegram's selected largest
+downloadable image; document-class media uses the original file stream.
+Single downloads return `media_path`, `bytes`, and `skipped`; bulk results
+return `media_downloaded`, `media_skipped`, `media_failed`, and `warnings`.
+
+Treat a nonzero envelope with `committed: true` as a partial commit. Its
+bounded recovery metadata may include validated artifact paths and byte counts;
+inspect those before deciding whether to retry. An anchored regular file at the
+final name is a successful no-overwrite skip, not a content-hash match.
+`--overwrite` or `--overwrite-media` explicitly opts into safe atomic
+replacement; unsupported atomic replacement fails safely. Size limit `0` means
+unlimited.
 
 ## Exit codes
 
@@ -120,18 +164,18 @@ for shells; the string is better for logs and metrics.
 
 ## Request IDs
 
-Every envelope includes `request_id`. Write audit entries use the same
-ID before and after the Telegram call:
+Every envelope includes `request_id`. Telegram write-pipeline audit entries use
+the same ID for pre-call and final records:
 
 ```bash
-tg send 1240314255 "trace me" --allow-write --json |
+tg --account "$TG_ACCOUNT_NAME" send "$TG_CHAT_ID" "trace me" --allow-write --json |
   jq -r '.request_id'
 ```
 
-Then correlate in `accounts/default/audit.log`:
+Then correlate in `accounts/<account-name>/audit.log`:
 
 ```bash
-rg 'req-abc12345' accounts/default/audit.log
+rg "$TG_REQUEST_ID" "accounts/$TG_ACCOUNT_NAME/audit.log"
 ```
 
 ## Streaming
@@ -139,13 +183,14 @@ rg 'req-abc12345' accounts/default/audit.log
 `tg listen --json` emits one envelope per update:
 
 ```bash
-tg listen --json | jq -c 'select(.ok == true) | .data'
+tg --account "$TG_ACCOUNT_NAME" listen --allow-write --json |
+  jq -c 'select(.ok == true) | .data'
 ```
 
 For tests, use one update and exit:
 
 ```bash
-tg listen --once --json
+tg --account "$TG_ACCOUNT_NAME" listen --once --allow-write --json
 ```
 
 ## Versioning
