@@ -622,17 +622,34 @@ func TestGotdDownloadMediaJoinsCommitAndAbortErrors(t *testing.T) {
 
 func TestGotdDownloadMediaPublishedCommitErrorSignalsConservativeArtifact(t *testing.T) {
 	commitErr := errors.New("directory sync failed after publish")
+	outputDir := t.TempDir()
+	path := filepath.Join(outputDir, "published.bin")
+	if err := os.WriteFile(path, []byte("data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	identity, _, err := media.CaptureArtifactIdentity(outputDir, path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	destination := &fakeDownloadDestination{
-		path:      filepath.Join(t.TempDir(), "published.bin"),
+		path:      path,
+		identity:  identity,
 		commitErr: commitErr,
 		abortErr:  media.ErrDestinationCommitted,
 	}
 	message := documentMessageWithSize(32, 4, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "published.bin"})
 	g, _, _ := downloadTestClientWithDownloader(t, message, &recordingFileDownloader{chunks: [][]byte{[]byte("data")}})
 	g.destinationOpener = fakeDestinationOpener{destination: destination}
-	_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 32, OutputDir: t.TempDir()})
+	resp, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 32, OutputDir: outputDir})
+	var committed *CommittedMediaDownloadError
 	if !errors.Is(err, commitErr) || !errors.Is(err, media.ErrDestinationCommitted) || !errors.Is(err, media.ErrCleanupIncomplete) {
 		t.Fatalf("error = %v, want commit, committed, and cleanup-incomplete errors", err)
+	}
+	if !errors.As(err, &committed) || !reflect.DeepEqual(committed.Response, resp) || resp.Path != path || resp.Bytes != 4 || resp.Skipped {
+		t.Fatalf("response=%#v committed=%#v error=%v", resp, committed, err)
+	}
+	if _, err := media.InspectDownloadedArtifactWithIdentity(outputDir, path, resp.ArtifactIdentity); err != nil {
+		t.Fatalf("committed response identity did not validate: %v", err)
 	}
 }
 
@@ -1116,6 +1133,7 @@ func (d *recordingFileDownloader) Locations() []tg.InputFileLocationClass {
 type fakeDownloadDestination struct {
 	bytes.Buffer
 	path        string
+	identity    media.ArtifactIdentity
 	commitErr   error
 	abortErr    error
 	commitCalls int
@@ -1124,7 +1142,7 @@ type fakeDownloadDestination struct {
 
 func (d *fakeDownloadDestination) FinalPath() string { return d.path }
 func (d *fakeDownloadDestination) ArtifactIdentity() media.ArtifactIdentity {
-	return media.ArtifactIdentity{}
+	return d.identity
 }
 func (d *fakeDownloadDestination) Commit() error { d.commitCalls++; return d.commitErr }
 func (d *fakeDownloadDestination) Abort() error  { d.abortCalls++; return d.abortErr }

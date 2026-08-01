@@ -123,7 +123,34 @@ func downloadMediaCommand(cfg CommandsConfig) *cobra.Command {
 				})
 				clientCloseErr := telegramClient.Close()
 				if downloadErr != nil {
-					return nil, errors.Join(downloadErr, clientCloseErr)
+					joined := errors.Join(downloadErr, clientCloseErr)
+					var committedDownload *client.CommittedMediaDownloadError
+					if errors.As(downloadErr, &committedDownload) {
+						artifact, validationErr := validateDownloadMediaResponse(committedDownload.Response, chatID, messageID, validationRoot, overwrite)
+						if validationErr != nil {
+							return nil, safety.NewCommittedWrite(
+								"media download committed but recovery metadata was invalid; do not retry blindly",
+								errors.Join(joined, validationErr),
+							)
+						}
+						artifactMetadata := downloadArtifactMetadata(committedDownload.Response, artifact)
+						for key, value := range artifactMetadata {
+							auditArgs[key] = value
+							recoveryExtras[key] = value
+						}
+						return nil, safety.NewCommittedWriteWithExtras(
+							"media download committed but finalization failed; do not retry blindly",
+							joined,
+							recoveryExtras,
+						)
+					}
+					if errors.Is(downloadErr, media.ErrDestinationCommitted) {
+						return nil, safety.NewCommittedWrite(
+							"media download committed without trusted recovery metadata; do not retry blindly",
+							joined,
+						)
+					}
+					return nil, joined
 				}
 				artifact, validationErr := validateDownloadMediaResponse(resp, chatID, messageID, validationRoot, overwrite)
 				if validationErr != nil {

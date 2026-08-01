@@ -536,22 +536,24 @@ func TestCappedBackfillRacingReaderCannotInterruptWALRestore(t *testing.T) {
 	committed := make(chan struct{})
 	attempting := make(chan struct{})
 	readerDone := make(chan error, 1)
+	readerClosed := make(chan struct{})
 	go func() {
+		defer close(readerClosed)
 		<-committed
 		readerDB, openErr := sql.Open("sqlite", path)
 		if openErr != nil {
 			readerDone <- openErr
 			return
 		}
-		defer readerDB.Close()
 		readerDB.SetMaxOpenConns(1)
 		if _, busyErr := readerDB.Exec("PRAGMA busy_timeout=1000"); busyErr != nil {
-			readerDone <- busyErr
+			readerDone <- errors.Join(busyErr, readerDB.Close())
 			return
 		}
 		close(attempting)
 		var count int
-		readerDone <- readerDB.QueryRow("SELECT COUNT(*) FROM tg_messages WHERE message_id=302").Scan(&count)
+		queryErr := readerDB.QueryRow("SELECT COUNT(*) FROM tg_messages WHERE message_id=302").Scan(&count)
+		readerDone <- errors.Join(queryErr, readerDB.Close())
 	}()
 	_, _, _, _, err = insertBackfillRowsAtomicWithHooks(context.Background(), db, 1, 10, 1024*1024,
 		[]client.BackfillMessage{{ChatID: 1, MessageID: 302, Date: "2026-08-01T12:00:00Z", Text: "committed"}},
@@ -577,6 +579,7 @@ func TestCappedBackfillRacingReaderCannotInterruptWALRestore(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("racing reader remained blocked after restoration")
 	}
+	<-readerClosed
 	if mode := sqliteJournalMode(t, path); mode != "wal" {
 		t.Fatalf("journal_mode=%q after success, want wal", mode)
 	}

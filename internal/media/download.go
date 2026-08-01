@@ -70,6 +70,7 @@ type Destination struct {
 
 	overwrite bool
 	state     destinationState
+	published bool
 	finalPath string
 	partPath  string
 	file      *os.File
@@ -622,7 +623,7 @@ func (d *Destination) ArtifactIdentity() ArtifactIdentity {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.state != destinationCommitted {
+	if !d.published {
 		return ArtifactIdentity{}
 	}
 	return newArtifactIdentity(d.dirID, d.partID)
@@ -822,6 +823,7 @@ func (d *Destination) validateTargetUnchanged() error {
 }
 
 func (d *Destination) finishCommit() error {
+	d.published = true
 	d.state = destinationCommitted
 	syncErr := d.ops.syncDir(d.dir)
 	closeErr := d.closeDir()
@@ -832,6 +834,9 @@ func (d *Destination) finishCommit() error {
 		closeErr = errors.Join(ErrCleanupIncomplete, fmt.Errorf("download committed but close directory: %w", closeErr))
 	}
 	joined := errors.Join(syncErr, closeErr)
+	if joined != nil {
+		joined = errors.Join(ErrDestinationCommitted, joined)
+	}
 	if errors.Is(joined, ErrCleanupIncomplete) {
 		d.state = destinationCleanupIncomplete
 		d.terminalErr = joined

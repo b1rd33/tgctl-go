@@ -414,6 +414,76 @@ func TestDownloadMediaClientFailureDoesNotUpdateCache(t *testing.T) {
 	}
 }
 
+func TestDownloadMediaCommittedClientErrorPublishesValidatedRecoveryMetadataWithoutCacheWrite(t *testing.T) {
+	cfg, fake, dir := setupWriteEnv(t)
+	path := configureDownload(t, cfg, fake, 1, 9, filepath.Join(dir, "media", "1"), false)
+	trusted := fake.DownloadResp
+	fake.DownloadResp = client.DownloadMediaResp{}
+	commitErr := errors.New("directory sync failed after publish")
+	fake.DownloadErr = &client.CommittedMediaDownloadError{
+		Response: trusted,
+		Err:      errors.Join(media.ErrDestinationCommitted, media.ErrCleanupIncomplete, commitErr),
+	}
+	out, code := runRoot(t, cfg, "download-media", "1", "9", "--allow-write", "--json")
+	if code != 1 {
+		t.Fatalf("code=%d out=%s", code, out)
+	}
+	for _, fragment := range []string{
+		`"committed":true`, `"partial":true`, `"artifact_path":"` + strings.ReplaceAll(path, `\`, `\\`) + `"`,
+		`"artifact_bytes":12`, `"media_type":"document"`, `"filename":"asset.bin"`, `"skipped":false`,
+	} {
+		if !strings.Contains(out, fragment) {
+			t.Fatalf("output missing %s: %s", fragment, out)
+		}
+	}
+	assertAuditContains(t, filepath.Join(dir, "audit.log"),
+		`"committed":true`, `"partial":true`, `"artifact_path":"`+strings.ReplaceAll(path, `\`, `\\`)+`"`,
+		`"artifact_bytes":12`, `"media_type":"document"`, `"filename":"asset.bin"`)
+	if _, err := loadMessage(cfg.Paths.(stubPaths).db, 1, 9); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("cache persisted after committed client error: %v", err)
+	}
+}
+
+func TestDownloadMediaInvalidCommittedClientMetadataOmitsRecoveryExtras(t *testing.T) {
+	cfg, fake, dir := setupWriteEnv(t)
+	path := configureDownload(t, cfg, fake, 1, 9, filepath.Join(dir, "media", "1"), false)
+	trusted := fake.DownloadResp
+	trusted.Bytes++
+	fake.DownloadResp = client.DownloadMediaResp{}
+	fake.DownloadErr = &client.CommittedMediaDownloadError{
+		Response: trusted,
+		Err:      errors.Join(media.ErrDestinationCommitted, errors.New("post-publish failure")),
+	}
+	out, code := runRoot(t, cfg, "download-media", "1", "9", "--allow-write", "--json")
+	if code != 1 || !strings.Contains(out, `"committed":true`) || !strings.Contains(out, `"partial":true`) || strings.Contains(out, `"artifact_path"`) || strings.Contains(out, path) {
+		t.Fatalf("code=%d out=%s", code, out)
+	}
+	if auditBytes, err := os.ReadFile(filepath.Join(dir, "audit.log")); err != nil || bytes.Contains(auditBytes, []byte("artifact_path")) {
+		t.Fatalf("audit leaked invalid recovery metadata: %s err=%v", auditBytes, err)
+	}
+}
+
+func TestDownloadMediaRawDestinationCommittedErrorFallsBackWithoutRecoveryExtras(t *testing.T) {
+	cfg, fake, dir := setupWriteEnv(t)
+	fake.DownloadErr = errors.Join(media.ErrDestinationCommitted, errors.New("legacy committed error"))
+	out, code := runRoot(t, cfg, "download-media", "1", "9", "--allow-write", "--json")
+	if code != 1 || !strings.Contains(out, `"committed":true`) || !strings.Contains(out, `"partial":true`) || strings.Contains(out, `"artifact_path"`) {
+		t.Fatalf("code=%d out=%s", code, out)
+	}
+	if auditBytes, err := os.ReadFile(filepath.Join(dir, "audit.log")); err != nil || bytes.Contains(auditBytes, []byte("artifact_path")) {
+		t.Fatalf("audit unexpectedly contained recovery path: %s err=%v", auditBytes, err)
+	}
+}
+
+func TestDownloadMediaPrepublishCleanupFailureIsNotCommitted(t *testing.T) {
+	cfg, fake, _ := setupWriteEnv(t)
+	fake.DownloadErr = errors.Join(media.ErrCleanupIncomplete, errors.New("part cleanup failed"))
+	out, code := runRoot(t, cfg, "download-media", "1", "9", "--allow-write", "--json")
+	if code != 1 || strings.Contains(out, `"committed":true`) || strings.Contains(out, `"partial":true`) {
+		t.Fatalf("code=%d out=%s", code, out)
+	}
+}
+
 func TestDownloadMediaPersistenceFailureMarksCommittedOnlyForNewDownload(t *testing.T) {
 	for _, skipped := range []bool{false, true} {
 		t.Run(fmt.Sprintf("skipped_%v", skipped), func(t *testing.T) {

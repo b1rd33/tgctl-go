@@ -189,7 +189,15 @@ func (g *GotdClient) DownloadMedia(ctx context.Context, req DownloadMediaReq) (D
 		if !req.Overwrite && errors.As(err, &collision) {
 			return collisionDownloadResponse(resp, err)
 		}
-		return DownloadMediaResp{}, abortDownload(destination, err)
+		commitErr := abortDownload(destination, err)
+		if errors.Is(commitErr, media.ErrDestinationCommitted) {
+			resp.Path = destination.FinalPath()
+			resp.Bytes = limitWriter.N
+			resp.Skipped = false
+			resp.ArtifactIdentity = destination.ArtifactIdentity()
+			return resp, &CommittedMediaDownloadError{Response: resp, Err: commitErr}
+		}
+		return DownloadMediaResp{}, commitErr
 	}
 	resp.Path = destination.FinalPath()
 	resp.Bytes = limitWriter.N

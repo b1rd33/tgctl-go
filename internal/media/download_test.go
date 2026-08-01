@@ -865,8 +865,11 @@ func TestDestinationDirectorySyncFailureReportsCommittedOutcome(t *testing.T) {
 	}
 	injected := errors.New("injected directory sync failure")
 	d.ops.syncDir = func(*anchoredDir) error { return injected }
-	if err := d.Commit(); !errors.Is(err, injected) {
-		t.Fatalf("Commit error = %v, want directory sync error", err)
+	if err := d.Commit(); !errors.Is(err, injected) || !errors.Is(err, ErrDestinationCommitted) {
+		t.Fatalf("Commit error = %v, want directory sync and committed errors", err)
+	}
+	if _, err := InspectDownloadedArtifactWithIdentity(dir, d.FinalPath, d.ArtifactIdentity()); err != nil {
+		t.Fatalf("published artifact identity did not validate: %v", err)
 	}
 	if got, err := os.ReadFile(d.FinalPath); err != nil || string(got) != "download" {
 		t.Fatalf("published final content=%q err=%v", got, err)
@@ -891,6 +894,12 @@ func TestDestinationCommitFileCloseFailureIsStableCleanupIncomplete(t *testing.T
 	if !errors.Is(commitErr, ErrCleanupIncomplete) || !errors.Is(commitErr, injected) {
 		t.Fatalf("Commit error = %v, want cleanup and close errors", commitErr)
 	}
+	if errors.Is(commitErr, ErrDestinationCommitted) {
+		t.Fatalf("prepublish cleanup was marked committed: error=%v", commitErr)
+	}
+	if _, identityErr := InspectDownloadedArtifactWithIdentity(dir, d.FinalPath, d.ArtifactIdentity()); !errors.Is(identityErr, ErrDestinationChanged) {
+		t.Fatalf("prepublish cleanup returned a validating identity: %v", identityErr)
+	}
 	assertNoParts(t, dir)
 	if abortErr := d.Abort(); abortErr.Error() != commitErr.Error() {
 		t.Fatalf("terminal close error changed: Commit=%q Abort=%q", commitErr, abortErr)
@@ -912,8 +921,11 @@ func TestDestinationCommittedDirectoryCloseFailureIsStableCleanupIncomplete(t *t
 		return errors.Join(closeDir(dir), injected)
 	}
 	commitErr := d.Commit()
-	if !errors.Is(commitErr, ErrCleanupIncomplete) || !errors.Is(commitErr, injected) {
-		t.Fatalf("Commit error = %v, want cleanup and close errors", commitErr)
+	if !errors.Is(commitErr, ErrCleanupIncomplete) || !errors.Is(commitErr, ErrDestinationCommitted) || !errors.Is(commitErr, injected) {
+		t.Fatalf("Commit error = %v, want committed, cleanup, and close errors", commitErr)
+	}
+	if _, err := InspectDownloadedArtifactWithIdentity(dir, d.FinalPath, d.ArtifactIdentity()); err != nil {
+		t.Fatalf("published artifact identity did not validate: %v", err)
 	}
 	if got, err := os.ReadFile(d.FinalPath); err != nil || string(got) != "download" {
 		t.Fatalf("published final content=%q err=%v", got, err)

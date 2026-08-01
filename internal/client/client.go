@@ -78,6 +78,28 @@ type DownloadMediaResp struct {
 	ArtifactIdentity media.ArtifactIdentity `json:"-"`
 }
 
+// CommittedMediaDownloadError reports a failure discovered after the media
+// artifact was published. Response carries producer-issued identity and
+// metadata so the command layer can independently validate recovery details.
+type CommittedMediaDownloadError struct {
+	Response DownloadMediaResp
+	Err      error
+}
+
+func (e *CommittedMediaDownloadError) Error() string {
+	if e == nil || e.Err == nil {
+		return "media download committed but finalization failed"
+	}
+	return "media download committed but finalization failed: " + e.Err.Error()
+}
+
+func (e *CommittedMediaDownloadError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
 // EditMessageReq mirrors messages.EditMessage.
 type EditMessageReq struct {
 	ChatID    int64
