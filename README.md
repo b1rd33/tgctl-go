@@ -205,12 +205,22 @@ do not retry blindly.
 
 ## Safety contract
 
-Every Telegram-side write goes through a fixed pipeline you can trust:
+Ordinary Telegram-side writes use this fixed pipeline:
 
 ```
 write gate → idempotency lookup → fuzzy gate → resolve → dry-run →
 local rate limit → audit_pre → Telegram call → idempotency record → audit final
 ```
+
+Typed destructive commands first run a read-only preflight: enforce the write
+and fuzzy gates, select the account, resolve the target once from the read-only
+cache, and validate the exact typed confirmation. Only then does the later
+idempotency/dry-run send pipeline consume that immutable target.
+
+Local media and cache mutations such as `download-media` and `backfill` use
+command-specific account, write, and read-only gates plus durable final audit
+handling; they do not use the ordinary pipeline above. See the
+[Safety model](docs/safety.md) for the exact flows.
 
 | Flag / env | Effect |
 |---|---|
