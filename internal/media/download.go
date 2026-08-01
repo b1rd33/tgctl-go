@@ -66,6 +66,7 @@ var (
 	generatePartName       = randomPartName
 	beforeOverwritePublish = func() {}
 	beforeNoReplacePublish = func() {}
+	beforeAbsentPublish    = func() {}
 	beforeQuarantineDelete = func() {}
 )
 
@@ -365,9 +366,11 @@ func validateFinalTarget(dir *anchoredDir, name, displayPath string, overwrite b
 // Commit syncs and publishes the part file using only the directory handle
 // captured by OpenDestination. On Darwin and Linux, replacing an existing
 // regular file uses an atomic name exchange; the displaced inode is then
-// checked against the inode accepted at open time. A changed, symlink, or
-// special target is atomically restored and rejected. Platforms without both
-// atomic exchange and no-replace rename fail closed in OpenDestination.
+// checked against the inode accepted at open time. Publishing to an absent
+// name uses one atomic no-replace rename after the synced part has been closed
+// and captured under a private name. A changed, symlink, or special target is
+// atomically restored and rejected. Platforms without both atomic exchange and
+// no-replace rename fail closed in OpenDestination.
 func (d *Destination) Commit() error {
 	if err := d.lifecycleError(); err != nil {
 		return err
@@ -419,83 +422,33 @@ func (d *Destination) Commit() error {
 }
 
 func (d *Destination) publishAbsent(hook func(), collisionSentinel error) (bool, error) {
-	// The final name is briefly occupied by a known private placeholder. The
-	// validated part is first moved out of its attacker-visible public name,
-	// then exchanged with that placeholder so either side can be verified and
-	// rolled back without publishing an untrusted part-name replacement.
-	placeholderID, err := d.reserveFinalPlaceholder(collisionSentinel)
-	if err != nil {
-		return false, err
-	}
-	cleanupPlaceholder := func() error {
-		return quarantineRemove(d.dir, d.finalName, d.FinalPath, placeholderID)
-	}
-
 	if err := d.validatePartEntry(); err != nil {
-		return false, errors.Join(err, cleanupPlaceholder())
+		return false, err
 	}
 	hook()
 	privatePart, err := captureNamedRegular(d.dir, d.partName, d.PartPath, d.partID)
 	if err != nil {
-		return false, errors.Join(err, cleanupPlaceholder())
+		return false, err
 	}
-	if err := d.dir.exchange(privatePart, d.finalName); err != nil {
-		return false, errors.Join(
-			fmt.Errorf("atomic publish exchange: %w", err),
-			restorePrivateRegular(d.dir, privatePart, d.partName, d.PartPath, d.partID),
-			cleanupPlaceholder(),
-		)
-	}
-
-	finalErr := validateNamedRegular(d.dir, d.finalName, d.FinalPath, d.partID)
-	placeholderErr := validateNamedRegular(d.dir, privatePart, d.PartPath, placeholderID)
-	if finalErr == nil && placeholderErr == nil {
-		if err := deletePrivateRegular(d.dir, privatePart, d.PartPath, placeholderID); err != nil {
-			return true, fmt.Errorf("download committed but remove publication placeholder: %w", err)
-		}
-		return true, nil
-	}
-
-	raceErr := errors.Join(finalErr, placeholderErr)
-	if err := d.dir.exchange(privatePart, d.finalName); err != nil {
-		return true, errors.Join(raceErr, fmt.Errorf("publication rollback failed: %w", err))
-	}
-	return false, errors.Join(
-		raceErr,
-		restorePrivateRegular(d.dir, privatePart, d.partName, d.PartPath, d.partID),
-		cleanupPlaceholder(),
-	)
-}
-
-func (d *Destination) reserveFinalPlaceholder(collisionSentinel error) (fileIdentity, error) {
-	file, err := d.dir.createExclusive(d.finalName, d.FinalPath)
-	if err != nil {
+	beforeAbsentPublish()
+	if err := d.dir.renameNoReplace(privatePart, d.finalName); err != nil {
+		publishErr := fmt.Errorf("atomic publish download: %w", err)
 		if errors.Is(err, os.ErrExist) {
 			if errors.Is(collisionSentinel, ErrDestinationChanged) {
-				return fileIdentity{}, d.targetRaceError()
+				publishErr = d.targetRaceError()
+			} else {
+				publishErr = fmt.Errorf("%w: %s", collisionSentinel, d.FinalPath)
 			}
-			return fileIdentity{}, fmt.Errorf("%w: %s", collisionSentinel, d.FinalPath)
 		}
-		return fileIdentity{}, fmt.Errorf("reserve download destination: %w", err)
-	}
-	entry, inspectErr := snapshotOpenFile(file)
-	closeErr := file.Close()
-	if inspectErr != nil || !entry.regular {
-		if inspectErr != nil {
-			return fileIdentity{}, errors.Join(fmt.Errorf("inspect publication placeholder: %w", inspectErr), closeErr)
-		}
-		return fileIdentity{}, errors.Join(ErrUnsafeDestination, errors.New("publication placeholder is not regular"), closeErr)
-	}
-	if err := validateNamedRegular(d.dir, d.finalName, d.FinalPath, entry.identity); err != nil {
-		return fileIdentity{}, errors.Join(err, closeErr)
-	}
-	if closeErr != nil {
-		return fileIdentity{}, errors.Join(
-			fmt.Errorf("close publication placeholder: %w", closeErr),
-			quarantineRemove(d.dir, d.finalName, d.FinalPath, entry.identity),
+		return false, errors.Join(
+			publishErr,
+			restorePrivateRegular(d.dir, privatePart, d.partName, d.PartPath, d.partID),
 		)
 	}
-	return entry.identity, nil
+	if err := validateNamedRegular(d.dir, d.finalName, d.FinalPath, d.partID); err != nil {
+		return true, fmt.Errorf("download published but final identity changed: %w", err)
+	}
+	return true, nil
 }
 
 func (d *Destination) publishOverwrite() (bool, error) {

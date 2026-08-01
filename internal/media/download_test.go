@@ -2,6 +2,7 @@ package media
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -198,6 +199,60 @@ func TestDestinationCommitPublishesAtomicallyAndSetsPrivateMode(t *testing.T) {
 	}
 }
 
+func TestDestinationAbsentPublishNeverExposesIncompleteFinal(t *testing.T) {
+	for _, overwrite := range []bool{false, true} {
+		t.Run(fmt.Sprintf("overwrite=%t", overwrite), func(t *testing.T) {
+			dir := t.TempDir()
+			d, err := OpenDestination(dir, "result.bin", overwrite)
+			if err != nil {
+				t.Fatal(err)
+			}
+			payload := strings.Repeat("complete-download-", 4096)
+			if _, err := d.File.Write([]byte(payload)); err != nil {
+				t.Fatal(err)
+			}
+
+			entered := make(chan struct{})
+			release := make(chan struct{})
+			originalHook := beforeAbsentPublish
+			beforeAbsentPublish = func() {
+				close(entered)
+				<-release
+			}
+			t.Cleanup(func() { beforeAbsentPublish = originalHook })
+
+			commitResult := make(chan error, 1)
+			go func() { commitResult <- d.Commit() }()
+			<-entered
+
+			var observationErr error
+			for range 100 {
+				got, err := os.ReadFile(d.FinalPath)
+				switch {
+				case errors.Is(err, os.ErrNotExist):
+				case err != nil:
+					observationErr = fmt.Errorf("observe final: %w", err)
+				case string(got) != payload:
+					observationErr = fmt.Errorf("observed incomplete final: got %d bytes, want %d", len(got), len(payload))
+				}
+				if observationErr != nil {
+					break
+				}
+			}
+			close(release)
+			if err := <-commitResult; err != nil {
+				t.Fatalf("Commit: %v", err)
+			}
+			if observationErr != nil {
+				t.Fatal(observationErr)
+			}
+			if got, err := os.ReadFile(d.FinalPath); err != nil || string(got) != payload {
+				t.Fatalf("final content incomplete after commit: bytes=%d err=%v", len(got), err)
+			}
+		})
+	}
+}
+
 func TestDestinationCommitWithoutOverwriteDoesNotClobberRacedFinal(t *testing.T) {
 	dir := t.TempDir()
 	d, err := OpenDestination(dir, "race.bin", false)
@@ -223,6 +278,43 @@ func TestDestinationCommitWithoutOverwriteDoesNotClobberRacedFinal(t *testing.T)
 	assertNoParts(t, dir)
 	if err := d.Abort(); err != nil {
 		t.Fatalf("Abort after failed Commit should be idempotent: %v", err)
+	}
+}
+
+func TestDestinationAbsentPublishDoesNotClobberTargetAppearingAfterCapture(t *testing.T) {
+	for _, overwrite := range []bool{false, true} {
+		t.Run(fmt.Sprintf("overwrite=%t", overwrite), func(t *testing.T) {
+			dir := t.TempDir()
+			d, err := OpenDestination(dir, "race.bin", overwrite)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := d.File.Write([]byte("download")); err != nil {
+				t.Fatal(err)
+			}
+
+			originalHook := beforeAbsentPublish
+			beforeAbsentPublish = func() {
+				if err := os.WriteFile(d.FinalPath, []byte("winner"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Cleanup(func() { beforeAbsentPublish = originalHook })
+
+			commitErr := d.Commit()
+			wantErr := ErrDestinationExists
+			if overwrite {
+				wantErr = ErrDestinationChanged
+			}
+			if !errors.Is(commitErr, wantErr) {
+				t.Fatalf("Commit error = %v, want %v", commitErr, wantErr)
+			}
+			if got, err := os.ReadFile(d.FinalPath); err != nil || string(got) != "winner" {
+				t.Fatalf("raced final changed: content=%q err=%v", got, err)
+			}
+			assertNoParts(t, dir)
+			assertNoQuarantines(t, dir)
+		})
 	}
 }
 
@@ -655,26 +747,24 @@ func TestDestinationRollbackCleanupDoesNotDeleteNewFinalReplacement(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	originalPublishHook := beforeNoReplacePublish
-	beforeNoReplacePublish = func() {
-		_ = replacePartEntry(t, d, "symlink")
+	if _, err := d.File.Write([]byte("download")); err != nil {
+		t.Fatal(err)
 	}
-	t.Cleanup(func() { beforeNoReplacePublish = originalPublishHook })
-	originalCleanupHook := beforeQuarantineDelete
-	beforeQuarantineDelete = func() {
+	originalPublishHook := beforeAbsentPublish
+	beforeAbsentPublish = func() {
 		if err := os.WriteFile(d.FinalPath, []byte("replacement"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	t.Cleanup(func() { beforeQuarantineDelete = originalCleanupHook })
+	t.Cleanup(func() { beforeAbsentPublish = originalPublishHook })
 
-	if err := d.Commit(); !errors.Is(err, ErrUnsafeDestination) {
-		t.Fatalf("Commit error = %v, want ErrUnsafeDestination", err)
+	if err := d.Commit(); !errors.Is(err, ErrDestinationExists) {
+		t.Fatalf("Commit error = %v, want ErrDestinationExists", err)
 	}
 	if got, err := os.ReadFile(d.FinalPath); err != nil || string(got) != "replacement" {
 		t.Fatalf("new final replacement changed: content=%q err=%v", got, err)
 	}
-	assertReplacementUnchanged(t, d.PartPath, "symlink")
+	assertNoParts(t, dir)
 	assertNoQuarantines(t, dir)
 }
 
