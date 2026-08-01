@@ -505,6 +505,35 @@ func TestBackfillFatalErrorAfterDownloadedPartialReturnsCommittedRecovery(t *tes
 	}
 }
 
+func TestBackfillRecoveryOutcomesPrioritizeCommittedArtifactsWithinBound(t *testing.T) {
+	t.Run("noncommitted outcomes cannot evict committed", func(t *testing.T) {
+		result := client.BackfillResult{Warnings: []string{}}
+		for i := 0; i < maxBackfillRecoveryOutcomes+5; i++ {
+			result.MediaOutcomes = append(result.MediaOutcomes, client.BackfillMediaOutcome{ChatID: 1, MessageID: int64(i + 1), Status: client.BackfillMediaUnsupported})
+		}
+		result.MediaOutcomes = append(result.MediaOutcomes, client.BackfillMediaOutcome{ChatID: 1, MessageID: 999, MediaIdentity: "document:999", Status: client.BackfillMediaFailed, Committed: true, MediaPath: "/media/999.bin", Bytes: 4})
+		recountBackfillMedia(&result)
+		extras := map[string]any{}
+		setBackfillRecoveryExtras(extras, result, "/media")
+		outcomes := extras["media_outcomes"].([]map[string]any)
+		if len(outcomes) != maxBackfillRecoveryOutcomes || outcomes[0]["message_id"] != int64(999) || extras["artifact_count"] != 1 || extras["media_outcomes_truncated"] != true {
+			t.Fatalf("extras=%#v", extras)
+		}
+	})
+	t.Run("committed artifacts over bound report truthful total", func(t *testing.T) {
+		result := client.BackfillResult{Warnings: []string{}}
+		for i := 0; i < maxBackfillRecoveryOutcomes+7; i++ {
+			result.MediaOutcomes = append(result.MediaOutcomes, client.BackfillMediaOutcome{ChatID: 1, MessageID: int64(i + 1), MediaIdentity: fmt.Sprintf("document:%d", i+1), Status: client.BackfillMediaDownloaded, Committed: true, MediaPath: fmt.Sprintf("/media/%d.bin", i+1), Bytes: 4})
+		}
+		recountBackfillMedia(&result)
+		extras := map[string]any{}
+		setBackfillRecoveryExtras(extras, result, "/media")
+		if extras["artifact_count"] != maxBackfillRecoveryOutcomes+7 || len(extras["media_outcomes"].([]map[string]any)) != maxBackfillRecoveryOutcomes || extras["media_outcomes_truncated"] != true {
+			t.Fatalf("extras=%#v", extras)
+		}
+	})
+}
+
 func TestBackfillFatalErrorAfterPreexistingSkipIsNotCommitted(t *testing.T) {
 	cfg, fc, _ := setupWriteEnv(t)
 	fc.BackfillResult = client.BackfillResult{MediaOutcomes: []client.BackfillMediaOutcome{{

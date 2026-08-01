@@ -793,12 +793,22 @@ func recountBackfillMedia(result *client.BackfillResult) {
 }
 
 func setBackfillRecoveryExtras(dst map[string]any, result client.BackfillResult, mediaRoot string) {
-	dst["artifact_count"] = result.MediaDownloaded
+	committed := make([]client.BackfillMediaOutcome, 0, len(result.MediaOutcomes))
+	diagnostic := make([]client.BackfillMediaOutcome, 0, len(result.MediaOutcomes))
+	for _, outcome := range result.MediaOutcomes {
+		if isCommittedBackfillOutcome(outcome) {
+			committed = append(committed, outcome)
+		} else {
+			diagnostic = append(diagnostic, outcome)
+		}
+	}
+	dst["artifact_count"] = len(committed)
 	dst["media_downloaded"] = result.MediaDownloaded
 	dst["media_skipped"] = result.MediaSkipped
 	dst["media_failed"] = result.MediaFailed
 	outcomes := make([]map[string]any, 0, min(len(result.MediaOutcomes), maxBackfillRecoveryOutcomes))
-	for _, outcome := range result.MediaOutcomes {
+	ordered := append(committed, diagnostic...)
+	for _, outcome := range ordered {
 		if len(outcomes) >= maxBackfillRecoveryOutcomes {
 			break
 		}
@@ -817,6 +827,20 @@ func setBackfillRecoveryExtras(dst map[string]any, result client.BackfillResult,
 	if len(result.MediaOutcomes) > len(outcomes) {
 		dst["media_outcomes_truncated"] = true
 	}
+}
+
+func isCommittedBackfillOutcome(outcome client.BackfillMediaOutcome) bool {
+	return outcome.Committed || outcome.Status == client.BackfillMediaDownloaded
+}
+
+func backfillCommittedArtifactCount(result client.BackfillResult) int {
+	count := 0
+	for _, outcome := range result.MediaOutcomes {
+		if isCommittedBackfillOutcome(outcome) {
+			count++
+		}
+	}
+	return count
 }
 
 func backfillRecoveryPathAllowed(path, root string) bool {
@@ -858,7 +882,7 @@ func boundedBackfillWarnings(warnings []string, limit int) []string {
 }
 
 func wrapBackfillMediaCommit(err error, result client.BackfillResult, mediaRoot, message string) error {
-	if err == nil || result.MediaDownloaded == 0 {
+	if err == nil || backfillCommittedArtifactCount(result) == 0 {
 		return err
 	}
 	extras := map[string]any{}

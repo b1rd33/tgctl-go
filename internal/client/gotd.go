@@ -998,6 +998,7 @@ func (g *GotdClient) backfillMessageMedia(ctx context.Context, req BackfillReq, 
 		return nil
 	}
 	row.MediaIdentity = extracted.Identity
+	row.MediaType = extracted.MediaType
 	identityName := strings.ReplaceAll(extracted.Identity, ":", "_")
 	uniqueName := fmt.Sprintf("%d_%d_%s_%s", req.ChatID, message.ID, identityName, media.SanitizeDownloadName(extracted.Filename))
 	resp, err := g.downloadExtractedMessageMedia(ctx, DownloadMediaReq{
@@ -1005,6 +1006,21 @@ func (g *GotdClient) backfillMessageMedia(ctx context.Context, req BackfillReq, 
 		MaxBytes: req.MaxMediaBytes, Overwrite: req.OverwriteMedia,
 	}, message, extracted, uniqueName)
 	if err != nil {
+		var committedDownload *CommittedMediaDownloadError
+		if errors.As(err, &committedDownload) && committedDownload != nil {
+			row.MediaDisposition = BackfillMediaFailed
+			appendBackfillMediaOutcome(result, BackfillMediaOutcome{
+				ChatID: req.ChatID, MessageID: int64(message.ID), MediaIdentity: extracted.Identity,
+				Status: BackfillMediaFailed, MediaType: extracted.MediaType,
+				MediaPath: committedDownload.Response.Path, Bytes: committedDownload.Response.Bytes,
+				ErrorCode: "COMMITTED", Committed: true,
+			})
+			result.Warnings = append(result.Warnings, backfillMediaWarning(req.ChatID, int64(message.ID), "failed", "COMMITTED"))
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return ctxErr
+			}
+			return nil
+		}
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
@@ -1025,7 +1041,7 @@ func (g *GotdClient) backfillMessageMedia(ctx context.Context, req BackfillReq, 
 	row.MediaDisposition = status
 	appendBackfillMediaOutcome(result, BackfillMediaOutcome{
 		ChatID: req.ChatID, MessageID: int64(message.ID), MediaIdentity: extracted.Identity,
-		Status: status, MediaType: resp.MediaType, MediaPath: resp.Path, Bytes: resp.Bytes,
+		Status: status, MediaType: resp.MediaType, MediaPath: resp.Path, Bytes: resp.Bytes, Committed: !resp.Skipped,
 	})
 	return nil
 }

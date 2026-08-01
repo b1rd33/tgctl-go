@@ -237,6 +237,7 @@ type BackfillMediaOutcome struct {
 	MediaPath     string
 	Bytes         int64
 	ErrorCode     string
+	Committed     bool
 }
 
 type BackfillResult struct {

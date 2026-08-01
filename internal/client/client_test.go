@@ -100,7 +100,7 @@ func TestBackfillMediaContractAndFake(t *testing.T) {
 func TestBackfillStructuredMediaOutcomeContract(t *testing.T) {
 	want := BackfillResult{MediaOutcomes: []BackfillMediaOutcome{{
 		ChatID: 42, MessageID: 9, MediaIdentity: "document:700", Status: BackfillMediaDownloaded,
-		MediaType: "document", MediaPath: "/safe/42_9_document_700_report.pdf", Bytes: 12,
+		MediaType: "document", MediaPath: "/safe/42_9_document_700_report.pdf", Bytes: 12, Committed: true,
 	}}}
 	fake := &FakeClient{BackfillResult: want}
 	got, err := fake.BackfillMessages(context.Background(), BackfillReq{ChatID: 42})

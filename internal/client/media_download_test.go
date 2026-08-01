@@ -188,8 +188,40 @@ func TestBackfillMediaTransferFailureDoesNotStopLaterMessages(t *testing.T) {
 	if result.Messages[0].MediaPath != "" || filepath.Base(result.Messages[1].MediaPath) != "42_10_document_10_same.bin" {
 		t.Fatalf("message paths=%#v", result.Messages)
 	}
+	if result.Messages[0].MediaType != "document" || result.Messages[0].MediaIdentity != "document:20" {
+		t.Fatalf("failed known media metadata=%#v", result.Messages[0])
+	}
 	if strings.Contains(strings.Join(result.Warnings, ""), "secret") || strings.Contains(strings.Join(result.Warnings, ""), "access_hash") {
 		t.Fatalf("warnings leaked downloader error: %#v", result.Warnings)
+	}
+}
+
+func TestBackfillCommittedFinalizationErrorPreservesRecoveryOutcomeEvenWhenCanceled(t *testing.T) {
+	for _, cancelDuringCommit := range []bool{false, true} {
+		t.Run(fmt.Sprint("cancel=", cancelDuringCommit), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			message := documentMessageWithSize(700, 4, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "asset.bin"})
+			message.ID = 9
+			destination := &fakeDownloadDestination{
+				path:      filepath.Join(t.TempDir(), "42_9_document_700_asset.bin"),
+				commitErr: errors.New("directory sync failed"), abortErr: media.ErrDestinationCommitted,
+			}
+			if cancelDuringCommit {
+				destination.commitHook = cancel
+			}
+			g := &GotdClient{fileDownloader: &recordingFileDownloader{chunks: [][]byte{[]byte("data")}}, destinationOpener: fakeDestinationOpener{destination: destination}}
+			result, err := g.paginateBackfillHistory(ctx, BackfillReq{ChatID: 42, Limit: 1, DownloadMedia: true, MediaDir: t.TempDir()}, func(context.Context, int, int) (historyPage, error) {
+				return historyPage{Messages: []tg.MessageClass{message}, Total: 1, TotalKnown: true}, nil
+			}, waitForThrottle)
+			if len(result.MediaOutcomes) != 1 || (cancelDuringCommit && !errors.Is(err, context.Canceled)) || (!cancelDuringCommit && err != nil) {
+				t.Fatalf("err=%v result=%#v", err, result)
+			}
+			outcome := result.MediaOutcomes[0]
+			if !outcome.Committed || outcome.Status != BackfillMediaFailed || outcome.MediaPath != destination.path || outcome.Bytes != 4 || outcome.ErrorCode != "COMMITTED" || result.MediaFailed != 1 {
+				t.Fatalf("outcome=%#v result=%#v", outcome, result)
+			}
+		})
 	}
 }
 
@@ -1422,6 +1454,7 @@ type fakeDownloadDestination struct {
 	commitErr   error
 	abortErr    error
 	commitCalls int
+	commitHook  func()
 	abortCalls  int
 }
 
@@ -1429,8 +1462,14 @@ func (d *fakeDownloadDestination) FinalPath() string { return d.path }
 func (d *fakeDownloadDestination) ArtifactIdentity() media.ArtifactIdentity {
 	return d.identity
 }
-func (d *fakeDownloadDestination) Commit() error { d.commitCalls++; return d.commitErr }
-func (d *fakeDownloadDestination) Abort() error  { d.abortCalls++; return d.abortErr }
+func (d *fakeDownloadDestination) Commit() error {
+	d.commitCalls++
+	if d.commitHook != nil {
+		d.commitHook()
+	}
+	return d.commitErr
+}
+func (d *fakeDownloadDestination) Abort() error { d.abortCalls++; return d.abortErr }
 
 type fakeDestinationOpener struct {
 	destination downloadDestination
