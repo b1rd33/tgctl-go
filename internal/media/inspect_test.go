@@ -22,6 +22,85 @@ func TestInspectDownloadedArtifactAcceptsAnchoredRegularDirectChild(t *testing.T
 	}
 }
 
+func TestArtifactIdentityValidatesOriginalArtifact(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "asset.bin")
+	if err := os.WriteFile(path, []byte("payload"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	identity, captured, err := CaptureArtifactIdentity(dir, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := InspectDownloadedArtifactWithIdentity(dir, path, identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != captured || got.Size != 7 {
+		t.Fatalf("inspection=%#v captured=%#v", got, captured)
+	}
+}
+
+func TestArtifactIdentityRejectsCoherentOutputRootReplacement(t *testing.T) {
+	base := t.TempDir()
+	dir := filepath.Join(base, "downloads")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "asset.bin")
+	if err := os.WriteFile(path, []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	identity, _, err := CaptureArtifactIdentity(dir, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(dir, filepath.Join(base, "old-downloads")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("attacker"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InspectDownloadedArtifactWithIdentity(dir, path, identity); !errors.Is(err, ErrDestinationChanged) {
+		t.Fatalf("error=%v want ErrDestinationChanged", err)
+	}
+}
+
+func TestArtifactIdentityRejectsSameSizeFileReplacement(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "asset.bin")
+	if err := os.WriteFile(path, []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	identity, _, err := CaptureArtifactIdentity(dir, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("attacker"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InspectDownloadedArtifactWithIdentity(dir, path, identity); !errors.Is(err, ErrDestinationChanged) {
+		t.Fatalf("error=%v want ErrDestinationChanged", err)
+	}
+}
+
+func TestArtifactIdentityRejectsZeroValue(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "asset.bin")
+	if err := os.WriteFile(path, []byte("payload"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InspectDownloadedArtifactWithIdentity(dir, path, ArtifactIdentity{}); !errors.Is(err, ErrDestinationChanged) {
+		t.Fatalf("error=%v want ErrDestinationChanged", err)
+	}
+}
+
 func TestInspectDownloadedArtifactRejectsMissingSymlinkDirectoryAndNested(t *testing.T) {
 	dir := t.TempDir()
 	victim := filepath.Join(t.TempDir(), "victim")

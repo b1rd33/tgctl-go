@@ -128,10 +128,7 @@ func downloadMediaCommand(cfg CommandsConfig) *cobra.Command {
 				artifact, validationErr := validateDownloadMediaResponse(resp, chatID, messageID, validationRoot, overwrite)
 				if validationErr != nil {
 					validationErr = errors.Join(validationErr, clientCloseErr)
-					if !resp.Skipped {
-						return nil, safety.NewCommittedWrite("media download may have committed but returned an invalid response; do not retry blindly", validationErr)
-					}
-					return nil, validationErr
+					return nil, safety.NewCommittedWrite("media download may have committed but returned an invalid response; do not retry blindly", validationErr)
 				}
 				artifactMetadata := downloadArtifactMetadata(resp, artifact)
 				for key, value := range artifactMetadata {
@@ -257,7 +254,7 @@ func validateDownloadMediaResponse(resp client.DownloadMediaResp, chatID, messag
 	if filepath.Base(cleanPath) != resp.Filename {
 		return media.DownloadedArtifact{}, fmt.Errorf("download-media client returned filename/path mismatch")
 	}
-	artifact, err := media.InspectDownloadedArtifact(outputRoot, cleanPath)
+	artifact, err := media.InspectDownloadedArtifactWithIdentity(outputRoot, cleanPath, resp.ArtifactIdentity)
 	if err != nil {
 		return media.DownloadedArtifact{}, fmt.Errorf("validate downloaded media artifact: %w", err)
 	}

@@ -39,6 +39,7 @@ func (d gotdFileDownloader) Download(ctx context.Context, location tg.InputFileL
 type downloadDestination interface {
 	io.Writer
 	FinalPath() string
+	ArtifactIdentity() media.ArtifactIdentity
 	Commit() error
 	Abort() error
 }
@@ -63,8 +64,11 @@ type atomicDownloadDestination struct {
 
 func (d *atomicDownloadDestination) Write(p []byte) (int, error) { return d.destination.File.Write(p) }
 func (d *atomicDownloadDestination) FinalPath() string           { return d.destination.FinalPath }
-func (d *atomicDownloadDestination) Commit() error               { return d.destination.Commit() }
-func (d *atomicDownloadDestination) Abort() error                { return d.destination.Abort() }
+func (d *atomicDownloadDestination) ArtifactIdentity() media.ArtifactIdentity {
+	return d.destination.ArtifactIdentity()
+}
+func (d *atomicDownloadDestination) Commit() error { return d.destination.Commit() }
+func (d *atomicDownloadDestination) Abort() error  { return d.destination.Abort() }
 
 type mediaDownloadAPI interface {
 	ChannelsGetMessages(context.Context, *tg.ChannelsGetMessagesRequest) (tg.MessagesMessagesClass, error)
@@ -189,6 +193,7 @@ func (g *GotdClient) DownloadMedia(ctx context.Context, req DownloadMediaReq) (D
 	}
 	resp.Path = destination.FinalPath()
 	resp.Bytes = limitWriter.N
+	resp.ArtifactIdentity = destination.ArtifactIdentity()
 	return resp, nil
 }
 
@@ -211,6 +216,7 @@ func collisionDownloadResponse(resp DownloadMediaResp, collisionErr error) (Down
 	resp.Path = collision.FinalPath
 	resp.Bytes = collision.Size
 	resp.Skipped = true
+	resp.ArtifactIdentity = collision.Identity
 	return resp, nil
 }
 

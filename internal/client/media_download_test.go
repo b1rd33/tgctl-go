@@ -26,13 +26,23 @@ import (
 )
 
 func TestDownloadMediaContractAndFake(t *testing.T) {
+	identityDir := t.TempDir()
+	identityPath := filepath.Join(identityDir, "identity.bin")
+	if err := os.WriteFile(identityPath, []byte("identity"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	identity, _, err := media.CaptureArtifactIdentity(identityDir, identityPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	wantReq := DownloadMediaReq{
 		ChatID: 42, MessageID: 99, OutputDir: "raw/output", MaxBytes: 1024, Overwrite: true,
 	}
 	wantResp := DownloadMediaResp{
 		ChatID: 42, MessageID: 99, MediaType: "video", MIMEType: "video/mp4",
 		Filename: "clip.mp4", Path: "/tmp/clip.mp4", Bytes: 123, Skipped: true,
-		MessageDate: time.Date(2026, 8, 1, 10, 11, 12, 0, time.UTC),
+		MessageDate:      time.Date(2026, 8, 1, 10, 11, 12, 0, time.UTC),
+		ArtifactIdentity: identity,
 	}
 	fake := &FakeClient{DownloadResp: wantResp}
 
@@ -420,8 +430,13 @@ func TestGotdDownloadMediaStreamsAtomicallyAndReturnsSafeMetadata(t *testing.T) 
 		ChatID: 321, MessageID: 77, MediaType: "video", MIMEType: "video/mp4", Filename: "telegram-name.mp4",
 		Path: wantPath, Bytes: int64(len(data)), MessageDate: time.Unix(1_700_000_123, 0).UTC(),
 	}
+	identity := got.ArtifactIdentity
+	got.ArtifactIdentity = media.ArtifactIdentity{}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("response = %#v, want %#v", got, want)
+	}
+	if _, err := media.InspectDownloadedArtifactWithIdentity(outputDir, wantPath, identity); err != nil {
+		t.Fatalf("producer artifact identity did not validate: %v", err)
 	}
 	if !filepath.IsAbs(got.Path) {
 		t.Fatalf("path = %q, want absolute", got.Path)
@@ -635,6 +650,9 @@ func TestGotdDownloadMediaExistingRegularSkipsWithoutDownloading(t *testing.T) {
 	if err != nil || !got.Skipped || got.Path != final || got.Bytes != 8 {
 		t.Fatalf("response=%#v error=%v", got, err)
 	}
+	if _, err := media.InspectDownloadedArtifactWithIdentity(outputDir, final, got.ArtifactIdentity); err != nil {
+		t.Fatalf("collision artifact identity did not validate: %v", err)
+	}
 	if downloader.Calls() != 0 {
 		t.Fatalf("downloader calls = %d", downloader.Calls())
 	}
@@ -781,6 +799,9 @@ func TestGotdDownloadMediaCollisionDuringTransferReturnsSafeSkip(t *testing.T) {
 	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 26, OutputDir: outputDir})
 	if err != nil || !got.Skipped || got.Bytes != 6 {
 		t.Fatalf("response=%#v error=%v", got, err)
+	}
+	if _, err := media.InspectDownloadedArtifactWithIdentity(outputDir, final, got.ArtifactIdentity); err != nil {
+		t.Fatalf("commit collision identity did not validate: %v", err)
 	}
 	assertFileState(t, final, "winner", 0o640)
 	assertNoDownloadArtifacts(t, outputDir)
@@ -1102,8 +1123,11 @@ type fakeDownloadDestination struct {
 }
 
 func (d *fakeDownloadDestination) FinalPath() string { return d.path }
-func (d *fakeDownloadDestination) Commit() error     { d.commitCalls++; return d.commitErr }
-func (d *fakeDownloadDestination) Abort() error      { d.abortCalls++; return d.abortErr }
+func (d *fakeDownloadDestination) ArtifactIdentity() media.ArtifactIdentity {
+	return media.ArtifactIdentity{}
+}
+func (d *fakeDownloadDestination) Commit() error { d.commitCalls++; return d.commitErr }
+func (d *fakeDownloadDestination) Abort() error  { d.abortCalls++; return d.abortErr }
 
 type fakeDestinationOpener struct {
 	destination downloadDestination

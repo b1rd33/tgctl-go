@@ -34,11 +34,12 @@ var (
 
 // DestinationExistsError reports a no-overwrite collision that was proven to
 // be a regular file using the destination's anchored directory descriptor.
-// FinalPath is the safe logical path; Size is captured from that same no-follow
+// FinalPath, Size, and Identity are captured from that same no-follow
 // inspection. Callers must not restat FinalPath to classify the collision.
 type DestinationExistsError struct {
 	FinalPath string
 	Size      int64
+	Identity  ArtifactIdentity
 }
 
 func (e *DestinationExistsError) Error() string {
@@ -75,6 +76,7 @@ type Destination struct {
 	dir       *anchoredDir
 	finalName string
 	partName  string
+	dirID     fileIdentity
 	partID    fileIdentity
 	target    targetSnapshot
 
@@ -234,6 +236,10 @@ func openDestinationWithOps(dir, name string, overwrite bool, ops destinationOps
 	if err != nil {
 		return nil, fmt.Errorf("open download directory: %w", err)
 	}
+	dirID, err := dirHandle.identity()
+	if err != nil {
+		return nil, closeOpenDestinationDir(ops, dirHandle, fmt.Errorf("inspect download directory identity: %w", err))
+	}
 
 	safeName := SanitizeDownloadName(name)
 	finalPath := filepath.Join(absDir, safeName)
@@ -284,6 +290,7 @@ func openDestinationWithOps(dir, name string, overwrite bool, ops destinationOps
 		dir:       dirHandle,
 		finalName: safeName,
 		partName:  partName,
+		dirID:     dirID,
 		partID:    partEntry.identity,
 		target:    target,
 		ops:       ops,
@@ -577,7 +584,15 @@ func validateFinalTarget(dir *anchoredDir, name, displayPath string, overwrite b
 		return targetSnapshot{}, fmt.Errorf("%w: %s", ErrUnsafeDestination, displayPath)
 	}
 	if !overwrite {
-		return targetSnapshot{}, &DestinationExistsError{FinalPath: displayPath, Size: info.size}
+		dirID, identityErr := dir.identity()
+		if identityErr != nil {
+			return targetSnapshot{}, fmt.Errorf("inspect download directory identity: %w", identityErr)
+		}
+		return targetSnapshot{}, &DestinationExistsError{
+			FinalPath: displayPath,
+			Size:      info.size,
+			Identity:  newArtifactIdentity(dirID, info.identity),
+		}
 	}
 	return targetSnapshot{exists: true, identity: info.identity}, nil
 }
@@ -597,6 +612,20 @@ func (d *Destination) Commit() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.commitLocked()
+}
+
+// ArtifactIdentity returns the opaque identity of a successfully committed
+// destination. The zero value is returned before commit or after an abort.
+func (d *Destination) ArtifactIdentity() ArtifactIdentity {
+	if d == nil {
+		return ArtifactIdentity{}
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.state != destinationCommitted {
+		return ArtifactIdentity{}
+	}
+	return newArtifactIdentity(d.dirID, d.partID)
 }
 
 func (d *Destination) commitLocked() error {
@@ -693,7 +722,18 @@ func inspectDestinationCollision(dir *anchoredDir, name, displayPath string) err
 	if !entry.regular {
 		return fmt.Errorf("%w: %s", ErrUnsafeDestination, displayPath)
 	}
-	return &DestinationExistsError{FinalPath: displayPath, Size: entry.size}
+	dirID, identityErr := dir.identity()
+	if identityErr != nil {
+		return errors.Join(
+			fmt.Errorf("%w: %s", ErrDestinationChanged, displayPath),
+			fmt.Errorf("inspect collision directory identity: %w", identityErr),
+		)
+	}
+	return &DestinationExistsError{
+		FinalPath: displayPath,
+		Size:      entry.size,
+		Identity:  newArtifactIdentity(dirID, entry.identity),
+	}
 }
 
 func (d *Destination) publishOverwrite() (bool, error) {

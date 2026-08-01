@@ -23,6 +23,7 @@ type FakeClient struct {
 	Downloads    []DownloadMediaReq
 	DownloadResp DownloadMediaResp
 	DownloadErr  error
+	DownloadHook func()
 	CloseErr     error
 	Edited       []EditMessageReq
 	Forwards     []ForwardReq
@@ -121,6 +122,9 @@ func (f *FakeClient) DownloadMedia(_ context.Context, req DownloadMediaReq) (Dow
 		return DownloadMediaResp{}, err
 	}
 	f.Downloads = append(f.Downloads, req)
+	if f.DownloadHook != nil {
+		f.DownloadHook()
+	}
 	return f.DownloadResp, f.DownloadErr
 }
 

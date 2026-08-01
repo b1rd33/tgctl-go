@@ -228,6 +228,37 @@ func TestRunDurableAuditFailurePreservesPrecommitClassification(t *testing.T) {
 	}
 }
 
+func TestRunBlankDurableAuditPathAfterSuccessReturnsCommittedFailure(t *testing.T) {
+	var stdout bytes.Buffer
+	code := Run("download-media", Options{
+		JSON: true, Stdout: &stdout, DurableAudit: true,
+		CommittedExtras: map[string]any{"artifact_path": "/safe/media.bin", "artifact_bytes": int64(12)},
+	}, func(context.Context) (any, error) { return map[string]any{"ok": true}, nil })
+	if code != int(output.Generic) || !bytes.Contains(stdout.Bytes(), []byte(`"committed":true`)) || !bytes.Contains(stdout.Bytes(), []byte(`"artifact_path":"/safe/media.bin"`)) {
+		t.Fatalf("code=%d output=%s", code, stdout.Bytes())
+	}
+}
+
+func TestRunBlankDurableAuditPathPreservesPrecommitClassification(t *testing.T) {
+	var stdout bytes.Buffer
+	code := Run("download-media", Options{JSON: true, Stdout: &stdout, DurableAudit: true},
+		func(context.Context) (any, error) { return nil, resolve.NewNotFound("message missing") })
+	if code != int(output.NotFound) || !bytes.Contains(stdout.Bytes(), []byte(`"code":"NOT_FOUND"`)) || !bytes.Contains(stdout.Bytes(), []byte(`"audit_failed":true`)) || bytes.Contains(stdout.Bytes(), []byte(`"committed":true`)) {
+		t.Fatalf("code=%d output=%s", code, stdout.Bytes())
+	}
+}
+
+func TestRunBlankDurableAuditPathPreservesCommittedClassification(t *testing.T) {
+	var stdout bytes.Buffer
+	code := Run("download-media", Options{JSON: true, Stdout: &stdout, DurableAudit: true},
+		func(context.Context) (any, error) {
+			return nil, safety.NewCommittedWriteWithExtras("download committed", errors.New("cache failed"), map[string]any{"artifact_bytes": int64(12)})
+		})
+	if code != int(output.Generic) || !bytes.Contains(stdout.Bytes(), []byte(`"committed":true`)) || !bytes.Contains(stdout.Bytes(), []byte(`"partial":true`)) || !bytes.Contains(stdout.Bytes(), []byte(`"artifact_bytes":12`)) || !bytes.Contains(stdout.Bytes(), []byte(`"audit_failed":true`)) {
+		t.Fatalf("code=%d output=%s", code, stdout.Bytes())
+	}
+}
+
 func TestRunNonDurableAuditFailureDoesNotChangeSuccess(t *testing.T) {
 	dir := t.TempDir()
 	blocker := filepath.Join(dir, "not-a-directory")

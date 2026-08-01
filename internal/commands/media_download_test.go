@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/b1rd33/tgctl-go/internal/client"
+	"github.com/b1rd33/tgctl-go/internal/media"
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
@@ -146,10 +147,15 @@ func configureDownload(t *testing.T, cfg CommandsConfig, fake *client.FakeClient
 	if err := os.WriteFile(mediaPath, []byte("hello world!"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	identity, _, err := media.CaptureArtifactIdentity(absOutput, mediaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	fake.DownloadResp = client.DownloadMediaResp{
 		ChatID: chatID, MessageID: messageID, MediaType: "document", MIMEType: "application/octet-stream",
 		Filename: "asset.bin", Path: mediaPath, Bytes: 12, Skipped: skipped,
-		MessageDate: time.Date(2026, 7, 31, 15, 4, 5, 0, time.UTC),
+		MessageDate:      time.Date(2026, 7, 31, 15, 4, 5, 0, time.UTC),
+		ArtifactIdentity: identity,
 	}
 	return mediaPath
 }
@@ -289,6 +295,9 @@ func TestDownloadMediaRejectsFaultyResponsesWithoutCacheMutation(t *testing.T) {
 			_ = os.WriteFile(r.Path, bytes.Repeat([]byte{'x'}, int(r.Bytes)), 0o600)
 		}},
 		{name: "negative bytes", edit: func(r *client.DownloadMediaResp, _ string) { r.Bytes = -1 }},
+		{name: "missing artifact identity", edit: func(r *client.DownloadMediaResp, _ string) {
+			r.ArtifactIdentity = media.ArtifactIdentity{}
+		}},
 		{name: "size mismatch", edit: func(r *client.DownloadMediaResp, _ string) { r.Bytes++ }},
 		{name: "relative path", edit: func(r *client.DownloadMediaResp, _ string) { r.Path = "asset.bin" }},
 		{name: "outside output", edit: func(r *client.DownloadMediaResp, output string) {
@@ -325,13 +334,13 @@ func TestDownloadMediaRejectsFaultyResponsesWithoutCacheMutation(t *testing.T) {
 	}
 }
 
-func TestDownloadMediaRejectsInvalidSkippedResponseWithoutCommittedClassification(t *testing.T) {
+func TestDownloadMediaRejectsInvalidSkippedResponseAsCommitted(t *testing.T) {
 	cfg, fake, dir := setupWriteEnv(t)
 	output := filepath.Join(dir, "media", "1")
 	configureDownload(t, cfg, fake, 1, 9, output, true)
 	fake.DownloadResp.MIMEType = "not a mime"
 	out, code := runRoot(t, cfg, "download-media", "1", "9", "--allow-write", "--json")
-	if code != 1 || strings.Contains(out, `"committed":true`) {
+	if code != 1 || !strings.Contains(out, `"committed":true`) || !strings.Contains(out, `"partial":true`) || strings.Contains(out, fake.DownloadResp.Path) {
 		t.Fatalf("code=%d out=%s", code, out)
 	}
 	if _, err := loadMessage(cfg.Paths.(stubPaths).db, 1, 9); !errors.Is(err, sql.ErrNoRows) {
@@ -343,8 +352,53 @@ func TestDownloadMediaRejectsSkippedOverwriteAsIncoherent(t *testing.T) {
 	cfg, fake, dir := setupWriteEnv(t)
 	configureDownload(t, cfg, fake, 1, 9, filepath.Join(dir, "media", "1"), true)
 	out, code := runRoot(t, cfg, "download-media", "1", "9", "--overwrite", "--allow-write", "--json")
-	if code != 1 || strings.Contains(out, `"committed":true`) {
+	if code != 1 || !strings.Contains(out, `"committed":true`) || !strings.Contains(out, `"partial":true`) || strings.Contains(out, fake.DownloadResp.Path) {
 		t.Fatalf("code=%d out=%s", code, out)
+	}
+}
+
+func TestDownloadMediaRejectsOutputRootReplacementAfterClientReturn(t *testing.T) {
+	cfg, fake, dir := setupWriteEnv(t)
+	output := filepath.Join(dir, "media", "1")
+	path := configureDownload(t, cfg, fake, 1, 9, output, false)
+	fake.DownloadHook = func() {
+		if err := os.Rename(output, output+"-original"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(output, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("evil payload"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, code := runRoot(t, cfg, "download-media", "1", "9", "--allow-write", "--json")
+	if code != 1 || !strings.Contains(out, `"committed":true`) || strings.Contains(out, path) {
+		t.Fatalf("code=%d out=%s", code, out)
+	}
+	if _, err := loadMessage(cfg.Paths.(stubPaths).db, 1, 9); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("cache mutated: %v", err)
+	}
+}
+
+func TestDownloadMediaRejectsSameSizeFileReplacementAfterClientReturn(t *testing.T) {
+	cfg, fake, dir := setupWriteEnv(t)
+	output := filepath.Join(dir, "media", "1")
+	path := configureDownload(t, cfg, fake, 1, 9, output, false)
+	fake.DownloadHook = func() {
+		if err := os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("evil payload"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, code := runRoot(t, cfg, "download-media", "1", "9", "--allow-write", "--json")
+	if code != 1 || !strings.Contains(out, `"committed":true`) || strings.Contains(out, path) {
+		t.Fatalf("code=%d out=%s", code, out)
+	}
+	if _, err := loadMessage(cfg.Paths.(stubPaths).db, 1, 9); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("cache mutated: %v", err)
 	}
 }
 

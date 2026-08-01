@@ -177,6 +177,9 @@ func TestOpenDestinationRejectsExistingFinalWithoutOverwrite(t *testing.T) {
 	if !errors.As(err, &collision) || collision.FinalPath != final || collision.Size != 3 {
 		t.Fatalf("collision = %#v from %v, want anchored path=%q size=3", collision, err, final)
 	}
+	if _, err := InspectDownloadedArtifactWithIdentity(dir, final, collision.Identity); err != nil {
+		t.Fatalf("collision identity did not validate: %v", err)
+	}
 	assertNoParts(t, dir)
 }
 
@@ -325,6 +328,9 @@ func TestDestinationCommitPublishesAtomicallyAndSetsPrivateMode(t *testing.T) {
 	if err := d.Commit(); err != nil {
 		t.Fatalf("Commit: %v", err)
 	}
+	if _, err := InspectDownloadedArtifactWithIdentity(dir, d.FinalPath, d.ArtifactIdentity()); err != nil {
+		t.Fatalf("committed destination identity did not validate: %v", err)
+	}
 	got, err := os.ReadFile(d.FinalPath)
 	if err != nil {
 		t.Fatal(err)
@@ -418,6 +424,9 @@ func TestDestinationCommitWithoutOverwriteDoesNotClobberRacedFinal(t *testing.T)
 	var collision *DestinationExistsError
 	if !errors.As(commitErr, &collision) || collision.FinalPath != d.FinalPath || collision.Size != 6 {
 		t.Fatalf("collision = %#v from %v, want anchored winner size=6", collision, commitErr)
+	}
+	if _, err := InspectDownloadedArtifactWithIdentity(dir, d.FinalPath, collision.Identity); err != nil {
+		t.Fatalf("commit collision identity did not validate: %v", err)
 	}
 	got, err := os.ReadFile(d.FinalPath)
 	if err != nil {

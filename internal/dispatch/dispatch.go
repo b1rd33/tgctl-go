@@ -150,23 +150,26 @@ func Run(name string, opts Options, runner Runner) int {
 		result = "ok"
 	}
 
+	var auditErr error
 	if opts.AuditPath != "" {
-		auditErr := audit.Write(opts.AuditPath, name, requestID, opts.Args, result, auditExtra)
-		if auditErr != nil && opts.DurableAudit {
-			if err == nil {
-				committedErr := safety.NewCommittedWriteWithExtras(
-					"operation committed but durable audit finalization failed; do not retry blindly",
-					auditErr,
-					opts.CommittedExtras,
-				)
-				code, msg, extra := Classify(committedErr)
-				envelope = output.Fail(name, code, msg, requestID, extra)
-			} else if envelope.Error != nil {
-				if envelope.Error.Extra == nil {
-					envelope.Error.Extra = map[string]any{}
-				}
-				envelope.Error.Extra["audit_failed"] = true
+		auditErr = audit.Write(opts.AuditPath, name, requestID, opts.Args, result, auditExtra)
+	} else if opts.DurableAudit {
+		auditErr = errors.New("durable audit path is not configured")
+	}
+	if auditErr != nil && opts.DurableAudit {
+		if err == nil {
+			committedErr := safety.NewCommittedWriteWithExtras(
+				"operation committed but durable audit finalization failed; do not retry blindly",
+				auditErr,
+				opts.CommittedExtras,
+			)
+			code, msg, extra := Classify(committedErr)
+			envelope = output.Fail(name, code, msg, requestID, extra)
+		} else if envelope.Error != nil {
+			if envelope.Error.Extra == nil {
+				envelope.Error.Extra = map[string]any{}
 			}
+			envelope.Error.Extra["audit_failed"] = true
 		}
 	}
 

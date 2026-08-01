@@ -5,6 +5,8 @@ package client
 import (
 	"context"
 	"time"
+
+	"github.com/b1rd33/tgctl-go/internal/media"
 )
 
 // User mirrors the subset of fields tgcli.commands.auth uses.
@@ -71,6 +73,9 @@ type DownloadMediaResp struct {
 	Bytes       int64     `json:"bytes"`
 	Skipped     bool      `json:"skipped"`
 	MessageDate time.Time `json:"-"`
+	// ArtifactIdentity binds Path to the directory entry committed or safely
+	// inspected by the producer. It is intentionally omitted from external JSON.
+	ArtifactIdentity media.ArtifactIdentity `json:"-"`
 }
 
 // EditMessageReq mirrors messages.EditMessage.

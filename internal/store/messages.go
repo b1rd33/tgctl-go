@@ -285,9 +285,9 @@ func UpdateMessageMediaPath(db *sql.DB, chatID, messageID int64, mediaType, medi
 }
 
 // StoreMessageMediaPath records downloaded media whether or not the live
-// message was already cached. The single UPSERT is race-safe: if another
-// writer inserts a richer row first, the conflict arm changes only the media
-// fields and preserves all other message data.
+// message was already cached. It updates existing rows first; if no row exists,
+// a conditional UPSERT inserts the minimal record or changes only the media
+// fields when another writer wins the insert race, preserving richer data.
 func StoreMessageMediaPath(db *sql.DB, chatID, messageID int64, messageDate time.Time, mediaType, mediaPath string) error {
 	if err := UpdateMessageMediaPath(db, chatID, messageID, mediaType, mediaPath); err == nil {
 		return nil
