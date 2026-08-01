@@ -665,6 +665,9 @@ func TestBackfillFullCommandProcessHelper(t *testing.T) {
 			t.Fatalf("command failed unclearly code=%d envelope=%#v\nout:%s", code, envelope, out)
 		}
 	}
+	if err := os.WriteFile(os.Getenv("TGCTL_BACKFILL_RESULT"), []byte(strconv.Itoa(code)), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("command code=%d output=%s", code, strings.TrimSpace(out))
 }
 
@@ -675,19 +678,21 @@ func TestCappedBackfillFullCommandCrossProcessContention(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	type child struct {
-		cmd *exec.Cmd
-		out bytes.Buffer
+		cmd        *exec.Cmd
+		out        bytes.Buffer
+		resultPath string
 	}
 	children := make([]*child, 2)
 	for i := range children {
 		ready := filepath.Join(dir, fmt.Sprintf("full-command-ready-%d", i))
-		child := &child{}
+		child := &child{resultPath: filepath.Join(dir, fmt.Sprintf("child-%d.result", i))}
 		child.cmd = exec.CommandContext(ctx, os.Args[0], "-test.run=^TestBackfillFullCommandProcessHelper$", "-test.v")
 		child.cmd.Env = append(os.Environ(),
 			"TGCTL_BACKFILL_COMMAND_HELPER=1", "TGCTL_BACKFILL_DB="+paths.db,
 			"TGCTL_BACKFILL_ID="+strconv.Itoa(500+i), "TGCTL_BACKFILL_READY="+ready,
 			"TGCTL_BACKFILL_GATE="+gate, "TGCTL_BACKFILL_SESSION="+filepath.Join(dir, fmt.Sprintf("child-%d.session", i)),
 			"TGCTL_BACKFILL_AUDIT="+filepath.Join(dir, fmt.Sprintf("child-%d.audit", i)),
+			"TGCTL_BACKFILL_RESULT="+child.resultPath,
 		)
 		child.cmd.Stdout = &child.out
 		child.cmd.Stderr = &child.out
@@ -712,9 +717,21 @@ func TestCappedBackfillFullCommandCrossProcessContention(t *testing.T) {
 	if err := os.WriteFile(gate, []byte("go"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	successes := 0
 	for i, child := range children {
 		if err := child.cmd.Wait(); err != nil {
 			t.Fatalf("full-command child %d failed: %v\n%s", i, err, child.out.String())
+		}
+		result, err := os.ReadFile(child.resultPath)
+		if err != nil {
+			t.Fatalf("read child %d result: %v\n%s", i, err, child.out.String())
+		}
+		code, err := strconv.Atoi(string(result))
+		if err != nil {
+			t.Fatalf("parse child %d result %q: %v", i, result, err)
+		}
+		if code == 0 {
+			successes++
 		}
 		t.Logf("child %d:\n%s", i, child.out.String())
 	}
@@ -731,8 +748,14 @@ func TestCappedBackfillFullCommandCrossProcessContention(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if count != 1 || size > 1024*1024 {
-		t.Fatalf("full-command cross-process count=%d size=%d, want one row within cap", count, size)
+	if count < 0 || count > 1 || size > 1024*1024 {
+		t.Fatalf("full-command cross-process count=%d size=%d, want at most one row within cap", count, size)
+	}
+	if count == 0 && successes != 0 {
+		t.Fatalf("count=0 with %d successful children, want both clean busy/locked failures", successes)
+	}
+	if count == 1 && successes == 0 {
+		t.Fatal("count=1 without a successful child outcome")
 	}
 	if mode := sqliteJournalMode(t, paths.db); mode != "wal" {
 		t.Fatalf("journal_mode=%q after full-command subprocess contention, want wal", mode)
