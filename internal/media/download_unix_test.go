@@ -48,3 +48,47 @@ func TestDestinationOverwriteRollsBackFIFOSwapBeforePublish(t *testing.T) {
 	}
 	assertNoParts(t, dir)
 }
+
+func TestDestinationCommitAndAbortRejectReplacedPartFIFO(t *testing.T) {
+	for _, action := range []string{"commit", "abort"} {
+		t.Run(action, func(t *testing.T) {
+			dir := t.TempDir()
+			d, err := OpenDestination(dir, "result.bin", false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			openFile := d.File
+			orphan := d.PartPath + ".renamed"
+			if err := os.Rename(d.PartPath, orphan); err != nil {
+				t.Fatal(err)
+			}
+			if err := unix.Mkfifo(d.PartPath, 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			var lifecycleErr error
+			if action == "commit" {
+				lifecycleErr = d.Commit()
+			} else {
+				lifecycleErr = d.Abort()
+			}
+			if !errors.Is(lifecycleErr, ErrUnsafeDestination) {
+				t.Fatalf("%s error = %v, want ErrUnsafeDestination", action, lifecycleErr)
+			}
+			assertFileClosed(t, openFile)
+			info, err := os.Lstat(d.PartPath)
+			if err != nil {
+				t.Fatalf("replacement FIFO removed: %v", err)
+			}
+			if info.Mode()&os.ModeNamedPipe == 0 {
+				t.Fatalf("replacement changed: mode=%v", info.Mode())
+			}
+			if _, err := os.Lstat(orphan); err != nil {
+				t.Fatalf("renamed original part was removed: %v", err)
+			}
+			if _, err := os.Lstat(d.FinalPath); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("final was published: %v", err)
+			}
+		})
+	}
+}

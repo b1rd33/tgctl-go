@@ -52,6 +52,7 @@ type Destination struct {
 	dir       *anchoredDir
 	finalName string
 	partName  string
+	partID    fileIdentity
 	target    targetSnapshot
 }
 
@@ -171,13 +172,32 @@ func OpenDestination(dir, name string, overwrite bool) (*Destination, error) {
 		_ = dirHandle.close()
 		return nil, fmt.Errorf("create download part: %w", err)
 	}
+	partEntry, err := snapshotOpenFile(part)
+	if err != nil || !partEntry.regular {
+		_ = part.Close()
+		_ = dirHandle.close()
+		if err != nil {
+			return nil, fmt.Errorf("inspect opened download part: %w", err)
+		}
+		return nil, fmt.Errorf("%w: opened part is not regular", ErrUnsafeDestination)
+	}
+	partPath := filepath.Join(absDir, partName)
+	if err := validateNamedRegular(dirHandle, partName, partPath, partEntry.identity); err != nil {
+		_ = part.Close()
+		_ = dirHandle.close()
+		return nil, err
+	}
 	if err := part.Chmod(0o600); err != nil {
 		_ = part.Close()
-		_ = dirHandle.remove(partName)
+		_ = removeNamedRegular(dirHandle, partName, partPath, partEntry.identity)
 		_ = dirHandle.close()
 		return nil, fmt.Errorf("secure download part: %w", err)
 	}
-	partPath := filepath.Join(absDir, partName)
+	if err := validateNamedRegular(dirHandle, partName, partPath, partEntry.identity); err != nil {
+		_ = part.Close()
+		_ = dirHandle.close()
+		return nil, err
+	}
 	return &Destination{
 		FinalPath: finalPath,
 		PartPath:  partPath,
@@ -190,8 +210,36 @@ func OpenDestination(dir, name string, overwrite bool) (*Destination, error) {
 		dir:       dirHandle,
 		finalName: safeName,
 		partName:  partName,
+		partID:    partEntry.identity,
 		target:    target,
 	}, nil
+}
+
+func validateNamedRegular(dir *anchoredDir, name, displayPath string, expected fileIdentity) error {
+	entry, err := dir.lstat(name)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("%w: %s", ErrDestinationChanged, displayPath)
+		}
+		return errors.Join(
+			fmt.Errorf("%w: %s", ErrDestinationChanged, displayPath),
+			fmt.Errorf("inspect destination entry: %w", err),
+		)
+	}
+	if !entry.regular {
+		return fmt.Errorf("%w: %s", ErrUnsafeDestination, displayPath)
+	}
+	if !sameFileIdentity(entry.identity, expected) {
+		return fmt.Errorf("%w: %s", ErrDestinationChanged, displayPath)
+	}
+	return nil
+}
+
+func removeNamedRegular(dir *anchoredDir, name, displayPath string, expected fileIdentity) error {
+	if err := validateNamedRegular(dir, name, displayPath, expected); err != nil {
+		return err
+	}
+	return dir.remove(name)
 }
 
 func createPartFile(dir *anchoredDir, displayDir, safeName string) (string, *os.File, error) {
@@ -281,6 +329,9 @@ func (d *Destination) Commit() error {
 			return errors.Join(publishErr, d.finishCommit())
 		}
 	} else {
+		if err := d.validatePartEntry(); err != nil {
+			return d.failBeforeCommit(err)
+		}
 		if err := d.dir.renameNoReplace(d.partName, d.finalName); err != nil {
 			if errors.Is(err, os.ErrExist) {
 				err = fmt.Errorf("%w: %s", ErrDestinationExists, d.FinalPath)
@@ -289,6 +340,12 @@ func (d *Destination) Commit() error {
 			}
 			return d.failBeforeCommit(err)
 		}
+		if err := validateNamedRegular(d.dir, d.finalName, d.FinalPath, d.partID); err != nil {
+			return errors.Join(
+				fmt.Errorf("download published but part identity changed during publish: %w", err),
+				d.finishCommit(),
+			)
+		}
 	}
 
 	return d.finishCommit()
@@ -296,6 +353,9 @@ func (d *Destination) Commit() error {
 
 func (d *Destination) publishOverwrite() (bool, error) {
 	if err := d.validateTargetUnchanged(); err != nil {
+		return false, err
+	}
+	if err := d.validatePartEntry(); err != nil {
 		return false, err
 	}
 	beforeOverwritePublish()
@@ -307,6 +367,9 @@ func (d *Destination) publishOverwrite() (bool, error) {
 			}
 			return false, fmt.Errorf("publish new download: %w", err)
 		}
+		if err := validateNamedRegular(d.dir, d.finalName, d.FinalPath, d.partID); err != nil {
+			return true, fmt.Errorf("download published but part identity changed during publish: %w", err)
+		}
 		return true, nil
 	}
 
@@ -316,24 +379,24 @@ func (d *Destination) publishOverwrite() (bool, error) {
 		}
 		return false, errors.Join(d.targetRaceError(), fmt.Errorf("atomic exchange download: %w", err))
 	}
-	displaced, inspectErr := d.dir.lstat(d.partName)
-	if inspectErr == nil && displaced.regular && sameFileIdentity(displaced.identity, d.target.identity) {
-		if err := d.dir.remove(d.partName); err != nil {
+	finalErr := validateNamedRegular(d.dir, d.finalName, d.FinalPath, d.partID)
+	displacedErr := validateNamedRegular(d.dir, d.partName, d.PartPath, d.target.identity)
+	if finalErr == nil && displacedErr == nil {
+		if err := removeNamedRegular(d.dir, d.partName, d.PartPath, d.target.identity); err != nil {
 			return true, fmt.Errorf("download committed but remove displaced target: %w", err)
 		}
 		return true, nil
 	}
 
-	raceErr := fmt.Errorf("%w: %s", ErrDestinationChanged, d.FinalPath)
-	if inspectErr == nil && !displaced.regular {
-		raceErr = fmt.Errorf("%w: %s", ErrUnsafeDestination, d.FinalPath)
-	} else if inspectErr != nil {
-		raceErr = errors.Join(raceErr, fmt.Errorf("inspect displaced target: %w", inspectErr))
-	}
+	raceErr := errors.Join(finalErr, displacedErr)
 	if err := d.dir.exchange(d.partName, d.finalName); err != nil {
 		return true, errors.Join(raceErr, fmt.Errorf("unsafe target displaced but rollback failed: %w", err))
 	}
 	return false, raceErr
+}
+
+func (d *Destination) validatePartEntry() error {
+	return validateNamedRegular(d.dir, d.partName, d.PartPath, d.partID)
 }
 
 func (d *Destination) targetRaceError() error {
@@ -427,7 +490,7 @@ func (d *Destination) abortOpen() error {
 		}
 	}
 	if d.dir != nil && d.partName != "" {
-		if err := d.dir.remove(d.partName); err != nil && !errors.Is(err, os.ErrNotExist) {
+		if err := removeNamedRegular(d.dir, d.partName, d.PartPath, d.partID); err != nil {
 			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("remove download part: %w", err))
 		}
 	}

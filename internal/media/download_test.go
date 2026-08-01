@@ -459,6 +459,152 @@ func TestDestinationMutatedFieldsCannotDamageUnrelatedFiles(t *testing.T) {
 	}
 }
 
+func TestDestinationCommitRejectsReplacedOrMissingPartEntry(t *testing.T) {
+	for _, kind := range []string{"symlink", "regular", "missing"} {
+		t.Run(kind, func(t *testing.T) {
+			dir := t.TempDir()
+			d, err := OpenDestination(dir, "result.bin", false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			openFile := d.File
+			if _, err := openFile.Write([]byte("download")); err != nil {
+				t.Fatal(err)
+			}
+			orphan := replacePartEntry(t, d, kind)
+
+			commitErr := d.Commit()
+			wantErr := ErrDestinationChanged
+			if kind == "symlink" {
+				wantErr = ErrUnsafeDestination
+			}
+			if !errors.Is(commitErr, wantErr) {
+				t.Fatalf("Commit error = %v, want %v", commitErr, wantErr)
+			}
+			assertFileClosed(t, openFile)
+			if _, err := os.Lstat(d.FinalPath); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("final was published from changed part: %v", err)
+			}
+			assertReplacementUnchanged(t, d.PartPath, kind)
+			if got, err := os.ReadFile(orphan); err != nil || string(got) != "download" {
+				t.Fatalf("renamed original part changed: content=%q err=%v", got, err)
+			}
+		})
+	}
+}
+
+func TestDestinationAbortRejectsReplacedOrMissingPartEntry(t *testing.T) {
+	for _, kind := range []string{"symlink", "regular", "missing"} {
+		t.Run(kind, func(t *testing.T) {
+			dir := t.TempDir()
+			d, err := OpenDestination(dir, "cancel.bin", false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			openFile := d.File
+			orphan := replacePartEntry(t, d, kind)
+
+			abortErr := d.Abort()
+			wantErr := ErrDestinationChanged
+			if kind == "symlink" {
+				wantErr = ErrUnsafeDestination
+			}
+			if !errors.Is(abortErr, wantErr) {
+				t.Fatalf("Abort error = %v, want %v", abortErr, wantErr)
+			}
+			assertFileClosed(t, openFile)
+			assertReplacementUnchanged(t, d.PartPath, kind)
+			if _, err := os.Lstat(orphan); err != nil {
+				t.Fatalf("renamed original part was removed: %v", err)
+			}
+		})
+	}
+}
+
+func TestDestinationOverwriteRejectsReplacedPartAndRestoresFinal(t *testing.T) {
+	dir := t.TempDir()
+	final := filepath.Join(dir, "result.bin")
+	if err := os.WriteFile(final, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d, err := OpenDestination(dir, "result.bin", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	openFile := d.File
+	if _, err := openFile.Write([]byte("download")); err != nil {
+		t.Fatal(err)
+	}
+	orphan := replacePartEntry(t, d, "symlink")
+
+	if err := d.Commit(); !errors.Is(err, ErrUnsafeDestination) {
+		t.Fatalf("Commit error = %v, want ErrUnsafeDestination", err)
+	}
+	assertFileClosed(t, openFile)
+	if got, err := os.ReadFile(final); err != nil || string(got) != "old" {
+		t.Fatalf("original final changed: content=%q err=%v", got, err)
+	}
+	assertReplacementUnchanged(t, d.PartPath, "symlink")
+	if got, err := os.ReadFile(orphan); err != nil || string(got) != "download" {
+		t.Fatalf("renamed original part changed: content=%q err=%v", got, err)
+	}
+}
+
+func replacePartEntry(t *testing.T, d *Destination, kind string) string {
+	t.Helper()
+	orphan := d.PartPath + ".renamed"
+	if err := os.Rename(d.PartPath, orphan); err != nil {
+		t.Fatal(err)
+	}
+	switch kind {
+	case "symlink":
+		victim := d.PartPath + ".victim"
+		if err := os.WriteFile(victim, []byte("safe"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(victim, d.PartPath); err != nil {
+			t.Skipf("symlink unsupported: %v", err)
+		}
+	case "regular":
+		if err := os.WriteFile(d.PartPath, []byte("replacement"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	case "missing":
+	default:
+		t.Fatalf("unknown replacement kind %q", kind)
+	}
+	return orphan
+}
+
+func assertReplacementUnchanged(t *testing.T, partPath, kind string) {
+	t.Helper()
+	switch kind {
+	case "symlink":
+		target, err := os.Readlink(partPath)
+		if err != nil {
+			t.Fatalf("replacement symlink removed or changed: %v", err)
+		}
+		if got, err := os.ReadFile(target); err != nil || string(got) != "safe" {
+			t.Fatalf("replacement referent changed: content=%q err=%v", got, err)
+		}
+	case "regular":
+		if got, err := os.ReadFile(partPath); err != nil || string(got) != "replacement" {
+			t.Fatalf("replacement regular file changed: content=%q err=%v", got, err)
+		}
+	case "missing":
+		if _, err := os.Lstat(partPath); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("missing part entry was recreated: %v", err)
+		}
+	}
+}
+
+func assertFileClosed(t *testing.T, file *os.File) {
+	t.Helper()
+	if _, err := file.Write([]byte("x")); !errors.Is(err, os.ErrClosed) {
+		t.Fatalf("original part FD is not closed: %v", err)
+	}
+}
+
 func TestLimitWriterExactLimitAndUnlimited(t *testing.T) {
 	var exact strings.Builder
 	w := &LimitWriter{W: &exact, Max: 4}

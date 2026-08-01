@@ -46,6 +46,14 @@ func (d *anchoredDir) lstat(name string) (anchoredEntry, error) {
 	return anchoredEntry{identity: fileIdentity{info: info}, regular: info.Mode().IsRegular()}, nil
 }
 
+func snapshotOpenFile(file *os.File) (anchoredEntry, error) {
+	info, err := file.Stat()
+	if err != nil {
+		return anchoredEntry{}, err
+	}
+	return anchoredEntry{identity: fileIdentity{info: info}, regular: info.Mode().IsRegular()}, nil
+}
+
 func sameFileIdentity(a, b fileIdentity) bool {
 	return a.info != nil && b.info != nil && os.SameFile(a.info, b.info)
 }

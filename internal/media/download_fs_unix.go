@@ -50,6 +50,17 @@ func (d *anchoredDir) lstat(name string) (anchoredEntry, error) {
 	}, nil
 }
 
+func snapshotOpenFile(file *os.File) (anchoredEntry, error) {
+	var stat unix.Stat_t
+	if err := unix.Fstat(int(file.Fd()), &stat); err != nil {
+		return anchoredEntry{}, err
+	}
+	return anchoredEntry{
+		identity: fileIdentity{device: uint64(stat.Dev), inode: stat.Ino},
+		regular:  stat.Mode&unix.S_IFMT == unix.S_IFREG,
+	}, nil
+}
+
 func sameFileIdentity(a, b fileIdentity) bool {
 	return a == b
 }
