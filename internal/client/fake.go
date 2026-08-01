@@ -3,30 +3,36 @@ package client
 import (
 	"context"
 	"errors"
+	"sync"
 )
 
 // FakeClient is the test double for the Client interface. It records every
 // call and lets tests assert on the captured arguments.
 type FakeClient struct {
-	Me       User
-	NextErr  error
-	Closed   bool
-	Calls    []string
-	Sent     []SendMessageReq
-	Uploads  []UploadFileReq
-	Edited   []EditMessageReq
-	Forwards []ForwardReq
-	Pins     []PinReq
-	Reacts   []ReactReq
-	Reads    []MarkReadReq
-	Deletes  []DeleteMessagesReq
-	Leaves   []LeaveChatReq
-	Blocks   []BlockUserReq
-	Unblocks []BlockUserReq
-	Sessions []SessionRef
-	Terms    []TerminateSessionReq
-	Dialogs  []ChatInfo
-	Contacts []ContactInfo
+	downloadMu sync.Mutex
+
+	Me           User
+	NextErr      error
+	Closed       bool
+	Calls        []string
+	Sent         []SendMessageReq
+	Uploads      []UploadFileReq
+	Downloads    []DownloadMediaReq
+	DownloadResp DownloadMediaResp
+	DownloadErr  error
+	Edited       []EditMessageReq
+	Forwards     []ForwardReq
+	Pins         []PinReq
+	Reacts       []ReactReq
+	Reads        []MarkReadReq
+	Deletes      []DeleteMessagesReq
+	Leaves       []LeaveChatReq
+	Blocks       []BlockUserReq
+	Unblocks     []BlockUserReq
+	Sessions     []SessionRef
+	Terms        []TerminateSessionReq
+	Dialogs      []ChatInfo
+	Contacts     []ContactInfo
 
 	Discoveries  []int
 	ContactSyncs []bool
@@ -95,6 +101,16 @@ func (f *FakeClient) UploadFile(_ context.Context, req UploadFileReq) (UploadFil
 		id = int64(3000 + len(f.Uploads))
 	}
 	return UploadFileResp{MessageID: id, Date: "2026-05-08T12:00:00"}, nil
+}
+
+func (f *FakeClient) DownloadMedia(_ context.Context, req DownloadMediaReq) (DownloadMediaResp, error) {
+	f.downloadMu.Lock()
+	defer f.downloadMu.Unlock()
+	if err := f.record("DownloadMedia"); err != nil {
+		return DownloadMediaResp{}, err
+	}
+	f.Downloads = append(f.Downloads, req)
+	return f.DownloadResp, f.DownloadErr
 }
 
 func (f *FakeClient) EditMessage(_ context.Context, req EditMessageReq) error {

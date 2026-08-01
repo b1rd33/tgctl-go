@@ -51,6 +51,27 @@ type UploadFileResp struct {
 	Date      string
 }
 
+// DownloadMediaReq identifies one Telegram message whose file attachment
+// should be downloaded.
+type DownloadMediaReq struct {
+	ChatID    int64
+	MessageID int64
+	OutputDir string
+	MaxBytes  int64
+	Overwrite bool
+}
+
+type DownloadMediaResp struct {
+	ChatID    int64  `json:"chat_id"`
+	MessageID int64  `json:"message_id"`
+	MediaType string `json:"media_type"`
+	MIMEType  string `json:"mime_type"`
+	Filename  string `json:"filename"`
+	Path      string `json:"media_path"`
+	Bytes     int64  `json:"bytes"`
+	Skipped   bool   `json:"skipped"`
+}
+
 // EditMessageReq mirrors messages.EditMessage.
 type EditMessageReq struct {
 	ChatID    int64
@@ -253,6 +274,7 @@ type Client interface {
 	GetMe(ctx context.Context) (User, error)
 	SendMessage(ctx context.Context, req SendMessageReq) (SendMessageResp, error)
 	UploadFile(ctx context.Context, req UploadFileReq) (UploadFileResp, error)
+	DownloadMedia(ctx context.Context, req DownloadMediaReq) (DownloadMediaResp, error)
 	EditMessage(ctx context.Context, req EditMessageReq) error
 	Forward(ctx context.Context, req ForwardReq) (ForwardResp, error)
 	Pin(ctx context.Context, req PinReq) error

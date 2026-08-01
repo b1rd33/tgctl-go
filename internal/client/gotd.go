@@ -26,12 +26,13 @@ import (
 // Close() cancels Run and waits for the goroutine to exit, ensuring the
 // session file flushes cleanly.
 type GotdClient struct {
-	api    *tg.Client
-	tgc    *telegram.Client
-	cancel context.CancelFunc
-	done   chan error
-	db     *sql.DB // per-account entity cache; may be nil for ephemeral clients
-	events chan ListenEvent
+	api      *tg.Client
+	mediaAPI mediaDownloadAPI
+	tgc      *telegram.Client
+	cancel   context.CancelFunc
+	done     chan error
+	db       *sql.DB // per-account entity cache; may be nil for ephemeral clients
+	events   chan ListenEvent
 }
 
 // AuthPrompt is the interactive callback set used during `tg login`. Each
@@ -230,7 +231,7 @@ func newClient(ctx context.Context, apiID int, apiHash, sessionPath, dbPath stri
 		<-done
 		return nil, err
 	}
-	gc := &GotdClient{api: api, tgc: tgc, cancel: cancel, done: done, events: events}
+	gc := &GotdClient{api: api, mediaAPI: api, tgc: tgc, cancel: cancel, done: done, events: events}
 	if dbPath != "" {
 		if db, err := store.Connect(dbPath); err == nil {
 			gc.db = db
@@ -767,10 +768,19 @@ type historyPage struct {
 func historyPageFromResp(resp tg.MessagesMessagesClass) historyPage {
 	switch m := resp.(type) {
 	case *tg.MessagesMessages:
+		if m == nil {
+			return historyPage{}
+		}
 		return historyPage{Messages: m.Messages, Total: len(m.Messages), TotalKnown: true}
 	case *tg.MessagesMessagesSlice:
+		if m == nil {
+			return historyPage{}
+		}
 		return historyPage{Messages: m.Messages, Total: m.Count, TotalKnown: true}
 	case *tg.MessagesChannelMessages:
+		if m == nil {
+			return historyPage{}
+		}
 		return historyPage{Messages: m.Messages, Total: m.Count, TotalKnown: true}
 	}
 	return historyPage{}
