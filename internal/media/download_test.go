@@ -21,6 +21,10 @@ func TestSanitizeDownloadName(t *testing.T) {
 		{`C:\\Users\\alice\\photo.jpg`, "photo.jpg"},
 		{"a/b", "b"},
 		{"bad\x00\nname.txt", "bad__name.txt"},
+		{`report<>:"|?*.txt`, "report_______.txt"},
+		{"NUL.txt", "_NUL.txt"},
+		{"com1.LOG", "_com1.LOG"},
+		{"Lpt9", "_Lpt9"},
 		{"", "media.bin"},
 		{".", "media.bin"},
 		{"..", "media.bin"},
@@ -33,6 +37,45 @@ func TestSanitizeDownloadName(t *testing.T) {
 				t.Fatalf("SanitizeDownloadName(%q) = %q, want %q", tt.name, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestSanitizeDownloadNamePortableCollisionsRemainIdentical(t *testing.T) {
+	left := SanitizeDownloadName("a:b.txt")
+	right := SanitizeDownloadName("a?b.txt")
+	if left != "a_b.txt" || right != left {
+		t.Fatalf("portable collision mismatch: left=%q right=%q", left, right)
+	}
+}
+
+func TestSanitizeDownloadNameLongUnicodeReservedStemPreservesExtension(t *testing.T) {
+	name := "NUL." + strings.Repeat("界", 100) + ".txt"
+	got := SanitizeDownloadName(name)
+	if len(got) > maxDownloadNameSize || !utf8.ValidString(got) {
+		t.Fatalf("unsafe result: bytes=%d valid=%t name=%q", len(got), utf8.ValidString(got), got)
+	}
+	if !strings.HasSuffix(got, ".txt") {
+		t.Fatalf("useful extension lost: %q", got)
+	}
+	if strings.EqualFold(strings.TrimSuffix(got, filepath.Ext(got)), "NUL") {
+		t.Fatalf("reserved device stem remains: %q", got)
+	}
+}
+
+func TestOpenDestinationPortableSanitizerCollisionUsesNoReplace(t *testing.T) {
+	dir := t.TempDir()
+	d, err := OpenDestination(dir, "a:b.txt", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.File.Write([]byte("first")); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := OpenDestination(dir, "a?b.txt", false); !errors.Is(err, ErrDestinationExists) {
+		t.Fatalf("colliding OpenDestination error = %v, want ErrDestinationExists", err)
 	}
 }
 
@@ -101,6 +144,27 @@ func TestOpenDestinationRejectsExistingFinalWithoutOverwrite(t *testing.T) {
 	assertNoParts(t, dir)
 }
 
+func TestOpenDestinationFailurePreservesDirectoryCloseError(t *testing.T) {
+	dir := t.TempDir()
+	final := filepath.Join(dir, "result.bin")
+	if err := os.WriteFile(final, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ops := defaultDestinationOps()
+	closeDir := ops.closeDir
+	injected := errors.New("injected open directory close failure")
+	ops.closeDir = func(dir *anchoredDir) error {
+		return errors.Join(closeDir(dir), injected)
+	}
+	_, err := openDestinationWithOps(dir, "result.bin", false, ops)
+	if !errors.Is(err, ErrDestinationExists) || !errors.Is(err, ErrCleanupIncomplete) || !errors.Is(err, injected) {
+		t.Fatalf("OpenDestination error = %v, want exists, cleanup, and close errors", err)
+	}
+	if got, readErr := os.ReadFile(final); readErr != nil || string(got) != "old" {
+		t.Fatalf("existing final changed: content=%q err=%v", got, readErr)
+	}
+}
+
 func TestOpenDestinationConcurrentCallsUseDistinctParts(t *testing.T) {
 	dir := t.TempDir()
 	d1, err := OpenDestination(dir, "same.bin", false)
@@ -128,16 +192,15 @@ func TestOpenDestinationDoesNotFollowCollidingPartSymlink(t *testing.T) {
 	if err := os.Symlink(victim, filepath.Join(dir, collision)); err != nil {
 		t.Skipf("symlink unsupported: %v", err)
 	}
-	originalGenerator := generatePartName
+	ops := defaultDestinationOps()
 	candidates := []string{collision, ".file.bin.safe.part"}
-	generatePartName = func(string) (string, error) {
+	ops.generatePartName = func(string) (string, error) {
 		candidate := candidates[0]
 		candidates = candidates[1:]
 		return candidate, nil
 	}
-	t.Cleanup(func() { generatePartName = originalGenerator })
 
-	d, err := OpenDestination(dir, "file.bin", false)
+	d, err := openDestinationWithOps(dir, "file.bin", false, ops)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,6 +223,24 @@ func TestOpenDestinationDoesNotFollowCollidingPartSymlink(t *testing.T) {
 	if info, err := os.Lstat(filepath.Join(dir, collision)); err != nil || info.Mode()&os.ModeSymlink == 0 {
 		t.Fatalf("colliding symlink changed: info=%v err=%v", info, err)
 	}
+}
+
+func TestOpenDestinationPartNameExhaustionPreservesCollisions(t *testing.T) {
+	dir := t.TempDir()
+	collisionName := ".result.bin.collision.part"
+	collisionPath := filepath.Join(dir, collisionName)
+	if err := os.WriteFile(collisionPath, []byte("attacker"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ops := defaultDestinationOps()
+	ops.generatePartName = func(string) (string, error) { return collisionName, nil }
+	if _, err := openDestinationWithOps(dir, "result.bin", false, ops); !errors.Is(err, os.ErrExist) {
+		t.Fatalf("OpenDestination error = %v, want os.ErrExist after 100 collisions", err)
+	}
+	if got, err := os.ReadFile(collisionPath); err != nil || string(got) != "attacker" {
+		t.Fatalf("colliding part changed: content=%q err=%v", got, err)
+	}
+	assertNoQuarantines(t, dir)
 }
 
 func TestDestinationCommitPublishesAtomicallyAndSetsPrivateMode(t *testing.T) {
@@ -214,12 +295,10 @@ func TestDestinationAbsentPublishNeverExposesIncompleteFinal(t *testing.T) {
 
 			entered := make(chan struct{})
 			release := make(chan struct{})
-			originalHook := beforeAbsentPublish
-			beforeAbsentPublish = func() {
+			d.ops.beforeAbsentPublish = func() {
 				close(entered)
 				<-release
 			}
-			t.Cleanup(func() { beforeAbsentPublish = originalHook })
 
 			commitResult := make(chan error, 1)
 			go func() { commitResult <- d.Commit() }()
@@ -293,13 +372,11 @@ func TestDestinationAbsentPublishDoesNotClobberTargetAppearingAfterCapture(t *te
 				t.Fatal(err)
 			}
 
-			originalHook := beforeAbsentPublish
-			beforeAbsentPublish = func() {
+			d.ops.beforeAbsentPublish = func() {
 				if err := os.WriteFile(d.FinalPath, []byte("winner"), 0o600); err != nil {
 					t.Fatal(err)
 				}
 			}
-			t.Cleanup(func() { beforeAbsentPublish = originalHook })
 
 			commitErr := d.Commit()
 			wantErr := ErrDestinationExists
@@ -453,8 +530,7 @@ func TestDestinationOverwriteRollsBackSymlinkSwapBeforePublish(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	originalHook := beforeOverwritePublish
-	beforeOverwritePublish = func() {
+	d.ops.beforeOverwrite = func() {
 		if err := os.Remove(final); err != nil {
 			t.Fatal(err)
 		}
@@ -462,7 +538,6 @@ func TestDestinationOverwriteRollsBackSymlinkSwapBeforePublish(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	t.Cleanup(func() { beforeOverwritePublish = originalHook })
 
 	if err := d.Commit(); !errors.Is(err, ErrUnsafeDestination) {
 		t.Fatalf("Commit error = %v, want ErrUnsafeDestination", err)
@@ -495,6 +570,247 @@ func TestDestinationAbortRemovesPartAndIsIdempotent(t *testing.T) {
 		t.Fatalf("Commit after Abort error = %v", err)
 	}
 	assertNoParts(t, dir)
+}
+
+func TestDestinationAbortUnlinkFailureRemainsStable(t *testing.T) {
+	dir := t.TempDir()
+	d, err := OpenDestination(dir, "cancel.bin", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	openFile := d.File
+	injected := errors.New("injected unlink failure")
+	d.ops.remove = func(*anchoredDir, string) error { return injected }
+
+	first := d.Abort()
+	if !errors.Is(first, ErrCleanupIncomplete) || !errors.Is(first, injected) {
+		t.Fatalf("first Abort error = %v, want cleanup and injected errors", first)
+	}
+	assertFileClosed(t, openFile)
+	second := d.Abort()
+	if !errors.Is(second, ErrCleanupIncomplete) || !errors.Is(second, injected) {
+		t.Fatalf("second Abort error = %v, want stable cleanup error", second)
+	}
+	if second.Error() != first.Error() {
+		t.Fatalf("cleanup error changed: first=%q second=%q", first, second)
+	}
+	if commitErr := d.Commit(); !errors.Is(commitErr, ErrCleanupIncomplete) || !errors.Is(commitErr, injected) {
+		t.Fatalf("Commit after failed cleanup = %v, want stable cleanup error", commitErr)
+	}
+	assertNoParts(t, dir)
+}
+
+func TestDestinationAbortQuarantineRenameFailureRemainsStable(t *testing.T) {
+	dir := t.TempDir()
+	d, err := OpenDestination(dir, "cancel.bin", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	openFile := d.File
+	injected := errors.New("injected quarantine rename failure")
+	d.ops.renameNoReplace = func(*anchoredDir, string, string) error { return injected }
+
+	first := d.Abort()
+	if !errors.Is(first, ErrCleanupIncomplete) || !errors.Is(first, injected) {
+		t.Fatalf("first Abort error = %v, want cleanup and rename errors", first)
+	}
+	assertFileClosed(t, openFile)
+	if _, err := os.Lstat(d.PartPath); err != nil {
+		t.Fatalf("uncleaned part state was not preserved: %v", err)
+	}
+	if second := d.Abort(); second.Error() != first.Error() {
+		t.Fatalf("cleanup error changed: first=%q second=%q", first, second)
+	}
+}
+
+func TestDestinationAbortQuarantineNameExhaustionPreservesEntries(t *testing.T) {
+	dir := t.TempDir()
+	d, err := OpenDestination(dir, "cancel.bin", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	occupied := filepath.Join(dir, ".occupied-private-name")
+	if err := os.WriteFile(occupied, []byte("attacker"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d.ops.randomPrivateName = func(string) (string, error) { return filepath.Base(occupied), nil }
+	abortErr := d.Abort()
+	if !errors.Is(abortErr, ErrCleanupIncomplete) {
+		t.Fatalf("Abort error = %v, want ErrCleanupIncomplete", abortErr)
+	}
+	if got, err := os.ReadFile(occupied); err != nil || string(got) != "attacker" {
+		t.Fatalf("occupied private candidate changed: content=%q err=%v", got, err)
+	}
+	if _, err := os.Lstat(d.PartPath); err != nil {
+		t.Fatalf("uncleaned original part state was not preserved: %v", err)
+	}
+	if second := d.Abort(); second.Error() != abortErr.Error() {
+		t.Fatalf("terminal exhaustion error changed: first=%q second=%q", abortErr, second)
+	}
+}
+
+func TestDestinationAbortCloseFailuresRemainStableWithoutArtifacts(t *testing.T) {
+	for _, target := range []string{"file", "directory"} {
+		t.Run(target, func(t *testing.T) {
+			dir := t.TempDir()
+			d, err := OpenDestination(dir, "cancel.bin", false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			openFile := d.File
+			injected := errors.New("injected " + target + " close failure")
+			switch target {
+			case "file":
+				closeFile := d.ops.closeFile
+				d.ops.closeFile = func(file *os.File) error {
+					return errors.Join(closeFile(file), injected)
+				}
+			case "directory":
+				closeDir := d.ops.closeDir
+				d.ops.closeDir = func(dir *anchoredDir) error {
+					return errors.Join(closeDir(dir), injected)
+				}
+			}
+
+			first := d.Abort()
+			if !errors.Is(first, ErrCleanupIncomplete) || !errors.Is(first, injected) {
+				t.Fatalf("Abort error = %v, want cleanup and close errors", first)
+			}
+			assertFileClosed(t, openFile)
+			assertNoParts(t, dir)
+			assertNoQuarantines(t, dir)
+			if second := d.Abort(); second.Error() != first.Error() {
+				t.Fatalf("cleanup error changed: first=%q second=%q", first, second)
+			}
+		})
+	}
+}
+
+func TestDestinationCommitFailureAndCleanupFailureRemainStableOnAbort(t *testing.T) {
+	dir := t.TempDir()
+	d, err := OpenDestination(dir, "broken.bin", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	syncErr := errors.New("injected file sync failure")
+	removeErr := errors.New("injected cleanup unlink failure")
+	d.ops.syncFile = func(*os.File) error { return syncErr }
+	d.ops.remove = func(*anchoredDir, string) error { return removeErr }
+
+	commitErr := d.Commit()
+	if !errors.Is(commitErr, syncErr) || !errors.Is(commitErr, removeErr) || !errors.Is(commitErr, ErrCleanupIncomplete) {
+		t.Fatalf("Commit error = %v, want sync, cleanup, and unlink errors", commitErr)
+	}
+	abortErr := d.Abort()
+	if !errors.Is(abortErr, syncErr) || !errors.Is(abortErr, removeErr) || !errors.Is(abortErr, ErrCleanupIncomplete) {
+		t.Fatalf("Abort error = %v, want stable joined Commit error", abortErr)
+	}
+	if abortErr.Error() != commitErr.Error() {
+		t.Fatalf("terminal error changed: Commit=%q Abort=%q", commitErr, abortErr)
+	}
+}
+
+func TestDestinationConcurrentCommitAndAbortAreSerialized(t *testing.T) {
+	dir := t.TempDir()
+	d, err := OpenDestination(dir, "result.bin", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.File.Write([]byte("download")); err != nil {
+		t.Fatal(err)
+	}
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	syncFile := d.ops.syncFile
+	d.ops.syncFile = func(file *os.File) error {
+		close(entered)
+		<-release
+		return syncFile(file)
+	}
+	commitResult := make(chan error, 1)
+	abortResult := make(chan error, 1)
+	go func() { commitResult <- d.Commit() }()
+	<-entered
+	go func() { abortResult <- d.Abort() }()
+	close(release)
+	if err := <-commitResult; err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+	if err := <-abortResult; !errors.Is(err, ErrDestinationCommitted) {
+		t.Fatalf("concurrent Abort error = %v, want ErrDestinationCommitted", err)
+	}
+	if got, err := os.ReadFile(d.FinalPath); err != nil || string(got) != "download" {
+		t.Fatalf("final content=%q err=%v", got, err)
+	}
+}
+
+func TestDestinationDirectorySyncFailureReportsCommittedOutcome(t *testing.T) {
+	dir := t.TempDir()
+	d, err := OpenDestination(dir, "result.bin", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.File.Write([]byte("download")); err != nil {
+		t.Fatal(err)
+	}
+	injected := errors.New("injected directory sync failure")
+	d.ops.syncDir = func(*anchoredDir) error { return injected }
+	if err := d.Commit(); !errors.Is(err, injected) {
+		t.Fatalf("Commit error = %v, want directory sync error", err)
+	}
+	if got, err := os.ReadFile(d.FinalPath); err != nil || string(got) != "download" {
+		t.Fatalf("published final content=%q err=%v", got, err)
+	}
+	if err := d.Abort(); !errors.Is(err, ErrDestinationCommitted) {
+		t.Fatalf("Abort after published sync failure = %v, want ErrDestinationCommitted", err)
+	}
+}
+
+func TestDestinationCommitFileCloseFailureIsStableCleanupIncomplete(t *testing.T) {
+	dir := t.TempDir()
+	d, err := OpenDestination(dir, "result.bin", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	closeFile := d.ops.closeFile
+	injected := errors.New("injected commit file close failure")
+	d.ops.closeFile = func(file *os.File) error {
+		return errors.Join(closeFile(file), injected)
+	}
+	commitErr := d.Commit()
+	if !errors.Is(commitErr, ErrCleanupIncomplete) || !errors.Is(commitErr, injected) {
+		t.Fatalf("Commit error = %v, want cleanup and close errors", commitErr)
+	}
+	assertNoParts(t, dir)
+	if abortErr := d.Abort(); abortErr.Error() != commitErr.Error() {
+		t.Fatalf("terminal close error changed: Commit=%q Abort=%q", commitErr, abortErr)
+	}
+}
+
+func TestDestinationCommittedDirectoryCloseFailureIsStableCleanupIncomplete(t *testing.T) {
+	dir := t.TempDir()
+	d, err := OpenDestination(dir, "result.bin", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.File.Write([]byte("download")); err != nil {
+		t.Fatal(err)
+	}
+	closeDir := d.ops.closeDir
+	injected := errors.New("injected committed directory close failure")
+	d.ops.closeDir = func(dir *anchoredDir) error {
+		return errors.Join(closeDir(dir), injected)
+	}
+	commitErr := d.Commit()
+	if !errors.Is(commitErr, ErrCleanupIncomplete) || !errors.Is(commitErr, injected) {
+		t.Fatalf("Commit error = %v, want cleanup and close errors", commitErr)
+	}
+	if got, err := os.ReadFile(d.FinalPath); err != nil || string(got) != "download" {
+		t.Fatalf("published final content=%q err=%v", got, err)
+	}
+	if abortErr := d.Abort(); abortErr.Error() != commitErr.Error() {
+		t.Fatalf("terminal directory close error changed: Commit=%q Abort=%q", commitErr, abortErr)
+	}
 }
 
 func TestDestinationAbortCleansPartAfterFileIsAlreadyClosed(t *testing.T) {
@@ -655,12 +971,10 @@ func TestDestinationNoReplaceRollsBackPartSwapDuringPublish(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			originalHook := beforeNoReplacePublish
 			var orphan string
-			beforeNoReplacePublish = func() {
+			d.ops.beforeNoReplace = func() {
 				orphan = replacePartEntry(t, d, kind)
 			}
-			t.Cleanup(func() { beforeNoReplacePublish = originalHook })
 
 			commitErr := d.Commit()
 			wantErr := ErrDestinationChanged
@@ -690,13 +1004,11 @@ func TestDestinationAbortQuarantineDoesNotDeleteNewPublicReplacement(t *testing.
 		t.Fatal(err)
 	}
 	openFile := d.File
-	originalHook := beforeQuarantineDelete
-	beforeQuarantineDelete = func() {
+	d.ops.beforeQuarantineDelete = func() {
 		if err := os.WriteFile(d.PartPath, []byte("replacement"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	t.Cleanup(func() { beforeQuarantineDelete = originalHook })
 
 	if err := d.Abort(); err != nil {
 		t.Fatalf("Abort: %v", err)
@@ -721,13 +1033,11 @@ func TestDestinationDisplacedCleanupDoesNotDeleteNewPartReplacement(t *testing.T
 	if _, err := d.File.Write([]byte("download")); err != nil {
 		t.Fatal(err)
 	}
-	originalHook := beforeQuarantineDelete
-	beforeQuarantineDelete = func() {
+	d.ops.beforeQuarantineDelete = func() {
 		if err := os.WriteFile(d.PartPath, []byte("replacement"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	t.Cleanup(func() { beforeQuarantineDelete = originalHook })
 
 	if err := d.Commit(); err != nil {
 		t.Fatalf("Commit: %v", err)
@@ -750,13 +1060,11 @@ func TestDestinationRollbackCleanupDoesNotDeleteNewFinalReplacement(t *testing.T
 	if _, err := d.File.Write([]byte("download")); err != nil {
 		t.Fatal(err)
 	}
-	originalPublishHook := beforeAbsentPublish
-	beforeAbsentPublish = func() {
+	d.ops.beforeAbsentPublish = func() {
 		if err := os.WriteFile(d.FinalPath, []byte("replacement"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	t.Cleanup(func() { beforeAbsentPublish = originalPublishHook })
 
 	if err := d.Commit(); !errors.Is(err, ErrDestinationExists) {
 		t.Fatalf("Commit error = %v, want ErrDestinationExists", err)
@@ -766,6 +1074,179 @@ func TestDestinationRollbackCleanupDoesNotDeleteNewFinalReplacement(t *testing.T
 	}
 	assertNoParts(t, dir)
 	assertNoQuarantines(t, dir)
+}
+
+func TestDestinationOverwriteRollbackFailureIsStableCleanupIncomplete(t *testing.T) {
+	dir := t.TempDir()
+	final := filepath.Join(dir, "result.bin")
+	if err := os.WriteFile(final, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d, err := OpenDestination(dir, "result.bin", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.File.Write([]byte("download")); err != nil {
+		t.Fatal(err)
+	}
+	exchange := d.ops.exchange
+	rollbackErr := errors.New("injected rollback exchange failure")
+	calls := 0
+	d.ops.exchange = func(dirHandle *anchoredDir, oldName, newName string) error {
+		calls++
+		if calls == 2 {
+			return rollbackErr
+		}
+		if err := exchange(dirHandle, oldName, newName); err != nil {
+			return err
+		}
+		if err := os.Remove(final); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(final, []byte("attacker"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return nil
+	}
+
+	commitErr := d.Commit()
+	if !errors.Is(commitErr, ErrDestinationChanged) || !errors.Is(commitErr, ErrCleanupIncomplete) || !errors.Is(commitErr, rollbackErr) {
+		t.Fatalf("Commit error = %v, want changed, cleanup, and rollback errors", commitErr)
+	}
+	if got, err := os.ReadFile(final); err != nil || string(got) != "attacker" {
+		t.Fatalf("partial public state changed: content=%q err=%v", got, err)
+	}
+	quarantines, err := filepath.Glob(filepath.Join(dir, ".tgctl-quarantine-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(quarantines) != 1 {
+		t.Fatalf("private displaced state = %v, want one retained entry", quarantines)
+	}
+	if got, err := os.ReadFile(quarantines[0]); err != nil || string(got) != "old" {
+		t.Fatalf("retained displaced target content=%q err=%v", got, err)
+	}
+	if abortErr := d.Abort(); abortErr.Error() != commitErr.Error() {
+		t.Fatalf("terminal partial-state error changed: Commit=%q Abort=%q", commitErr, abortErr)
+	}
+}
+
+func TestDestinationAbsentRestoreFailurePreservesWinnerAndPrivatePart(t *testing.T) {
+	dir := t.TempDir()
+	d, err := OpenDestination(dir, "result.bin", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.File.Write([]byte("download")); err != nil {
+		t.Fatal(err)
+	}
+	d.ops.beforeAbsentPublish = func() {
+		if err := os.WriteFile(d.FinalPath, []byte("winner"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rename := d.ops.renameNoReplace
+	restoreErr := errors.New("injected private restore failure")
+	d.ops.renameNoReplace = func(dirHandle *anchoredDir, oldName, newName string) error {
+		if strings.HasPrefix(oldName, ".tgctl-quarantine-") && newName == d.partName {
+			return restoreErr
+		}
+		return rename(dirHandle, oldName, newName)
+	}
+
+	commitErr := d.Commit()
+	if !errors.Is(commitErr, ErrDestinationExists) || !errors.Is(commitErr, ErrCleanupIncomplete) || !errors.Is(commitErr, restoreErr) {
+		t.Fatalf("Commit error = %v, want exists, cleanup, and restore errors", commitErr)
+	}
+	if got, err := os.ReadFile(d.FinalPath); err != nil || string(got) != "winner" {
+		t.Fatalf("winner changed: content=%q err=%v", got, err)
+	}
+	quarantines, err := filepath.Glob(filepath.Join(dir, ".tgctl-quarantine-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(quarantines) != 1 {
+		t.Fatalf("private staged state = %v, want one retained entry", quarantines)
+	}
+	if got, err := os.ReadFile(quarantines[0]); err != nil || string(got) != "download" {
+		t.Fatalf("retained staged content=%q err=%v", got, err)
+	}
+	if abortErr := d.Abort(); abortErr.Error() != commitErr.Error() {
+		t.Fatalf("terminal restore error changed: Commit=%q Abort=%q", commitErr, abortErr)
+	}
+}
+
+func TestDestinationPostPublishIdentityLossIsStableCleanupIncomplete(t *testing.T) {
+	dir := t.TempDir()
+	d, err := OpenDestination(dir, "result.bin", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.File.Write([]byte("download")); err != nil {
+		t.Fatal(err)
+	}
+	rename := d.ops.renameNoReplace
+	d.ops.renameNoReplace = func(dirHandle *anchoredDir, oldName, newName string) error {
+		if err := rename(dirHandle, oldName, newName); err != nil {
+			return err
+		}
+		if newName == d.finalName {
+			if err := os.Remove(d.FinalPath); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(d.FinalPath, []byte("attacker"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return nil
+	}
+	commitErr := d.Commit()
+	if !errors.Is(commitErr, ErrDestinationChanged) || !errors.Is(commitErr, ErrCleanupIncomplete) {
+		t.Fatalf("Commit error = %v, want changed and cleanup errors", commitErr)
+	}
+	if got, err := os.ReadFile(d.FinalPath); err != nil || string(got) != "attacker" {
+		t.Fatalf("attacker final changed: content=%q err=%v", got, err)
+	}
+	if abortErr := d.Abort(); abortErr.Error() != commitErr.Error() {
+		t.Fatalf("terminal publication error changed: Commit=%q Abort=%q", commitErr, abortErr)
+	}
+}
+
+func TestDestinationDisplacedUnlinkFailureIsStableCleanupIncomplete(t *testing.T) {
+	dir := t.TempDir()
+	final := filepath.Join(dir, "result.bin")
+	if err := os.WriteFile(final, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d, err := OpenDestination(dir, "result.bin", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.File.Write([]byte("download")); err != nil {
+		t.Fatal(err)
+	}
+	injected := errors.New("injected displaced unlink failure")
+	d.ops.remove = func(*anchoredDir, string) error { return injected }
+	commitErr := d.Commit()
+	if !errors.Is(commitErr, ErrCleanupIncomplete) || !errors.Is(commitErr, injected) {
+		t.Fatalf("Commit error = %v, want cleanup and unlink errors", commitErr)
+	}
+	if got, err := os.ReadFile(final); err != nil || string(got) != "download" {
+		t.Fatalf("published final content=%q err=%v", got, err)
+	}
+	quarantines, err := filepath.Glob(filepath.Join(dir, ".tgctl-quarantine-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(quarantines) != 1 {
+		t.Fatalf("retained displaced state = %v, want one entry", quarantines)
+	}
+	if got, err := os.ReadFile(quarantines[0]); err != nil || string(got) != "old" {
+		t.Fatalf("retained displaced content=%q err=%v", got, err)
+	}
+	if abortErr := d.Abort(); abortErr.Error() != commitErr.Error() {
+		t.Fatalf("terminal displaced cleanup error changed: Commit=%q Abort=%q", commitErr, abortErr)
+	}
 }
 
 func replacePartEntry(t *testing.T, d *Destination, kind string) string {

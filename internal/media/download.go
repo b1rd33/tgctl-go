@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 )
@@ -25,7 +26,7 @@ var (
 	ErrDestinationAborted         = errors.New("download destination is aborted")
 	ErrInvalidDestination         = errors.New("invalid download destination")
 	ErrDestinationChanged         = errors.New("download destination changed during commit")
-	ErrAtomicOverwriteUnsupported = errors.New("atomic safe overwrite is unsupported on this platform")
+	ErrAtomicOverwriteUnsupported = errors.New("atomic safe overwrite is unsupported on this platform or filesystem")
 	ErrCleanupIncomplete          = errors.New("download cleanup incomplete")
 	ErrLimitExceeded              = errors.New("download size limit exceeded")
 	ErrInvalidLimit               = errors.New("download size limit must not be negative")
@@ -37,9 +38,12 @@ const (
 	destinationOpen destinationState = iota + 1
 	destinationCommitted
 	destinationAborted
+	destinationCleanupIncomplete
 )
 
 // Destination holds an open temporary download and its eventual final path.
+// Commit and Abort are safe to call concurrently with each other after writes
+// to File have stopped. The exported fields must not be mutated concurrently.
 type Destination struct {
 	FinalPath string
 	PartPath  string
@@ -55,6 +59,10 @@ type Destination struct {
 	partName  string
 	partID    fileIdentity
 	target    targetSnapshot
+
+	mu          sync.Mutex
+	ops         destinationOps
+	terminalErr error
 }
 
 type targetSnapshot struct {
@@ -62,13 +70,41 @@ type targetSnapshot struct {
 	identity fileIdentity
 }
 
-var (
-	generatePartName       = randomPartName
-	beforeOverwritePublish = func() {}
-	beforeNoReplacePublish = func() {}
-	beforeAbsentPublish    = func() {}
-	beforeQuarantineDelete = func() {}
-)
+type destinationOps struct {
+	createExclusive        func(*anchoredDir, string, string) (*os.File, error)
+	renameNoReplace        func(*anchoredDir, string, string) error
+	exchange               func(*anchoredDir, string, string) error
+	remove                 func(*anchoredDir, string) error
+	syncDir                func(*anchoredDir) error
+	closeDir               func(*anchoredDir) error
+	syncFile               func(*os.File) error
+	closeFile              func(*os.File) error
+	generatePartName       func(string) (string, error)
+	randomPrivateName      func(string) (string, error)
+	beforeOverwrite        func()
+	beforeNoReplace        func()
+	beforeAbsentPublish    func()
+	beforeQuarantineDelete func()
+}
+
+func defaultDestinationOps() destinationOps {
+	return destinationOps{
+		createExclusive:        func(dir *anchoredDir, name, path string) (*os.File, error) { return dir.createExclusive(name, path) },
+		renameNoReplace:        func(dir *anchoredDir, oldName, newName string) error { return dir.renameNoReplace(oldName, newName) },
+		exchange:               func(dir *anchoredDir, oldName, newName string) error { return dir.exchange(oldName, newName) },
+		remove:                 func(dir *anchoredDir, name string) error { return dir.remove(name) },
+		syncDir:                func(dir *anchoredDir) error { return dir.sync() },
+		closeDir:               func(dir *anchoredDir) error { return dir.close() },
+		syncFile:               func(file *os.File) error { return file.Sync() },
+		closeFile:              func(file *os.File) error { return file.Close() },
+		generatePartName:       randomPartName,
+		randomPrivateName:      randomPrivateName,
+		beforeOverwrite:        func() {},
+		beforeNoReplace:        func() {},
+		beforeAbsentPublish:    func() {},
+		beforeQuarantineDelete: func() {},
+	}
+}
 
 // SanitizeDownloadName reduces name to one safe, portable path component.
 func SanitizeDownloadName(name string) string {
@@ -81,7 +117,7 @@ func SanitizeDownloadName(name string) string {
 	var clean strings.Builder
 	clean.Grow(len(name))
 	for _, r := range name {
-		if r == '/' || r == '\\' || unicode.IsControl(r) {
+		if strings.ContainsRune(`<>:"/\|?*`, r) || unicode.IsControl(r) {
 			clean.WriteByte('_')
 			continue
 		}
@@ -92,7 +128,7 @@ func SanitizeDownloadName(name string) string {
 		return defaultDownloadName
 	}
 	if len(name) <= maxDownloadNameSize {
-		return name
+		return avoidReservedDeviceName(name)
 	}
 
 	ext := filepath.Ext(name)
@@ -100,12 +136,25 @@ func SanitizeDownloadName(name string) string {
 		stem := strings.Trim(strings.TrimSuffix(name, ext), ". ")
 		stem = strings.Trim(truncateUTF8(stem, maxDownloadNameSize-len(ext)), ". ")
 		if stem != "" {
-			return stem + ext
+			return avoidReservedDeviceName(stem + ext)
 		}
 	}
 	name = strings.Trim(truncateUTF8(name, maxDownloadNameSize), ". ")
 	if unusableDownloadName(name) {
 		return defaultDownloadName
+	}
+	return avoidReservedDeviceName(name)
+}
+
+func avoidReservedDeviceName(name string) string {
+	stem := strings.TrimSuffix(name, filepath.Ext(name))
+	upper := strings.ToUpper(stem)
+	reserved := upper == "CON" || upper == "PRN" || upper == "AUX" || upper == "NUL"
+	if len(upper) == 4 && (strings.HasPrefix(upper, "COM") || strings.HasPrefix(upper, "LPT")) {
+		reserved = upper[3] >= '1' && upper[3] <= '9'
+	}
+	if reserved {
+		return "_" + name
 	}
 	return name
 }
@@ -128,6 +177,10 @@ func truncateUTF8(value string, max int) string {
 // OpenDestination creates a private, exclusive part file in dir. With
 // overwrite disabled, an existing final name is reported deterministically.
 func OpenDestination(dir, name string, overwrite bool) (*Destination, error) {
+	return openDestinationWithOps(dir, name, overwrite, defaultDestinationOps())
+}
+
+func openDestinationWithOps(dir, name string, overwrite bool, ops destinationOps) (*Destination, error) {
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve download directory: %w", err)
@@ -162,45 +215,39 @@ func OpenDestination(dir, name string, overwrite bool) (*Destination, error) {
 	safeName := SanitizeDownloadName(name)
 	finalPath := filepath.Join(absDir, safeName)
 	if filepath.Dir(finalPath) != absDir {
-		_ = dirHandle.close()
-		return nil, fmt.Errorf("%w: destination escaped download directory", ErrInvalidDestination)
+		return nil, closeOpenDestinationDir(ops, dirHandle, fmt.Errorf("%w: destination escaped download directory", ErrInvalidDestination))
 	}
 	target, err := validateFinalTarget(dirHandle, safeName, finalPath, overwrite)
 	if err != nil {
-		_ = dirHandle.close()
-		return nil, err
+		return nil, closeOpenDestinationDir(ops, dirHandle, err)
+	}
+	if err := probeAtomicCapabilities(ops, dirHandle, absDir, overwrite && target.exists); err != nil {
+		return nil, closeOpenDestinationDir(ops, dirHandle, err)
 	}
 
-	partName, part, err := createPartFile(dirHandle, absDir, safeName)
+	partName, part, err := createPartFile(ops, dirHandle, absDir, safeName)
 	if err != nil {
-		_ = dirHandle.close()
-		return nil, fmt.Errorf("create download part: %w", err)
+		return nil, closeOpenDestinationDir(ops, dirHandle, fmt.Errorf("create download part: %w", err))
 	}
 	partEntry, err := snapshotOpenFile(part)
 	if err != nil || !partEntry.regular {
-		_ = part.Close()
-		_ = dirHandle.close()
+		var primary error
 		if err != nil {
-			return nil, fmt.Errorf("inspect opened download part: %w", err)
+			primary = fmt.Errorf("inspect opened download part: %w", err)
+		} else {
+			primary = fmt.Errorf("%w: opened part is not regular", ErrUnsafeDestination)
 		}
-		return nil, fmt.Errorf("%w: opened part is not regular", ErrUnsafeDestination)
+		return nil, cleanupOpenDestinationPart(ops, dirHandle, part, partName, filepath.Join(absDir, partName), partEntry.identity, false, primary)
 	}
 	partPath := filepath.Join(absDir, partName)
 	if err := validateNamedRegular(dirHandle, partName, partPath, partEntry.identity); err != nil {
-		_ = part.Close()
-		_ = dirHandle.close()
-		return nil, err
+		return nil, cleanupOpenDestinationPart(ops, dirHandle, part, partName, partPath, partEntry.identity, true, err)
 	}
 	if err := part.Chmod(0o600); err != nil {
-		_ = part.Close()
-		_ = quarantineRemove(dirHandle, partName, partPath, partEntry.identity)
-		_ = dirHandle.close()
-		return nil, fmt.Errorf("secure download part: %w", err)
+		return nil, cleanupOpenDestinationPart(ops, dirHandle, part, partName, partPath, partEntry.identity, true, fmt.Errorf("secure download part: %w", err))
 	}
 	if err := validateNamedRegular(dirHandle, partName, partPath, partEntry.identity); err != nil {
-		_ = part.Close()
-		_ = dirHandle.close()
-		return nil, err
+		return nil, cleanupOpenDestinationPart(ops, dirHandle, part, partName, partPath, partEntry.identity, true, err)
 	}
 	return &Destination{
 		FinalPath: finalPath,
@@ -216,7 +263,38 @@ func OpenDestination(dir, name string, overwrite bool) (*Destination, error) {
 		partName:  partName,
 		partID:    partEntry.identity,
 		target:    target,
+		ops:       ops,
 	}, nil
+}
+
+func closeOpenDestinationDir(ops destinationOps, dir *anchoredDir, primary error) error {
+	if err := ops.closeDir(dir); err != nil {
+		return errors.Join(primary, ErrCleanupIncomplete, fmt.Errorf("close download directory: %w", err))
+	}
+	return primary
+}
+
+func cleanupOpenDestinationPart(
+	ops destinationOps,
+	dir *anchoredDir,
+	part *os.File,
+	partName, partPath string,
+	partID fileIdentity,
+	canRemove bool,
+	primary error,
+) error {
+	var cleanupErr error
+	if err := ops.closeFile(part); err != nil {
+		cleanupErr = errors.Join(cleanupErr, ErrCleanupIncomplete, fmt.Errorf("close download part: %w", err))
+	}
+	if canRemove {
+		if err := quarantineRemove(ops, dir, partName, partPath, partID); err != nil {
+			cleanupErr = errors.Join(cleanupErr, ErrCleanupIncomplete, fmt.Errorf("remove download part: %w", err))
+		}
+	} else {
+		cleanupErr = errors.Join(cleanupErr, ErrCleanupIncomplete, errors.New("opened download part identity could not be safely removed"))
+	}
+	return closeOpenDestinationDir(ops, dir, errors.Join(primary, cleanupErr))
 }
 
 func validateNamedRegular(dir *anchoredDir, name, displayPath string, expected fileIdentity) error {
@@ -239,29 +317,127 @@ func validateNamedRegular(dir *anchoredDir, name, displayPath string, expected f
 	return nil
 }
 
+func validAtomicRenameComponent(name string) bool {
+	return name != "" && name != "." && name != ".." && !strings.ContainsAny(name, `/\`)
+}
+
+func probeAtomicCapabilities(ops destinationOps, dir *anchoredDir, displayDir string, needExchange bool) error {
+	names := make([]string, 0, 2)
+	cleanup := func(primary error) error {
+		var cleanupErr error
+		for _, name := range names {
+			if err := ops.remove(dir, name); err != nil && !errors.Is(err, os.ErrNotExist) {
+				cleanupErr = errors.Join(cleanupErr, ErrCleanupIncomplete, fmt.Errorf("remove atomic capability probe %s: %w", name, err))
+			}
+		}
+		return errors.Join(primary, cleanupErr)
+	}
+
+	firstName, firstID, err := createAtomicProbeEntry(ops, dir, displayDir)
+	if firstName != "" {
+		names = append(names, firstName)
+	}
+	if err != nil {
+		return cleanup(err)
+	}
+	secondName, secondID, err := createAtomicProbeEntry(ops, dir, displayDir)
+	if secondName != "" {
+		names = append(names, secondName)
+	}
+	if err != nil {
+		return cleanup(err)
+	}
+
+	renameErr := normalizeAtomicRenameError(ops.renameNoReplace(dir, firstName, secondName), firstName, secondName)
+	if !errors.Is(renameErr, os.ErrExist) {
+		if renameErr == nil {
+			renameErr = errors.Join(ErrAtomicOverwriteUnsupported, errors.New("no-replace rename replaced an existing probe entry"))
+		}
+		return cleanup(renameErr)
+	}
+	if !needExchange {
+		return cleanup(nil)
+	}
+
+	exchangeErr := normalizeAtomicRenameError(ops.exchange(dir, firstName, secondName), firstName, secondName)
+	if exchangeErr != nil {
+		return cleanup(exchangeErr)
+	}
+	firstErr := validateNamedRegular(dir, firstName, filepath.Join(displayDir, firstName), secondID)
+	secondErr := validateNamedRegular(dir, secondName, filepath.Join(displayDir, secondName), firstID)
+	if firstErr != nil || secondErr != nil {
+		return cleanup(errors.Join(
+			ErrAtomicOverwriteUnsupported,
+			errors.New("atomic exchange probe did not swap both entries"),
+			firstErr,
+			secondErr,
+		))
+	}
+	return cleanup(nil)
+}
+
+func createAtomicProbeEntry(ops destinationOps, dir *anchoredDir, displayDir string) (string, fileIdentity, error) {
+	for range 100 {
+		name, err := ops.randomPrivateName(".tgctl-probe-")
+		if err != nil {
+			return "", fileIdentity{}, fmt.Errorf("generate atomic capability probe name: %w", err)
+		}
+		if !validAtomicRenameComponent(name) {
+			return "", fileIdentity{}, errors.Join(ErrInvalidDestination, errors.New("invalid atomic capability probe name"))
+		}
+		file, err := ops.createExclusive(dir, name, filepath.Join(displayDir, name))
+		if errors.Is(err, os.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return "", fileIdentity{}, fmt.Errorf("create atomic capability probe: %w", err)
+		}
+		entry, inspectErr := snapshotOpenFile(file)
+		closeErr := ops.closeFile(file)
+		if inspectErr != nil || closeErr != nil || !entry.regular {
+			primary := inspectErr
+			if closeErr != nil {
+				primary = errors.Join(primary, ErrCleanupIncomplete, fmt.Errorf("close atomic capability probe: %w", closeErr))
+			}
+			if !entry.regular && inspectErr == nil {
+				primary = errors.Join(primary, ErrUnsafeDestination, errors.New("atomic capability probe is not regular"))
+			}
+			return name, fileIdentity{}, primary
+		}
+		return name, entry.identity, nil
+	}
+	return "", fileIdentity{}, errors.Join(
+		ErrAtomicOverwriteUnsupported,
+		errors.New("could not allocate atomic capability probe name after 100 attempts"),
+	)
+}
+
 // quarantineRemove atomically moves a public entry to an unpredictable private
 // name before inspecting and deleting it. The supported attacker model permits
 // same-user mutation of public part/final names, but assumes the 128-bit
 // quarantine name is not discovered and targeted during this short operation.
 // Darwin and Linux supply the required atomic no-replace rename; other
 // platforms fail closed when the destination directory is opened.
-func quarantineRemove(dir *anchoredDir, name, displayPath string, expected fileIdentity) error {
-	quarantineName, err := captureNamedRegular(dir, name, displayPath, expected)
+func quarantineRemove(ops destinationOps, dir *anchoredDir, name, displayPath string, expected fileIdentity) error {
+	quarantineName, err := captureNamedRegular(ops, dir, name, displayPath, expected)
 	if err != nil {
 		return err
 	}
-	return deletePrivateRegular(dir, quarantineName, displayPath, expected)
+	return deletePrivateRegular(ops, dir, quarantineName, displayPath, expected)
 }
 
-func captureNamedRegular(dir *anchoredDir, name, displayPath string, expected fileIdentity) (string, error) {
+func captureNamedRegular(ops destinationOps, dir *anchoredDir, name, displayPath string, expected fileIdentity) (string, error) {
 	for range 100 {
-		quarantineName, err := randomPrivateName(".tgctl-quarantine-")
+		quarantineName, err := ops.randomPrivateName(".tgctl-quarantine-")
 		if err != nil {
 			return "", err
 		}
-		if err := dir.renameNoReplace(name, quarantineName); err != nil {
+		if err := normalizeAtomicRenameError(ops.renameNoReplace(dir, name, quarantineName), name, quarantineName); err != nil {
 			if errors.Is(err, os.ErrExist) {
 				continue
+			}
+			if errors.Is(err, ErrAtomicOverwriteUnsupported) {
+				return "", fmt.Errorf("quarantine destination entry: %w", err)
 			}
 			if errors.Is(err, os.ErrNotExist) {
 				return "", fmt.Errorf("%w: %s", ErrDestinationChanged, displayPath)
@@ -274,7 +450,7 @@ func captureNamedRegular(dir *anchoredDir, name, displayPath string, expected fi
 
 		identityErr := validateNamedRegular(dir, quarantineName, displayPath, expected)
 		if identityErr != nil {
-			if err := dir.renameNoReplace(quarantineName, name); err != nil {
+			if err := normalizeAtomicRenameError(ops.renameNoReplace(dir, quarantineName, name), quarantineName, name); err != nil {
 				return "", errors.Join(
 					identityErr,
 					ErrCleanupIncomplete,
@@ -288,46 +464,49 @@ func captureNamedRegular(dir *anchoredDir, name, displayPath string, expected fi
 	return "", errors.Join(ErrCleanupIncomplete, errors.New("could not allocate quarantine name"))
 }
 
-func restorePrivateRegular(dir *anchoredDir, privateName, publicName, displayPath string, expected fileIdentity) error {
+func restorePrivateRegular(ops destinationOps, dir *anchoredDir, privateName, publicName, displayPath string, expected fileIdentity) error {
 	if err := validateNamedRegular(dir, privateName, displayPath, expected); err != nil {
-		return err
+		return errors.Join(ErrCleanupIncomplete, err)
 	}
-	if err := dir.renameNoReplace(privateName, publicName); err != nil {
+	if err := normalizeAtomicRenameError(ops.renameNoReplace(dir, privateName, publicName), privateName, publicName); err != nil {
 		return errors.Join(
 			ErrCleanupIncomplete,
 			fmt.Errorf("restore private destination entry: %w", err),
 		)
 	}
-	return validateNamedRegular(dir, publicName, displayPath, expected)
+	if err := validateNamedRegular(dir, publicName, displayPath, expected); err != nil {
+		return errors.Join(ErrCleanupIncomplete, err)
+	}
+	return nil
 }
 
-func deletePrivateRegular(dir *anchoredDir, privateName, displayPath string, expected fileIdentity) error {
+func deletePrivateRegular(ops destinationOps, dir *anchoredDir, privateName, displayPath string, expected fileIdentity) error {
 	if err := validateNamedRegular(dir, privateName, displayPath, expected); err != nil {
-		return err
+		return errors.Join(ErrCleanupIncomplete, err)
 	}
-	beforeQuarantineDelete()
-	if err := dir.remove(privateName); err != nil {
+	ops.beforeQuarantineDelete()
+	if err := ops.remove(dir, privateName); err != nil {
 		return errors.Join(ErrCleanupIncomplete, fmt.Errorf("remove quarantined destination entry: %w", err))
 	}
 	return nil
 }
 
-func createPartFile(dir *anchoredDir, displayDir, safeName string) (string, *os.File, error) {
+func createPartFile(ops destinationOps, dir *anchoredDir, displayDir, safeName string) (string, *os.File, error) {
 	for range 100 {
-		name, err := generatePartName(safeName)
+		name, err := ops.generatePartName(safeName)
 		if err != nil {
 			return "", nil, err
 		}
 		if filepath.Base(name) != name || strings.ContainsAny(name, `/\`) || name == "." || name == ".." {
 			return "", nil, fmt.Errorf("%w: invalid generated part name", ErrInvalidDestination)
 		}
-		file, err := dir.createExclusive(name, filepath.Join(displayDir, name))
+		file, err := ops.createExclusive(dir, name, filepath.Join(displayDir, name))
 		if errors.Is(err, os.ErrExist) {
 			continue
 		}
 		return name, file, err
 	}
-	return "", nil, fmt.Errorf("could not allocate exclusive part name")
+	return "", nil, fmt.Errorf("could not allocate exclusive part name after 100 attempts: %w", os.ErrExist)
 }
 
 func randomPartName(safeName string) (string, error) {
@@ -372,6 +551,15 @@ func validateFinalTarget(dir *anchoredDir, name, displayPath string, overwrite b
 // atomically restored and rejected. Platforms without both atomic exchange and
 // no-replace rename fail closed in OpenDestination.
 func (d *Destination) Commit() error {
+	if d == nil {
+		return ErrInvalidDestination
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.commitLocked()
+}
+
+func (d *Destination) commitLocked() error {
 	if err := d.lifecycleError(); err != nil {
 		return err
 	}
@@ -389,13 +577,13 @@ func (d *Destination) Commit() error {
 	if err := d.file.Chmod(0o600); err != nil {
 		return d.failBeforeCommit(fmt.Errorf("secure download: %w", err))
 	}
-	if err := d.file.Sync(); err != nil {
+	if err := d.ops.syncFile(d.file); err != nil {
 		return d.failBeforeCommit(fmt.Errorf("sync download: %w", err))
 	}
-	if err := d.file.Close(); err != nil {
+	if err := d.ops.closeFile(d.file); err != nil {
 		d.file = nil
 		d.File = nil
-		return d.failBeforeCommit(fmt.Errorf("close download: %w", err))
+		return d.failBeforeCommit(errors.Join(ErrCleanupIncomplete, fmt.Errorf("close download: %w", err)))
 	}
 	d.file = nil
 	d.File = nil
@@ -406,15 +594,15 @@ func (d *Destination) Commit() error {
 			if !published {
 				return d.failBeforeCommit(publishErr)
 			}
-			return errors.Join(publishErr, d.finishCommit())
+			return d.finishPublishedError(publishErr)
 		}
 	} else {
-		published, publishErr := d.publishAbsent(beforeNoReplacePublish, ErrDestinationExists)
+		published, publishErr := d.publishAbsent(d.ops.beforeNoReplace, ErrDestinationExists)
 		if publishErr != nil {
 			if !published {
 				return d.failBeforeCommit(publishErr)
 			}
-			return errors.Join(publishErr, d.finishCommit())
+			return d.finishPublishedError(publishErr)
 		}
 	}
 
@@ -426,12 +614,12 @@ func (d *Destination) publishAbsent(hook func(), collisionSentinel error) (bool,
 		return false, err
 	}
 	hook()
-	privatePart, err := captureNamedRegular(d.dir, d.partName, d.PartPath, d.partID)
+	privatePart, err := captureNamedRegular(d.ops, d.dir, d.partName, d.PartPath, d.partID)
 	if err != nil {
 		return false, err
 	}
-	beforeAbsentPublish()
-	if err := d.dir.renameNoReplace(privatePart, d.finalName); err != nil {
+	d.ops.beforeAbsentPublish()
+	if err := normalizeAtomicRenameError(d.ops.renameNoReplace(d.dir, privatePart, d.finalName), privatePart, d.finalName); err != nil {
 		publishErr := fmt.Errorf("atomic publish download: %w", err)
 		if errors.Is(err, os.ErrExist) {
 			if errors.Is(collisionSentinel, ErrDestinationChanged) {
@@ -442,11 +630,11 @@ func (d *Destination) publishAbsent(hook func(), collisionSentinel error) (bool,
 		}
 		return false, errors.Join(
 			publishErr,
-			restorePrivateRegular(d.dir, privatePart, d.partName, d.PartPath, d.partID),
+			restorePrivateRegular(d.ops, d.dir, privatePart, d.partName, d.PartPath, d.partID),
 		)
 	}
 	if err := validateNamedRegular(d.dir, d.finalName, d.FinalPath, d.partID); err != nil {
-		return true, fmt.Errorf("download published but final identity changed: %w", err)
+		return true, errors.Join(ErrCleanupIncomplete, fmt.Errorf("download published but final identity changed: %w", err))
 	}
 	return true, nil
 }
@@ -456,46 +644,50 @@ func (d *Destination) publishOverwrite() (bool, error) {
 		return false, err
 	}
 	if !d.target.exists {
-		return d.publishAbsent(beforeOverwritePublish, ErrDestinationChanged)
+		return d.publishAbsent(d.ops.beforeOverwrite, ErrDestinationChanged)
 	}
 	if err := d.validatePartEntry(); err != nil {
 		return false, err
 	}
-	beforeOverwritePublish()
-	privatePart, err := captureNamedRegular(d.dir, d.partName, d.PartPath, d.partID)
+	d.ops.beforeOverwrite()
+	privatePart, err := captureNamedRegular(d.ops, d.dir, d.partName, d.PartPath, d.partID)
 	if err != nil {
 		return false, err
 	}
 
-	if err := d.dir.exchange(privatePart, d.finalName); err != nil {
+	if err := normalizeAtomicRenameError(d.ops.exchange(d.dir, privatePart, d.finalName), privatePart, d.finalName); err != nil {
 		if errors.Is(err, ErrAtomicOverwriteUnsupported) {
 			return false, errors.Join(
 				err,
-				restorePrivateRegular(d.dir, privatePart, d.partName, d.PartPath, d.partID),
+				restorePrivateRegular(d.ops, d.dir, privatePart, d.partName, d.PartPath, d.partID),
 			)
 		}
 		return false, errors.Join(
 			d.targetRaceError(),
 			fmt.Errorf("atomic exchange download: %w", err),
-			restorePrivateRegular(d.dir, privatePart, d.partName, d.PartPath, d.partID),
+			restorePrivateRegular(d.ops, d.dir, privatePart, d.partName, d.PartPath, d.partID),
 		)
 	}
 	finalErr := validateNamedRegular(d.dir, d.finalName, d.FinalPath, d.partID)
 	displacedErr := validateNamedRegular(d.dir, privatePart, d.PartPath, d.target.identity)
 	if finalErr == nil && displacedErr == nil {
-		if err := deletePrivateRegular(d.dir, privatePart, d.PartPath, d.target.identity); err != nil {
+		if err := deletePrivateRegular(d.ops, d.dir, privatePart, d.PartPath, d.target.identity); err != nil {
 			return true, fmt.Errorf("download committed but remove displaced target: %w", err)
 		}
 		return true, nil
 	}
 
 	raceErr := errors.Join(finalErr, displacedErr)
-	if err := d.dir.exchange(privatePart, d.finalName); err != nil {
-		return true, errors.Join(raceErr, fmt.Errorf("unsafe target displaced but rollback failed: %w", err))
+	if err := normalizeAtomicRenameError(d.ops.exchange(d.dir, privatePart, d.finalName), privatePart, d.finalName); err != nil {
+		return true, errors.Join(
+			raceErr,
+			ErrCleanupIncomplete,
+			fmt.Errorf("unsafe target displaced but rollback failed: %w", err),
+		)
 	}
 	return false, errors.Join(
 		raceErr,
-		restorePrivateRegular(d.dir, privatePart, d.partName, d.PartPath, d.partID),
+		restorePrivateRegular(d.ops, d.dir, privatePart, d.partName, d.PartPath, d.partID),
 	)
 }
 
@@ -534,15 +726,29 @@ func (d *Destination) validateTargetUnchanged() error {
 
 func (d *Destination) finishCommit() error {
 	d.state = destinationCommitted
-	syncErr := d.dir.sync()
+	syncErr := d.ops.syncDir(d.dir)
 	closeErr := d.closeDir()
 	if syncErr != nil {
 		syncErr = fmt.Errorf("download committed but sync directory: %w", syncErr)
 	}
 	if closeErr != nil {
-		closeErr = fmt.Errorf("download committed but close directory: %w", closeErr)
+		closeErr = errors.Join(ErrCleanupIncomplete, fmt.Errorf("download committed but close directory: %w", closeErr))
 	}
-	return errors.Join(syncErr, closeErr)
+	joined := errors.Join(syncErr, closeErr)
+	if errors.Is(joined, ErrCleanupIncomplete) {
+		d.state = destinationCleanupIncomplete
+		d.terminalErr = joined
+	}
+	return joined
+}
+
+func (d *Destination) finishPublishedError(publishErr error) error {
+	joined := errors.Join(publishErr, d.finishCommit())
+	if errors.Is(joined, ErrCleanupIncomplete) {
+		d.state = destinationCleanupIncomplete
+		d.terminalErr = joined
+	}
+	return joined
 }
 
 func (d *Destination) lifecycleError() error {
@@ -554,6 +760,8 @@ func (d *Destination) lifecycleError() error {
 		return ErrDestinationCommitted
 	case destinationAborted:
 		return ErrDestinationAborted
+	case destinationCleanupIncomplete:
+		return d.terminalErr
 	default:
 		return nil
 	}
@@ -561,19 +769,30 @@ func (d *Destination) lifecycleError() error {
 
 func (d *Destination) failBeforeCommit(primary error) error {
 	cleanupErr := d.abortOpen()
-	return errors.Join(primary, cleanupErr)
+	joined := errors.Join(primary, cleanupErr)
+	if errors.Is(joined, ErrCleanupIncomplete) {
+		d.state = destinationCleanupIncomplete
+		d.terminalErr = joined
+	}
+	return joined
 }
 
-// Abort closes the part file and removes it. Repeated aborts are harmless.
+// Abort closes the part file and removes it. Repeated successful aborts are
+// harmless; an incomplete cleanup returns the same stable error on every later
+// Abort or Commit call.
 func (d *Destination) Abort() error {
 	if d == nil {
 		return ErrInvalidDestination
 	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	switch d.state {
 	case destinationCommitted:
 		return ErrDestinationCommitted
 	case destinationAborted:
 		return nil
+	case destinationCleanupIncomplete:
+		return d.terminalErr
 	case destinationOpen:
 		return d.abortOpen()
 	default:
@@ -585,8 +804,8 @@ func (d *Destination) abortOpen() error {
 	var cleanupErr error
 	if d.file != nil {
 		originalFile := d.file
-		if err := originalFile.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
-			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("close download part: %w", err))
+		if err := d.ops.closeFile(originalFile); err != nil && !errors.Is(err, os.ErrClosed) {
+			cleanupErr = errors.Join(cleanupErr, ErrCleanupIncomplete, fmt.Errorf("close download part: %w", err))
 		}
 		d.file = nil
 		if d.File == originalFile {
@@ -594,15 +813,20 @@ func (d *Destination) abortOpen() error {
 		}
 	}
 	if d.dir != nil && d.partName != "" {
-		if err := quarantineRemove(d.dir, d.partName, d.PartPath, d.partID); err != nil {
-			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("remove download part: %w", err))
+		if err := quarantineRemove(d.ops, d.dir, d.partName, d.PartPath, d.partID); err != nil {
+			cleanupErr = errors.Join(cleanupErr, ErrCleanupIncomplete, fmt.Errorf("remove download part: %w", err))
 		}
 	}
 	if err := d.closeDir(); err != nil {
-		cleanupErr = errors.Join(cleanupErr, fmt.Errorf("close download directory: %w", err))
+		cleanupErr = errors.Join(cleanupErr, ErrCleanupIncomplete, fmt.Errorf("close download directory: %w", err))
+	}
+	if cleanupErr != nil {
+		d.state = destinationCleanupIncomplete
+		d.terminalErr = cleanupErr
+		return cleanupErr
 	}
 	d.state = destinationAborted
-	return cleanupErr
+	return nil
 }
 
 func (d *Destination) closeDir() error {
@@ -611,7 +835,7 @@ func (d *Destination) closeDir() error {
 	}
 	dir := d.dir
 	d.dir = nil
-	return dir.close()
+	return d.ops.closeDir(dir)
 }
 
 // LimitWriter writes at most Max bytes. Max == 0 is unlimited; Max < 0 is
