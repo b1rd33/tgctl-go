@@ -51,6 +51,9 @@ func exportCommand(cfg CommandsConfig) *cobra.Command {
 				return emitDispatchedFailure(cmd, "export", safety.NewBadArgs("--limit must not be negative"))
 			}
 			outputPath, _ := cmd.Flags().GetString("output")
+			if outputPath == "" {
+				outputPath = "-"
+			}
 			includeMedia, _ := cmd.Flags().GetBool("include-media")
 			account, err := selectedAccount(cmd, cfg.Paths)
 			if err != nil {
@@ -90,9 +93,6 @@ func exportCommand(cfg CommandsConfig) *cobra.Command {
 				records := make([]exportRecord, 0, len(rows))
 				for _, row := range rows {
 					records = append(records, makeExportRecord(row, includeMedia, paths.mediaDir))
-				}
-				if outputPath == "" {
-					outputPath = "-"
 				}
 				content := ""
 				if outputPath == "-" {
