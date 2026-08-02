@@ -165,7 +165,10 @@ treat failure to finalize that audit record after a committed artifact as a
 partial committed error instead of silently reporting success.
 
 `audit.log` lives at `accounts/<name>/audit.log` and is append-only.
-File permissions are 0600 (owner-only read/write).
+On Unix, sensitive files are created with mode 0600 (owner-only
+read/write). Windows does not expose POSIX mode bits through Go's
+`os.FileMode`; there, protection comes from the inherited ACL on the
+private account root and the session lock remains exclusive.
 
 ## Local rate limiter
 
@@ -186,7 +189,7 @@ up to N seconds for the lock instead of failing immediately.
 
 ## File permissions
 
-Sensitive files in `accounts/<name>/` are chmod'd to owner-only:
+On Unix, sensitive files in `accounts/<name>/` are chmod'd to owner-only:
 
 | File | Mode |
 |---|---|
@@ -197,6 +200,8 @@ Sensitive files in `accounts/<name>/` are chmod'd to owner-only:
 | Account directories | 0700 |
 
 This is best-effort and never blocks the operation if it fails.
+On Windows, Go reports implementation-defined POSIX mode bits; the account
+root's inherited ACL is the protection boundary instead.
 
 ## Exit codes
 
