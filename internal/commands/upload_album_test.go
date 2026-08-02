@@ -215,7 +215,7 @@ func TestUploadAlbumFinalSendFailureRetainsReservation(t *testing.T) {
 	cfg, fake, dir := albumFakeConfig(t)
 	first := writeAlbumFixture(t, "first.jpg", []byte("\xff\xd8\xffphoto"))
 	second := writeAlbumFixture(t, "second.jpg", []byte("\xff\xd8\xffphoto2"))
-	fake.AlbumErr = &client.AlbumUploadError{Stage: "final-send-cancel", Err: errors.New("RPC outcome unknown")}
+	fake.AlbumErr = &client.AlbumUploadError{Stage: "final-send-cancel", Err: errors.New("RPC outcome unknown"), OutcomeUnknown: true}
 	out, code := runRoot(t, cfg, "upload-album", "1", first, second, "--idempotency-key", "unknown", "--allow-write", "--json")
 	if code != 1 || !strings.Contains(out, `"committed":true`) || strings.Contains(out, first) || strings.Contains(out, "RPC outcome") {
 		t.Fatalf("code=%d out=%s", code, out)

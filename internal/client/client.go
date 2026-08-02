@@ -114,9 +114,10 @@ type UploadAlbumResponse = UploadAlbumResp
 // AlbumUploadError preserves the operation stage and item position without
 // exposing request credentials or private Telegram payloads.
 type AlbumUploadError struct {
-	Stage    string
-	Position int
-	Err      error
+	Stage          string
+	Position       int
+	Err            error
+	OutcomeUnknown bool
 }
 
 func (e *AlbumUploadError) Error() string {

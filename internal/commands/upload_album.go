@@ -107,7 +107,7 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 					})
 					if err != nil {
 						var albumErr *client.AlbumUploadError
-						if errors.As(err, &albumErr) && strings.HasPrefix(albumErr.Stage, "final-send") {
+						if errors.As(err, &albumErr) && albumErr.OutcomeUnknown {
 							return nil, safety.NewCommittedWriteWithExtras("album final-send outcome is unknown; do not retry blindly", errors.New("final Telegram send outcome unknown"), recoveryExtras)
 						}
 						return nil, redactAlbumUploadError(err, items, caption)

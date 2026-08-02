@@ -10,6 +10,7 @@ import (
 
 	"github.com/gotd/td/telegram/uploader"
 	"github.com/gotd/td/tg"
+	"github.com/gotd/td/tgerr"
 
 	"github.com/b1rd33/tgctl-go/internal/media"
 	"github.com/b1rd33/tgctl-go/internal/safety"
@@ -29,6 +30,13 @@ func albumFailure(stage string, position int, err error) error {
 		err = errors.New("unknown failure")
 	}
 	return &AlbumUploadError{Stage: stage, Position: position, Err: err}
+}
+
+func albumFailureUnknown(stage string, position int, err error) error {
+	if err == nil {
+		err = errors.New("unknown failure")
+	}
+	return &AlbumUploadError{Stage: stage, Position: position, Err: err, OutcomeUnknown: true}
 }
 
 func (g *GotdClient) uploadAlbumAPI() (albumUploadAPI, error) {
@@ -243,13 +251,14 @@ func documentHasAudioAttribute(doc *tg.Document) bool {
 }
 
 type albumUpdateData struct {
-	mapping    map[int64]int64
-	grouped    map[int64]int64
-	messageIDs map[int64]struct{}
+	mapping      map[int64]int64
+	grouped      map[int64]int64
+	messageIDs   map[int64]struct{}
+	messageOrder []int64
 }
 
 func collectAlbumUpdates(u tg.UpdatesClass) (albumUpdateData, error) {
-	d := albumUpdateData{mapping: make(map[int64]int64), grouped: make(map[int64]int64), messageIDs: make(map[int64]struct{})}
+	d := albumUpdateData{mapping: make(map[int64]int64), grouped: make(map[int64]int64), messageIDs: make(map[int64]struct{}), messageOrder: make([]int64, 0)}
 	var updates []tg.UpdateClass
 	switch v := u.(type) {
 	case *tg.Updates:
@@ -263,6 +272,7 @@ func collectAlbumUpdates(u tg.UpdatesClass) (albumUpdateData, error) {
 	case *tg.UpdateShortSentMessage:
 		if v != nil {
 			d.messageIDs[int64(v.ID)] = struct{}{}
+			d.messageOrder = append(d.messageOrder, int64(v.ID))
 		}
 		return d, nil
 	case *tg.UpdateShort:
@@ -292,18 +302,21 @@ func collectAlbumUpdates(u tg.UpdatesClass) (albumUpdateData, error) {
 			d.mapping[v.RandomID] = int64(v.ID)
 		case *tg.UpdateNewMessage:
 			if v != nil {
-				collectAlbumMessage(d, v.Message)
+				collectAlbumMessage(&d, v.Message)
 			}
 		case *tg.UpdateNewChannelMessage:
 			if v != nil {
-				collectAlbumMessage(d, v.Message)
+				collectAlbumMessage(&d, v.Message)
 			}
 		}
 	}
 	return d, nil
 }
 
-func collectAlbumMessage(d albumUpdateData, class tg.MessageClass) {
+func collectAlbumMessage(d *albumUpdateData, class tg.MessageClass) {
+	if d == nil {
+		return
+	}
 	msg, ok := class.(*tg.Message)
 	if !ok || msg == nil || msg.ID <= 0 {
 		return
@@ -313,6 +326,7 @@ func collectAlbumMessage(d albumUpdateData, class tg.MessageClass) {
 		return
 	}
 	d.messageIDs[id] = struct{}{}
+	d.messageOrder = append(d.messageOrder, id)
 	if msg.GroupedID != 0 {
 		d.grouped[id] = msg.GroupedID
 	}
@@ -327,6 +341,16 @@ func extractAlbumResponse(u tg.UpdatesClass, randomIDs []int64, items []validate
 		for id := range d.messageIDs {
 			d.mapping[randomIDs[0]] = id
 			break
+		}
+	}
+	// Telegram normally returns UpdateMessageID entries that map every
+	// random_id. Some document/video album responses only contain the newly
+	// created messages, in request order, without those mappings. Preserve the
+	// update order while collecting messages so those responses can still be
+	// correlated safely; never fall back to unordered map iteration for albums.
+	if len(d.mapping) == 0 && len(d.messageOrder) == len(randomIDs) {
+		for i, random := range randomIDs {
+			d.mapping[random] = d.messageOrder[i]
 		}
 	}
 	if len(d.mapping) != len(randomIDs) {
@@ -454,15 +478,23 @@ func (g *GotdClient) UploadAlbum(ctx context.Context, req UploadAlbumReq) (Uploa
 		stage := "final-send"
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			stage = "final-send-cancel"
+			return UploadAlbumResp{}, albumFailureUnknown(stage, -1, mapRPCErr(err))
 		}
-		return UploadAlbumResp{}, albumFailure(stage, -1, mapRPCErr(err))
+		mapped := mapRPCErr(err)
+		// A typed Telegram RPC response is a definitive rejection: no album
+		// message was created, even though earlier uploadMedia calls remain
+		// non-transactional. Only transport/unknown failures are ambiguous.
+		if _, ok := tgerr.As(err); ok {
+			return UploadAlbumResp{}, albumFailure(stage, -1, mapped)
+		}
+		return UploadAlbumResp{}, albumFailureUnknown(stage, -1, mapped)
 	}
 	if err := ctx.Err(); err != nil {
-		return UploadAlbumResp{}, albumFailure("final-send-cancel", -1, err)
+		return UploadAlbumResp{}, albumFailureUnknown("final-send-cancel", -1, err)
 	}
 	resp, err := extractAlbumResponse(updates, randomIDs, items)
 	if err != nil {
-		return UploadAlbumResp{}, albumFailure("final-send", -1, err)
+		return UploadAlbumResp{}, albumFailureUnknown("final-send", -1, err)
 	}
 	resp.ChatID = req.ChatID
 	return resp, nil
