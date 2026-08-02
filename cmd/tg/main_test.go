@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -21,7 +22,7 @@ type legacyState struct {
 
 func buildTGProcess(t *testing.T) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "tg")
+	path := filepath.Join(t.TempDir(), tgProcessName())
 	cmd := exec.Command("go", "build", "-o", path, ".")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build tg: %v\n%s", err, out)
@@ -35,7 +36,7 @@ func buildTGProcessWithVersion(t *testing.T, version string) string {
 
 func buildTGProcessWithBuildInfo(t *testing.T, version, commit, source string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "tg")
+	path := filepath.Join(t.TempDir(), tgProcessName())
 	const linkerPrefix = "github.com/b1rd33/tgctl-go/internal/commands."
 	ldflags := strings.Join([]string{
 		"-X " + linkerPrefix + "Version=" + version,
@@ -47,6 +48,13 @@ func buildTGProcessWithBuildInfo(t *testing.T, version, commit, source string) s
 		t.Fatalf("build tg with version %q: %v\n%s", version, err, out)
 	}
 	return path
+}
+
+func tgProcessName() string {
+	if runtime.GOOS == "windows" {
+		return "tg.exe"
+	}
+	return "tg"
 }
 
 func seedLegacyState(t *testing.T, root string) legacyState {
