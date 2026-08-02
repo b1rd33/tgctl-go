@@ -23,6 +23,8 @@ import (
 
 func registerLocalDBCommands(root *cobra.Command, cfg CommandsConfig) {
 	root.AddCommand(backfillCommand(cfg))
+	root.AddCommand(syncCommand(cfg))
+	root.AddCommand(exportCommand(cfg))
 	root.AddCommand(discoverCommand(cfg))
 	root.AddCommand(syncContactsCommand(cfg))
 }

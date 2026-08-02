@@ -1,6 +1,6 @@
 # Commands
 
-`tg --help` shows 71 commands. This page is generated from Cobra help output.
+`tg --help` shows 73 commands. This page is generated from Cobra help output.
 
 Every command supports the global flags shown by `tg --help`: `--account`, `--full`, `--json`, `--human`, `--lock-wait`, `--read-only`, and `--version` where applicable.
 
@@ -34,6 +34,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg download-album`](#tg-download-album) | Download one cached Telegram media group |
 | [`tg download-media`](#tg-download-media) | Download media attached to a message |
 | [`tg edit-msg`](#tg-edit-msg) | Edit a previously sent message |
+| [`tg export`](#tg-export) | Export cached Telegram history locally |
 | [`tg folder-add-chat`](#tg-folder-add-chat) | Mutate folder chat membership |
 | [`tg folder-create`](#tg-folder-create) | Create a dialog folder |
 | [`tg folder-delete`](#tg-folder-delete) | Delete a dialog folder |
@@ -62,6 +63,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg set-permissions`](#tg-set-permissions) | Set default chat permissions |
 | [`tg show`](#tg-show) | Show recent cached messages in a chat |
 | [`tg stats`](#tg-stats) | Show local cache statistics |
+| [`tg sync`](#tg-sync) | Synchronize cached messages and optionally follow updates |
 | [`tg sync-contacts`](#tg-sync-contacts) | Sync Telegram contacts into the local DB |
 | [`tg terminate-session`](#tg-terminate-session) | Terminate one of your authorized Telegram sessions |
 | [`tg topic-create`](#tg-topic-create) | Create a forum topic |
@@ -776,6 +778,36 @@ tg edit-msg 1240314255 1 "updated" --allow-write --json
 | `--human` | Force human-readable output (default on a TTY) |
 | `--idempotency-key string` | Per-account replay-safe key |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+
+## `tg export`
+
+Export cached Telegram history locally
+
+**Use**
+
+```text
+tg export <chat> [flags]
+```
+
+**Example**
+
+```bash
+tg export <chat> [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--format string` | Export format: jsonl, csv, or html (default "jsonl") |
+| `-h, --help` | help for export |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--include-media` | Include media paths relative to the account media root |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--limit int` | Maximum rows (0 means all cached rows) |
+| `--output string` | Output file, or - for stdout (default "-") |
+| `--since string` | Inclusive lower date/time bound |
+| `--until string` | Inclusive upper date/time bound |
 
 ## `tg folder-add-chat`
 
@@ -1560,6 +1592,38 @@ tg stats --json
 | `-h, --help` | help for stats |
 | `--human` | Force human-readable output (default on a TTY) |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+
+## `tg sync`
+
+Synchronize cached messages and optionally follow updates
+
+**Use**
+
+```text
+tg sync <chat> [flags]
+```
+
+**Example**
+
+```bash
+tg sync <chat> [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--allow-write` | Required for local DB writes |
+| `--backoff-max-seconds float` | Maximum reconnect delay in seconds (default 30) |
+| `--download-media` | Download media during catch-up |
+| `--follow` | Continue listening after the initial catch-up |
+| `-h, --help` | help for sync |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--max-media-size-mb int` | Maximum media file size during catch-up (default 100) |
+| `--max-messages int` | Maximum history messages to reconcile (default 100) |
+| `--once` | With --follow, stop after one matching live event |
+| `--overwrite-media` | Overwrite existing catch-up media |
 
 ## `tg sync-contacts`
 

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -125,6 +126,13 @@ func cacheListenEvent(dbPath string, event client.ListenEvent) error {
 		return err
 	}
 	defer db.Close()
+	return applyLiveEvent(db, event)
+}
+
+func applyLiveEvent(db *sql.DB, event client.ListenEvent) error {
+	if event.ChatID == 0 || event.MessageID == 0 {
+		return nil
+	}
 	if event.Deleted {
 		return store.MarkLiveMessagesDeleted(db, event.ChatID, []int64{event.MessageID})
 	}

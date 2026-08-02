@@ -41,15 +41,20 @@ type Message struct {
 // handling. Deleted mutations only need ChatID/MessageID/Deleted; all other
 // fields are retained for idempotent upserts.
 type LiveMessage struct {
-	ChatID    int64
-	MessageID int64
-	SenderID  *int64
-	Date      string
-	Text      *string
-	HasMedia  bool
-	MediaType *string
-	GroupedID int64
-	Deleted   bool
+	ChatID        int64
+	MessageID     int64
+	SenderID      *int64
+	Date          string
+	Text          *string
+	IsOutgoing    bool
+	ReplyToMsgID  *int64
+	HasMedia      bool
+	MediaType     *string
+	MediaPath     *string
+	MediaIdentity *string
+	GroupedID     int64
+	RawJSON       *string
+	Deleted       bool
 }
 
 // UpsertLiveMessage applies a new/edit mutation without allowing an older
@@ -65,17 +70,22 @@ func UpsertLiveMessage(db *sql.DB, m LiveMessage) error {
 	_, err := db.Exec(`
 		INSERT INTO tg_messages(
 			chat_id, message_id, sender_id, date, text, is_outgoing,
-			has_media, media_type, grouped_id, deleted
-		) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+			reply_to_msg_id, has_media, media_type, media_path, media_id, grouped_id, raw_json, deleted
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(chat_id, message_id) DO UPDATE SET
 			sender_id = CASE WHEN excluded.date >= tg_messages.date THEN excluded.sender_id ELSE tg_messages.sender_id END,
 			date = CASE WHEN excluded.date >= tg_messages.date THEN excluded.date ELSE tg_messages.date END,
 			text = CASE WHEN excluded.date >= tg_messages.date THEN excluded.text ELSE tg_messages.text END,
+			is_outgoing = CASE WHEN excluded.date >= tg_messages.date THEN excluded.is_outgoing ELSE tg_messages.is_outgoing END,
+			reply_to_msg_id = CASE WHEN excluded.date >= tg_messages.date THEN excluded.reply_to_msg_id ELSE tg_messages.reply_to_msg_id END,
 			has_media = CASE WHEN excluded.date >= tg_messages.date THEN excluded.has_media ELSE tg_messages.has_media END,
-			media_type = CASE WHEN excluded.date >= tg_messages.date THEN excluded.media_type ELSE tg_messages.media_type END,
-			grouped_id = CASE WHEN excluded.date >= tg_messages.date THEN excluded.grouped_id ELSE tg_messages.grouped_id END,
+			media_type = CASE WHEN excluded.date >= tg_messages.date THEN COALESCE(excluded.media_type, tg_messages.media_type) ELSE tg_messages.media_type END,
+			media_path = CASE WHEN excluded.date >= tg_messages.date THEN COALESCE(excluded.media_path, tg_messages.media_path) ELSE tg_messages.media_path END,
+			media_id = CASE WHEN excluded.date >= tg_messages.date THEN COALESCE(excluded.media_id, tg_messages.media_id) ELSE tg_messages.media_id END,
+			grouped_id = CASE WHEN excluded.date >= tg_messages.date THEN COALESCE(excluded.grouped_id, tg_messages.grouped_id) ELSE tg_messages.grouped_id END,
+			raw_json = CASE WHEN excluded.date >= tg_messages.date THEN COALESCE(excluded.raw_json, tg_messages.raw_json) ELSE tg_messages.raw_json END,
 			deleted = CASE WHEN excluded.date >= tg_messages.date THEN excluded.deleted ELSE tg_messages.deleted END`,
-		m.ChatID, m.MessageID, optInt64(m.SenderID), m.Date, optStr(m.Text), boolInt(m.HasMedia), optStr(m.MediaType), nullInt64(m.GroupedID), boolInt(m.Deleted),
+		m.ChatID, m.MessageID, optInt64(m.SenderID), m.Date, optStr(m.Text), boolInt(m.IsOutgoing), optInt64(m.ReplyToMsgID), boolInt(m.HasMedia), optStr(m.MediaType), optStr(m.MediaPath), optStr(m.MediaIdentity), nullInt64(m.GroupedID), optStr(m.RawJSON), boolInt(m.Deleted),
 	)
 	return err
 }
