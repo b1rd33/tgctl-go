@@ -56,7 +56,7 @@ func InspectDownloadedArtifactWithIdentity(outputRoot, artifactPath string, expe
 	if err != nil {
 		return DownloadedArtifact{}, err
 	}
-	if !sameFileIdentity(expected.directory, current.directory) || !sameFileIdentity(expected.file, current.file) {
+	if !sameFileIdentity(expected.directory, current.directory) || !sameStrictFileIdentity(expected.file, current.file) {
 		return DownloadedArtifact{}, fmt.Errorf("%w: downloaded artifact no longer matches producer identity", ErrDestinationChanged)
 	}
 	return artifact, nil
@@ -110,7 +110,7 @@ func inspectDownloadedArtifact(outputRoot, artifactPath string, afterFirstEntry 
 	if !second.regular {
 		return DownloadedArtifact{}, ArtifactIdentity{}, fmt.Errorf("%w: downloaded artifact changed to a non-regular entry", ErrUnsafeDestination)
 	}
-	if !sameFileIdentity(first.identity, second.identity) || first.size != second.size {
+	if !sameStrictFileIdentity(first.identity, second.identity) || first.size != second.size {
 		return DownloadedArtifact{}, ArtifactIdentity{}, fmt.Errorf("%w: downloaded artifact changed during inspection", ErrDestinationChanged)
 	}
 

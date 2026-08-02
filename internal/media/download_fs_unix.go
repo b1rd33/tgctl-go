@@ -10,8 +10,10 @@ import (
 )
 
 type fileIdentity struct {
-	device uint64
-	inode  uint64
+	device     uint64
+	inode      uint64
+	changeSec  int64
+	changeNsec int64
 }
 
 type anchoredEntry struct {
@@ -46,9 +48,14 @@ func (d *anchoredDir) lstat(name string) (anchoredEntry, error) {
 		return anchoredEntry{}, err
 	}
 	return anchoredEntry{
-		identity: fileIdentity{device: uint64(stat.Dev), inode: stat.Ino},
-		regular:  stat.Mode&unix.S_IFMT == unix.S_IFREG,
-		size:     stat.Size,
+		identity: fileIdentity{
+			device:     uint64(stat.Dev),
+			inode:      stat.Ino,
+			changeSec:  stat.Ctim.Sec,
+			changeNsec: stat.Ctim.Nsec,
+		},
+		regular: stat.Mode&unix.S_IFMT == unix.S_IFREG,
+		size:    stat.Size,
 	}, nil
 }
 
@@ -57,7 +64,12 @@ func (d *anchoredDir) identity() (fileIdentity, error) {
 	if err := unix.Fstat(d.fd, &stat); err != nil {
 		return fileIdentity{}, err
 	}
-	return fileIdentity{device: uint64(stat.Dev), inode: stat.Ino}, nil
+	return fileIdentity{
+		device:     uint64(stat.Dev),
+		inode:      stat.Ino,
+		changeSec:  stat.Ctim.Sec,
+		changeNsec: stat.Ctim.Nsec,
+	}, nil
 }
 
 func snapshotOpenFile(file *os.File) (anchoredEntry, error) {
@@ -66,14 +78,23 @@ func snapshotOpenFile(file *os.File) (anchoredEntry, error) {
 		return anchoredEntry{}, err
 	}
 	return anchoredEntry{
-		identity: fileIdentity{device: uint64(stat.Dev), inode: stat.Ino},
-		regular:  stat.Mode&unix.S_IFMT == unix.S_IFREG,
-		size:     stat.Size,
+		identity: fileIdentity{
+			device:     uint64(stat.Dev),
+			inode:      stat.Ino,
+			changeSec:  stat.Ctim.Sec,
+			changeNsec: stat.Ctim.Nsec,
+		},
+		regular: stat.Mode&unix.S_IFMT == unix.S_IFREG,
+		size:    stat.Size,
 	}, nil
 }
 
 func sameFileIdentity(a, b fileIdentity) bool {
-	return a == b
+	return a.device == b.device && a.inode == b.inode
+}
+
+func sameStrictFileIdentity(a, b fileIdentity) bool {
+	return sameFileIdentity(a, b) && a.changeSec == b.changeSec && a.changeNsec == b.changeNsec
 }
 
 func (d *anchoredDir) remove(name string) error {

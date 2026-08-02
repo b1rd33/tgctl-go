@@ -47,6 +47,10 @@ func sameFileIdentity(a, b fileIdentity) bool {
 	return a.info != nil && b.info != nil && os.SameFile(a.info, b.info)
 }
 
+func sameStrictFileIdentity(a, b fileIdentity) bool {
+	return sameFileIdentity(a, b)
+}
+
 func (d *anchoredDir) renameNoReplace(string, string) error {
 	return ErrAtomicOverwriteUnsupported
 }

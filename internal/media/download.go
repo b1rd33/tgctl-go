@@ -68,18 +68,20 @@ type Destination struct {
 	PartPath  string
 	File      *os.File
 
-	overwrite bool
-	state     destinationState
-	published bool
-	finalPath string
-	partPath  string
-	file      *os.File
-	dir       *anchoredDir
-	finalName string
-	partName  string
-	dirID     fileIdentity
-	partID    fileIdentity
-	target    targetSnapshot
+	overwrite        bool
+	state            destinationState
+	published        bool
+	finalPath        string
+	partPath         string
+	file             *os.File
+	dir              *anchoredDir
+	finalName        string
+	partName         string
+	dirID            fileIdentity
+	partID           fileIdentity
+	publishedID      fileIdentity
+	publishedIDValid bool
+	target           targetSnapshot
 
 	mu          sync.Mutex
 	ops         destinationOps
@@ -626,7 +628,10 @@ func (d *Destination) ArtifactIdentity() ArtifactIdentity {
 	if !d.published {
 		return ArtifactIdentity{}
 	}
-	return newArtifactIdentity(d.dirID, d.partID)
+	if !d.publishedIDValid {
+		return ArtifactIdentity{}
+	}
+	return newArtifactIdentity(d.dirID, d.publishedID)
 }
 
 func (d *Destination) commitLocked() error {
@@ -706,7 +711,23 @@ func (d *Destination) publishAbsent(hook func(), collisionSentinel error) (bool,
 	if err := validateNamedRegular(d.dir, d.finalName, d.FinalPath, d.partID); err != nil {
 		return true, errors.Join(ErrCleanupIncomplete, fmt.Errorf("download published but final identity changed: %w", err))
 	}
+	if err := d.capturePublishedIdentity(); err != nil {
+		return true, errors.Join(ErrCleanupIncomplete, fmt.Errorf("capture published download identity: %w", err))
+	}
 	return true, nil
+}
+
+func (d *Destination) capturePublishedIdentity() error {
+	entry, err := d.dir.lstat(d.finalName)
+	if err != nil {
+		return err
+	}
+	if !entry.regular {
+		return ErrUnsafeDestination
+	}
+	d.publishedID = entry.identity
+	d.publishedIDValid = true
+	return nil
 }
 
 func inspectDestinationCollision(dir *anchoredDir, name, displayPath string) error {
@@ -767,6 +788,9 @@ func (d *Destination) publishOverwrite() (bool, error) {
 		)
 	}
 	finalErr := validateNamedRegular(d.dir, d.finalName, d.FinalPath, d.partID)
+	if finalErr == nil {
+		finalErr = d.capturePublishedIdentity()
+	}
 	displacedErr := validateNamedRegular(d.dir, privatePart, d.PartPath, d.target.identity)
 	if finalErr == nil && displacedErr == nil {
 		if err := deletePrivateRegular(d.ops, d.dir, privatePart, d.PartPath, d.target.identity); err != nil {
