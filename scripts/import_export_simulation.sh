@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
-source "$SCRIPT_DIR/live_test_common.sh"
+. "$SCRIPT_DIR/live_test_common.sh"
 
 CHAT="${TGCTL_LIVE_CHAT:?Set TGCTL_LIVE_CHAT to an isolated test chat or Saved Messages ID}"
 export TG_ACCOUNT="${TGCTL_LIVE_ACCOUNT:?Set TGCTL_LIVE_ACCOUNT to a dedicated authenticated test account}"

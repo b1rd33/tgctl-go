@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"path/filepath"
 	"testing"
 )
@@ -47,6 +48,31 @@ func TestShowDefaultExcludesDeleted(t *testing.T) {
 	// Default order is DESC by date — newest first.
 	if rows[0].MessageID != 13 {
 		t.Fatalf("order: first MessageID = %d", rows[0].MessageID)
+	}
+}
+
+func TestUpsertLiveMessageIsIdempotentAndRejectsOlderMutation(t *testing.T) {
+	db := setupMessages(t)
+	first := "first"
+	second := "second"
+	if err := UpsertLiveMessage(db, LiveMessage{ChatID: 1, MessageID: 90, Date: "2026-05-10T10:00:00Z", Text: &first, GroupedID: 700}); err != nil {
+		t.Fatal(err)
+	}
+	if err := UpsertLiveMessage(db, LiveMessage{ChatID: 1, MessageID: 90, Date: "2026-05-10T09:00:00Z", Text: &second, GroupedID: 701}); err != nil {
+		t.Fatal(err)
+	}
+	row, err := GetOne(db, 1, 90, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row.Text == nil || *row.Text != first || row.GroupedID != 700 {
+		t.Fatalf("older mutation overwrote row: %+v", row)
+	}
+	if err := MarkLiveMessagesDeleted(db, 1, []int64{90, 999}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := GetOne(db, 1, 90, false); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("deleted live row visible: %v", err)
 	}
 }
 

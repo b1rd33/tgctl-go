@@ -114,6 +114,23 @@ func TestListenEventsPreserveAlbumIdentityAndAuthoritativeDate(t *testing.T) {
 	}
 }
 
+func TestListenEventsNormalizeEditsAndScopedDeletes(t *testing.T) {
+	events := listenEventsFromUpdates(&tg.Updates{Updates: []tg.UpdateClass{
+		&tg.UpdateEditMessage{Message: &tg.Message{ID: 4, PeerID: &tg.PeerUser{UserID: 2}, Message: "edited"}},
+		&tg.UpdateDeleteChannelMessages{ChannelID: 9, Messages: []int{5, 6}},
+		&tg.UpdateDeleteMessages{Messages: []int{7}},
+	}})
+	if len(events) != 4 {
+		t.Fatalf("events=%d want 4: %#v", len(events), events)
+	}
+	if events[0].UpdateKind != "edit_message" || events[0].Deleted || events[0].Text != "edited" {
+		t.Fatalf("edit event=%+v", events[0])
+	}
+	if events[1].ChatID != 9 || !events[1].Deleted || events[2].MessageID != 6 || events[3].ChatID != 0 || !events[3].Deleted {
+		t.Fatalf("delete events=%+v", events[1:])
+	}
+}
+
 func TestBackfillStructuredMediaOutcomeContract(t *testing.T) {
 	want := BackfillResult{MediaOutcomes: []BackfillMediaOutcome{{
 		ChatID: 42, MessageID: 9, MediaIdentity: "document:700", Status: BackfillMediaDownloaded,

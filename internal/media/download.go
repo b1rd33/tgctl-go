@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -137,7 +138,7 @@ func SanitizeDownloadName(name string) string {
 	// filepath.Base only recognizes the host separator. Normalize the other
 	// commonly supplied separator first so Windows-originated names are safe on
 	// Unix too.
-	name = filepath.Base(strings.ReplaceAll(name, `\`, "/"))
+	name = path.Base(strings.ReplaceAll(name, `\`, "/"))
 
 	var clean strings.Builder
 	clean.Grow(len(name))

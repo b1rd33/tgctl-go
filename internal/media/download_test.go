@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -1541,6 +1542,10 @@ func (w *shortErrorWriter) Write(p []byte) (int, error) {
 
 func assertMode(t *testing.T, path string, want os.FileMode) {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		// Windows ACLs do not expose POSIX mode bits through FileInfo.Perm.
+		return
+	}
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)

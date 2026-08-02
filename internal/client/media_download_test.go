@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -729,7 +730,7 @@ func TestGotdDownloadMediaStreamsAtomicallyAndReturnsSafeMetadata(t *testing.T) 
 	if contents, readErr := os.ReadFile(got.Path); readErr != nil || !bytes.Equal(contents, data) {
 		t.Fatalf("download = %q, %v", contents, readErr)
 	}
-	if info, statErr := os.Stat(got.Path); statErr != nil || info.Mode().Perm() != 0o600 {
+	if info, statErr := os.Stat(got.Path); runtime.GOOS != "windows" && (statErr != nil || info.Mode().Perm() != 0o600) {
 		t.Fatalf("mode = %v, %v, want 0600", info, statErr)
 	}
 	if api.channelReq == nil {
@@ -1186,6 +1187,9 @@ func TestGotdDownloadMediaRelativeOutputAndTraversalNameStayContained(t *testing
 	}
 	relOutput, err := filepath.Rel(wd, absOutput)
 	if err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("temporary directory is on a different Windows volume: %v", err)
+		}
 		t.Fatal(err)
 	}
 	g, _, _ := downloadTestClientAt(t, message, &recordingFileDownloader{chunks: [][]byte{[]byte("safe")}}, relOutput)
@@ -1340,7 +1344,7 @@ func assertFileState(t *testing.T, path, want string, wantMode os.FileMode) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != wantMode {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != wantMode {
 		t.Fatalf("%s mode = %#o, want %#o", path, info.Mode().Perm(), wantMode)
 	}
 }

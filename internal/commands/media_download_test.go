@@ -10,6 +10,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -232,6 +233,9 @@ func TestDownloadMediaExplicitRelativeOutputAndUnlimitedSize(t *testing.T) {
 	}
 	relative, err := filepath.Rel(workingDir, absoluteOutput)
 	if err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("temporary directory is on a different Windows volume: %v", err)
+		}
 		t.Fatal(err)
 	}
 	configureDownload(t, cfg, fake, 1, 9, relative, false)

@@ -32,7 +32,7 @@ type anchoredDir struct {
 }
 
 func openAnchoredDir(path string) (*anchoredDir, error) {
-	file, err := openWindowsPath(path, windows.GENERIC_READ, windows.FILE_FLAG_BACKUP_SEMANTICS|windows.FILE_FLAG_OPEN_REPARSE_POINT, windows.OPEN_EXISTING)
+	file, err := openWindowsPath(path, windows.GENERIC_READ|windows.DELETE, windows.FILE_FLAG_BACKUP_SEMANTICS|windows.FILE_FLAG_OPEN_REPARSE_POINT, windows.OPEN_EXISTING)
 	if err != nil {
 		return nil, err
 	}
@@ -42,11 +42,11 @@ func openAnchoredDir(path string) (*anchoredDir, error) {
 func (d *anchoredDir) entryPath(name string) string { return filepath.Join(d.path, name) }
 
 func (d *anchoredDir) createExclusive(name, displayPath string) (*os.File, error) {
-	return openWindowsPath(d.entryPath(name), windows.GENERIC_READ|windows.GENERIC_WRITE, windows.FILE_ATTRIBUTE_NORMAL, windows.CREATE_NEW)
+	return openWindowsPath(d.entryPath(name), windows.GENERIC_READ|windows.GENERIC_WRITE|windows.DELETE, windows.FILE_ATTRIBUTE_NORMAL, windows.CREATE_NEW)
 }
 
 func (d *anchoredDir) open(name, displayPath string) (*os.File, error) {
-	return openWindowsPath(d.entryPath(name), windows.GENERIC_READ, windows.FILE_FLAG_OPEN_REPARSE_POINT, windows.OPEN_EXISTING)
+	return openWindowsPath(d.entryPath(name), windows.GENERIC_READ|windows.DELETE, windows.FILE_FLAG_OPEN_REPARSE_POINT, windows.OPEN_EXISTING)
 }
 
 func openWindowsPath(path string, access, attrs, disposition uint32) (*os.File, error) {

@@ -1684,6 +1684,11 @@ func listenEventsFromUpdates(updates tg.UpdatesClass) []ListenEvent {
 			GroupedID:  m.GroupedID,
 		})
 	}
+	addDeleted := func(kind string, chatID int64, ids []int) {
+		for _, id := range ids {
+			out = append(out, ListenEvent{UpdateKind: kind, ChatID: chatID, MessageID: int64(id), Deleted: true})
+		}
+	}
 	switch u := updates.(type) {
 	case *tg.Updates:
 		for _, update := range u.Updates {
@@ -1692,6 +1697,17 @@ func listenEventsFromUpdates(updates tg.UpdatesClass) []ListenEvent {
 				add("message", v.Message)
 			case *tg.UpdateNewChannelMessage:
 				add("channel_message", v.Message)
+			case *tg.UpdateEditMessage:
+				add("edit_message", v.Message)
+			case *tg.UpdateEditChannelMessage:
+				add("edit_channel_message", v.Message)
+			case *tg.UpdateDeleteMessages:
+				// Telegram's basic delete update omits the chat id. Emit the
+				// event for observers, but durable caching waits for a scoped
+				// channel update or a subsequent backfill to identify the chat.
+				addDeleted("delete_message", 0, v.Messages)
+			case *tg.UpdateDeleteChannelMessages:
+				addDeleted("delete_channel_message", v.ChannelID, v.Messages)
 			}
 		}
 	case *tg.UpdateShortMessage:
@@ -1704,6 +1720,10 @@ func listenEventsFromUpdates(updates tg.UpdatesClass) []ListenEvent {
 			add("message", v.Message)
 		case *tg.UpdateNewChannelMessage:
 			add("channel_message", v.Message)
+		case *tg.UpdateEditMessage:
+			add("edit_message", v.Message)
+		case *tg.UpdateEditChannelMessage:
+			add("edit_channel_message", v.Message)
 		}
 	}
 	return out

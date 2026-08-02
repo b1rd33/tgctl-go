@@ -412,6 +412,7 @@ type ListenEvent struct {
 	Text       string `json:"text,omitempty"`
 	MediaType  string `json:"media_type,omitempty"`
 	GroupedID  int64  `json:"grouped_id,omitempty"`
+	Deleted    bool   `json:"deleted,omitempty"`
 }
 
 // TerminateSessionReq mirrors account.ResetAuthorization.

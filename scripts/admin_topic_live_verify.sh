@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
 readonly SCRIPT_DIR PROJECT_ROOT
-source "$SCRIPT_DIR/live_test_common.sh"
+. "$SCRIPT_DIR/live_test_common.sh"
 
 if [ -f "$PROJECT_ROOT/.env" ]; then
   set -a

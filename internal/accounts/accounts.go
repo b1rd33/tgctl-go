@@ -39,7 +39,15 @@ type Manager struct {
 }
 
 // New returns a Manager pinned to the given root directory.
-func New(root string) *Manager { return &Manager{Root: root} }
+func New(root string) *Manager {
+	if abs, err := filepath.Abs(root); err == nil {
+		root = abs
+		if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+			root = resolved
+		}
+	}
+	return &Manager{Root: root}
+}
 
 func (m *Manager) accountsRoot() string { return filepath.Join(m.Root, AccountsDirName) }
 
@@ -97,7 +105,7 @@ func (m *Manager) List() ([]string, error) {
 
 // Current returns the currently selected account, falling back to "default".
 func (m *Manager) Current() string {
-	b, err := os.ReadFile(m.currentPath())
+	b, err := readCurrentFile(m.currentPath())
 	if err != nil {
 		return DefaultAccount
 	}
