@@ -29,5 +29,16 @@ func readCurrentFile(path string) ([]byte, error) {
 			return b, err
 		}
 	}
+	// MoveFileEx can leave the destination briefly absent while the adjacent
+	// private selector is being published. Read that private file before
+	// falling back to the default account; this keeps concurrent readers from
+	// observing a false default during an otherwise valid account switch.
+	if entries, globErr := filepath.Glob(filepath.Join(filepath.Dir(path), ".current.tmp-*")); globErr == nil {
+		for _, candidate := range entries {
+			if candidateBytes, candidateErr := os.ReadFile(candidate); candidateErr == nil && len(candidateBytes) > 0 {
+				return candidateBytes, nil
+			}
+		}
+	}
 	return b, err
 }

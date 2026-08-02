@@ -101,7 +101,13 @@ func (d *anchoredDir) renameNoReplace(oldName, newName string) error {
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	return os.Rename(d.entryPath(oldName), d.entryPath(newName))
+	if err := moveFileWindows(d.entryPath(oldName), d.entryPath(newName), windows.MOVEFILE_WRITE_THROUGH); err != nil {
+		if errors.Is(err, windows.ERROR_ALREADY_EXISTS) || errors.Is(err, windows.ERROR_FILE_EXISTS) {
+			return fs.ErrExist
+		}
+		return err
+	}
+	return nil
 }
 
 func (d *anchoredDir) exchange(oldName, newName string) error {
@@ -126,21 +132,33 @@ func (d *anchoredDir) exchange(oldName, newName string) error {
 	stagePath := d.entryPath(staging)
 	oldPath := d.entryPath(oldName)
 	newPath := d.entryPath(newName)
-	if err := os.Rename(newPath, stagePath); err != nil {
+	if err := moveFileWindows(newPath, stagePath, windows.MOVEFILE_WRITE_THROUGH); err != nil {
 		return err
 	}
-	if err := os.Rename(oldPath, newPath); err != nil {
-		_ = os.Rename(stagePath, newPath)
+	if err := moveFileWindows(oldPath, newPath, windows.MOVEFILE_WRITE_THROUGH); err != nil {
+		_ = moveFileWindows(stagePath, newPath, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH)
 		return err
 	}
-	if err := os.Rename(stagePath, oldPath); err != nil {
+	if err := moveFileWindows(stagePath, oldPath, windows.MOVEFILE_WRITE_THROUGH); err != nil {
 		// Best-effort rollback; the caller will detect identity loss and report
 		// cleanup incomplete if the public state cannot be restored.
-		_ = os.Rename(newPath, oldPath)
-		_ = os.Rename(stagePath, newPath)
+		_ = moveFileWindows(newPath, oldPath, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH)
+		_ = moveFileWindows(stagePath, newPath, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH)
 		return err
 	}
 	return nil
+}
+
+func moveFileWindows(from, to string, flags uint32) error {
+	fromPtr, err := windows.UTF16PtrFromString(from)
+	if err != nil {
+		return err
+	}
+	toPtr, err := windows.UTF16PtrFromString(to)
+	if err != nil {
+		return err
+	}
+	return windows.MoveFileEx(fromPtr, toPtr, flags)
 }
 
 func (d *anchoredDir) remove(name string) error { return os.Remove(d.entryPath(name)) }

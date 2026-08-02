@@ -503,7 +503,10 @@ func TestBackfillDownloadMediaPassesOptionsPersistsPathsAndReturnsCounters(t *te
 
 func TestBackfillFatalErrorAfterDownloadedPartialReturnsCommittedRecovery(t *testing.T) {
 	cfg, fc, _ := setupWriteEnv(t)
-	path := filepath.Join(filepath.Dir(cfg.Paths.(stubPaths).db), "media", "1", "42_9_document_700_asset.bin")
+	path, err := filepath.Abs(filepath.Join(filepath.Dir(cfg.Paths.(stubPaths).db), "media", "1", "42_9_document_700_asset.bin"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	fc.BackfillResult = client.BackfillResult{
 		Messages: []client.BackfillMessage{{ChatID: 1, MessageID: 9, Date: "2026-08-01T10:00:00Z"}},
 		MediaOutcomes: []client.BackfillMediaOutcome{{

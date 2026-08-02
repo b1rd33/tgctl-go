@@ -507,6 +507,9 @@ func TestDestinationAbsentPublishDoesNotClobberTargetAppearingAfterCapture(t *te
 }
 
 func TestDestinationCommitStaysInOpenedDirectoryAfterPathReplacement(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not permit renaming an open directory handle")
+	}
 	root := t.TempDir()
 	dir := filepath.Join(root, "downloads")
 	d, err := OpenDestination(dir, "result.bin", false)
@@ -542,6 +545,9 @@ func TestDestinationCommitStaysInOpenedDirectoryAfterPathReplacement(t *testing.
 }
 
 func TestDestinationAbortStaysInOpenedDirectoryAfterPathReplacement(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not permit renaming an open directory handle")
+	}
 	root := t.TempDir()
 	dir := filepath.Join(root, "downloads")
 	d, err := OpenDestination(dir, "cancel.bin", false)

@@ -191,7 +191,7 @@ func TestResolvePathsCreatesAccountDir(t *testing.T) {
 	if _, err := os.Stat(p.AccountDir); err != nil {
 		t.Fatalf("dir missing: %v", err)
 	}
-	wantDB := filepath.Join(dir, "accounts", "alice", "telegram.sqlite")
+	wantDB := filepath.Join(m.Root, "accounts", "alice", "telegram.sqlite")
 	if p.DBPath != wantDB {
 		t.Fatalf("DBPath = %q, want %q", p.DBPath, wantDB)
 	}
@@ -204,7 +204,7 @@ func TestPathsDoesNotCreateAccountDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Paths: %v", err)
 	}
-	wantDir := filepath.Join(dir, "accounts", "alice")
+	wantDir := filepath.Join(m.Root, "accounts", "alice")
 	if p.AccountDir != wantDir {
 		t.Fatalf("AccountDir = %q, want %q", p.AccountDir, wantDir)
 	}
