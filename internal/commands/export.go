@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"encoding/csv"
 	"encoding/json"
@@ -59,7 +60,17 @@ func exportCommand(cfg CommandsConfig) *cobra.Command {
 			if err != nil {
 				return emitDispatchedFailure(cmd, "export", err)
 			}
-			code := dispatch.Run("export", dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr()}, func(ctx context.Context) (any, error) {
+			jsonOutput := jsonMode(cmd)
+			var humanFormatter func(any)
+			if outputPath == "-" {
+				// Raw stdout exports already own the human output stream; avoid
+				// appending dispatch's metadata object after the archive bytes.
+				humanFormatter = func(any) {}
+			}
+			code := dispatch.Run("export", dispatch.Options{
+				JSON: jsonOutput, Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
+				HumanFormatter: humanFormatter,
+			}, func(ctx context.Context) (any, error) {
 				if ctx.Err() != nil {
 					return nil, ctx.Err()
 				}
@@ -83,14 +94,25 @@ func exportCommand(cfg CommandsConfig) *cobra.Command {
 				if outputPath == "" {
 					outputPath = "-"
 				}
+				content := ""
 				if outputPath == "-" {
-					if err := writeExport(cmd.OutOrStdout(), format, records); err != nil {
+					if jsonOutput {
+						var buffer bytes.Buffer
+						if err := writeExport(&buffer, format, records); err != nil {
+							return nil, err
+						}
+						content = buffer.String()
+					} else if err := writeExport(cmd.OutOrStdout(), format, records); err != nil {
 						return nil, err
 					}
 				} else if err := writeExportAtomic(outputPath, format, records); err != nil {
 					return nil, err
 				}
-				return map[string]any{"chat_id": chatID, "title": title, "format": format, "rows": len(records), "output": outputPath, "include_media": includeMedia}, nil
+				result := map[string]any{"chat_id": chatID, "title": title, "format": format, "rows": len(records), "output": outputPath, "include_media": includeMedia}
+				if content != "" {
+					result["content"] = content
+				}
+				return result, nil
 			})
 			storeExitCode(cmd, code)
 			return nil

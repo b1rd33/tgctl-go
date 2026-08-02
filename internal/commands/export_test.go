@@ -122,6 +122,31 @@ func TestExportCommandRefusesToOverwriteOutput(t *testing.T) {
 	}
 }
 
+func TestExportCommandStdoutKeepsJSONEnvelopeValid(t *testing.T) {
+	cfg, fake, dir := setupWriteEnv(t)
+	seedExportRows(t, cfg, filepath.Join(dir, "media", "1", "photo.jpg"))
+	out, code := runRoot(t, cfg, "export", "1", "--format", "jsonl", "--output", "-", "--include-media", "--since", "2026-08-01", "--until", "2026-08-02T23:59:59Z", "--json")
+	if code != 0 {
+		t.Fatalf("code=%d out=%s", code, out)
+	}
+	var envelope struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Rows    int    `json:"rows"`
+			Content string `json:"content"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("invalid JSON envelope: %v\n%s", err, out)
+	}
+	if !envelope.OK || envelope.Data.Rows != 1 || !strings.Contains(envelope.Data.Content, `"message_id":1`) {
+		t.Fatalf("envelope=%+v", envelope)
+	}
+	if len(fake.Calls) != 0 {
+		t.Fatalf("Telegram client was called by local export: %#v", fake.Calls)
+	}
+}
+
 func bytesFirstLine(data []byte) []byte {
 	if i := strings.IndexByte(string(data), '\n'); i >= 0 {
 		return data[:i]
