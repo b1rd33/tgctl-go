@@ -4,6 +4,7 @@ package accounts
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -12,7 +13,7 @@ import (
 )
 
 func readCurrentFile(path string) ([]byte, error) {
-	b, err := os.ReadFile(path)
+	b, err := readCurrentFileShared(path)
 	if err == nil || (!errors.Is(err, windows.ERROR_ACCESS_DENIED) && !errors.Is(err, os.ErrNotExist)) {
 		return b, err
 	}
@@ -24,7 +25,7 @@ func readCurrentFile(path string) ([]byte, error) {
 	}
 	for range 250 {
 		time.Sleep(time.Millisecond)
-		b, err = os.ReadFile(path)
+		b, err = readCurrentFileShared(path)
 		if err == nil || (!errors.Is(err, windows.ERROR_ACCESS_DENIED) && !errors.Is(err, os.ErrNotExist)) {
 			return b, err
 		}
@@ -35,10 +36,30 @@ func readCurrentFile(path string) ([]byte, error) {
 	// observing a false default during an otherwise valid account switch.
 	if entries, globErr := filepath.Glob(filepath.Join(filepath.Dir(path), ".current.tmp-*")); globErr == nil {
 		for _, candidate := range entries {
-			if candidateBytes, candidateErr := os.ReadFile(candidate); candidateErr == nil && len(candidateBytes) > 0 {
+			if candidateBytes, candidateErr := readCurrentFileShared(candidate); candidateErr == nil && len(candidateBytes) > 0 {
 				return candidateBytes, nil
 			}
 		}
 	}
 	return b, err
+}
+
+func readCurrentFileShared(path string) ([]byte, error) {
+	p, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return nil, err
+	}
+	h, err := windows.CreateFile(p, windows.GENERIC_READ,
+		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
+		nil, windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL, 0)
+	if err != nil {
+		return nil, err
+	}
+	f := os.NewFile(uintptr(h), path)
+	if f == nil {
+		_ = windows.CloseHandle(h)
+		return nil, errors.New("open selector handle")
+	}
+	defer f.Close()
+	return io.ReadAll(f)
 }
