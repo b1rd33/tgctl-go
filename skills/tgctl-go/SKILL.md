@@ -41,6 +41,11 @@ The caption is placed on the first item. The client uploads each file through
 unique random ID per item. The success response contains every message ID and
 the shared `grouped_id` when Telegram returns it.
 
+Telegram can return a video as `MessageMediaDocument` without setting its
+response-level `Video` flag. The client therefore also checks
+`DocumentAttributeVideo`; use a real video container/codec for live tests
+because a tiny or malformed MP4 may legitimately be classified as a document.
+
 Reuse a key only for the identical account/chat, ordered files, file hashes,
 caption, and options. A changed request is rejected; a pending or unknown
 final send must not be retried blindly. Temporary uploads are not
@@ -121,13 +126,14 @@ GoReleaser publishes the GitHub archives, checksums, and tap formula from the
 release tag. The binary's semver may be printed with or without a leading
 `v`; the formula test must accept both forms.
 
-For live verification use a disposable account: confirm carousel order,
-caption placement, returned IDs, shared `grouped_id`, backfill preservation,
-legacy read-only reads, writable migration plus backfill, dry-run zero
-Telegram calls, partial failures, cancellation, size limits, client-close and
-durable-audit failures, nonzero committed envelopes, bounded recovery metadata,
-and absence of path/caption leaks. Never push sessions, database files, audit
-logs, private paths, or unreviewed public history.
+For live verification, use Saved Messages or another disposable chat and a
+valid JPEG/H.264 test fixture: confirm carousel order, caption placement,
+returned IDs, shared `grouped_id`, backfill preservation, album-aware download,
+idempotent replay, and dry-run zero Telegram calls. Exercise failure,
+cancellation, size-limit, client-close, durable-audit, nonzero committed
+envelope, bounded recovery metadata, and path/caption-leak cases locally with
+fakes. Never push sessions, database files, audit logs, private paths, or
+unreviewed public history.
 
 ## Known scope
 
