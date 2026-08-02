@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 )
@@ -127,12 +128,16 @@ func TestConcurrentUseReadersNeverObserveDefaultOrMalformedSelector(t *testing.T
 		}
 	}
 
-	info, err := os.Stat(filepath.Join(dir, AccountsDirName, CurrentFile))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := info.Mode().Perm(); got != 0o600 {
-		t.Fatalf("current selector mode=%#o want 0600", got)
+	// Windows does not expose POSIX permission bits through os.FileMode; the
+	// selector is protected by the inherited ACL of the private test root.
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(filepath.Join(dir, AccountsDirName, CurrentFile))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); got != 0o600 {
+			t.Fatalf("current selector mode=%#o want 0600", got)
+		}
 	}
 	matches, err := filepath.Glob(filepath.Join(dir, AccountsDirName, ".current.tmp-*"))
 	if err != nil {
