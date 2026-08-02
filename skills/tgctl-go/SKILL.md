@@ -94,6 +94,36 @@ cannot reconstruct old album membership. Run backfill after migration if
 album grouping is needed. A dry-run reads the local cache and cannot discover
 a remote album.
 
+## Durable sync and local export
+
+Use `sync` when a chat needs restart-safe catch-up plus optional live follow:
+
+```bash
+tg --account test sync 123 --allow-write --download-media --json
+tg --account test sync 123 --follow --once --allow-write --json
+```
+
+The command stores a per-account/chat checkpoint in SQLite, persists each
+backfill/live mutation before advancing that checkpoint, reconnects with
+bounded exponential backoff, and preserves message edits, deletions, and
+album `grouped_id` values. `--once` is useful for a deterministic probe; it
+requires `--follow`. A failed local persistence step stops before the cursor
+advances, so rerunning is safe.
+
+Export is local-only and never constructs a Telegram client:
+
+```bash
+tg --account test export 123 --format jsonl --output ./chat.jsonl --include-media --json
+tg --account test export 123 --format csv --since 2026-08-01 --limit 100
+tg --account test export 123 --format html --output ./chat.html
+```
+
+Exports read the cached SQLite snapshot oldest-first, exclude tombstoned rows
+by default, constrain media paths to the account media root, and refuse to
+overwrite an existing output file. JSONL/CSV/HTML are intentionally simple
+archive formats; manifests, checksums, resumable transfer, and cross-device
+verification remain later hardening.
+
 ## Verification and release hygiene
 
 Before calling a change ready, run:

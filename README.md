@@ -203,6 +203,28 @@ warnings while other rows continue. If files were committed before a later
 failure, the error envelope has `committed: true` and bounded recovery metadata;
 do not retry blindly.
 
+### Durable sync and local archive export
+
+Use `sync` to make a chat's history and live follow restart-safe. It stores a
+per-account/chat checkpoint only after local rows are persisted and reconnects
+with bounded backoff:
+
+```bash
+tg --account "$TG_ACCOUNT_NAME" sync "$TG_CHAT_ID" \
+  --follow --once --allow-write --json
+```
+
+Use `export` for a local-only snapshot; it never creates a Telegram client,
+excludes deleted rows by default, and refuses to overwrite an existing file:
+
+```bash
+tg --account "$TG_ACCOUNT_NAME" export "$TG_CHAT_ID" \
+  --format jsonl --output ./chat.jsonl --include-media --json
+```
+
+The first archive formats are JSONL, CSV, and HTML. Checksums, manifests,
+resumable transfer, and cross-device verification remain later hardening.
+
 ## Safety contract
 
 Ordinary Telegram-side writes use this fixed pipeline:

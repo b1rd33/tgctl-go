@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -42,8 +43,14 @@ type Manager struct {
 func New(root string) *Manager {
 	if abs, err := filepath.Abs(root); err == nil {
 		root = abs
-		if resolved, err := filepath.EvalSymlinks(abs); err == nil {
-			root = resolved
+		// Windows path comparisons in subprocess tests and MoveFileEx need a
+		// canonical volume spelling. On Unix, preserve the caller's logical
+		// path: macOS commonly exposes /var through /private, and changing it
+		// here makes returned public paths surprising and unstable.
+		if runtime.GOOS == "windows" {
+			if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+				root = resolved
+			}
 		}
 	}
 	return &Manager{Root: root}
