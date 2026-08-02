@@ -12,6 +12,7 @@ import (
 type fileIdentity struct {
 	device     uint64
 	inode      uint64
+	links      uint64
 	changeSec  int64
 	changeNsec int64
 }
@@ -42,6 +43,14 @@ func (d *anchoredDir) createExclusive(name, displayPath string) (*os.File, error
 	return os.NewFile(uintptr(fd), displayPath), nil
 }
 
+func (d *anchoredDir) open(name, displayPath string) (*os.File, error) {
+	fd, err := unix.Openat(d.fd, name, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, err
+	}
+	return os.NewFile(uintptr(fd), displayPath), nil
+}
+
 func (d *anchoredDir) lstat(name string) (anchoredEntry, error) {
 	var stat unix.Stat_t
 	if err := unix.Fstatat(d.fd, name, &stat, unix.AT_SYMLINK_NOFOLLOW); err != nil {
@@ -51,6 +60,7 @@ func (d *anchoredDir) lstat(name string) (anchoredEntry, error) {
 		identity: fileIdentity{
 			device:     uint64(stat.Dev),
 			inode:      stat.Ino,
+			links:      uint64(stat.Nlink),
 			changeSec:  stat.Ctim.Sec,
 			changeNsec: stat.Ctim.Nsec,
 		},
@@ -67,6 +77,7 @@ func (d *anchoredDir) identity() (fileIdentity, error) {
 	return fileIdentity{
 		device:     uint64(stat.Dev),
 		inode:      stat.Ino,
+		links:      uint64(stat.Nlink),
 		changeSec:  stat.Ctim.Sec,
 		changeNsec: stat.Ctim.Nsec,
 	}, nil
@@ -81,6 +92,7 @@ func snapshotOpenFile(file *os.File) (anchoredEntry, error) {
 		identity: fileIdentity{
 			device:     uint64(stat.Dev),
 			inode:      stat.Ino,
+			links:      uint64(stat.Nlink),
 			changeSec:  stat.Ctim.Sec,
 			changeNsec: stat.Ctim.Nsec,
 		},
@@ -94,7 +106,7 @@ func sameFileIdentity(a, b fileIdentity) bool {
 }
 
 func sameStrictFileIdentity(a, b fileIdentity) bool {
-	return sameFileIdentity(a, b) && a.changeSec == b.changeSec && a.changeNsec == b.changeNsec
+	return sameFileIdentity(a, b) && a.links == b.links && a.changeSec == b.changeSec && a.changeNsec == b.changeNsec
 }
 
 func (d *anchoredDir) remove(name string) error {

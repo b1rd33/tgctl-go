@@ -1,4 +1,4 @@
-//go:build !darwin && !linux
+//go:build !darwin && !linux && !windows
 
 package media
 
@@ -24,6 +24,10 @@ func openAnchoredDir(string) (*anchoredDir, error) {
 }
 
 func (d *anchoredDir) createExclusive(string, string) (*os.File, error) {
+	return nil, ErrAtomicOverwriteUnsupported
+}
+
+func (d *anchoredDir) open(string, string) (*os.File, error) {
 	return nil, ErrAtomicOverwriteUnsupported
 }
 

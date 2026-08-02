@@ -396,7 +396,15 @@ func probeAtomicCapabilities(ops destinationOps, dir *anchoredDir, displayDir st
 	if exchangeErr != nil {
 		return cleanup(exchangeErr)
 	}
-	entries[0].identity, entries[1].identity = entries[1].identity, entries[0].identity
+	// A successful rename updates ctime on Unix. Refresh the identities after
+	// the probe operation so strict cleanup still detects later replacements
+	// without mistaking the probe's own rename for an attacker mutation.
+	firstCurrent, firstInspectErr := dir.lstat(firstName)
+	secondCurrent, secondInspectErr := dir.lstat(secondName)
+	if firstInspectErr != nil || secondInspectErr != nil {
+		return cleanup(errors.Join(firstInspectErr, secondInspectErr, ErrAtomicOverwriteUnsupported))
+	}
+	entries[0].identity, entries[1].identity = firstCurrent.identity, secondCurrent.identity
 	firstErr := validateNamedRegular(dir, entries[0].name, filepath.Join(displayDir, entries[0].name), entries[0].identity)
 	secondErr := validateNamedRegular(dir, entries[1].name, filepath.Join(displayDir, entries[1].name), entries[1].identity)
 	if firstErr != nil || secondErr != nil {
@@ -414,7 +422,7 @@ func cleanupAtomicProbeEntries(ops destinationOps, dir *anchoredDir, displayDir 
 	var cleanupErr error
 	for _, entry := range entries {
 		displayPath := filepath.Join(displayDir, entry.name)
-		if err := validateNamedRegular(dir, entry.name, displayPath, entry.identity); err != nil {
+		if err := validateNamedRegularStrict(dir, entry.name, displayPath, entry.identity); err != nil {
 			cleanupErr = errors.Join(cleanupErr, ErrCleanupIncomplete, fmt.Errorf("validate atomic capability probe before cleanup: %w", err))
 			continue
 		}
@@ -424,6 +432,26 @@ func cleanupAtomicProbeEntries(ops destinationOps, dir *anchoredDir, displayDir 
 		}
 	}
 	return cleanupErr
+}
+
+func validateNamedRegularStrict(dir *anchoredDir, name, displayPath string, expected fileIdentity) error {
+	entry, err := dir.lstat(name)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("%w: %s", ErrDestinationChanged, displayPath)
+		}
+		return errors.Join(
+			fmt.Errorf("%w: %s", ErrDestinationChanged, displayPath),
+			fmt.Errorf("inspect destination entry: %w", err),
+		)
+	}
+	if !entry.regular {
+		return fmt.Errorf("%w: %s", ErrUnsafeDestination, displayPath)
+	}
+	if !sameStrictFileIdentity(entry.identity, expected) {
+		return fmt.Errorf("%w: %s", ErrDestinationChanged, displayPath)
+	}
+	return nil
 }
 
 func createAtomicProbeEntry(ops destinationOps, dir *anchoredDir, displayDir string) (string, fileIdentity, error) {
@@ -466,8 +494,9 @@ func createAtomicProbeEntry(ops destinationOps, dir *anchoredDir, displayDir str
 // name before inspecting and deleting it. The supported attacker model permits
 // same-user mutation of public part/final names, but assumes the 128-bit
 // quarantine name is not discovered and targeted during this short operation.
-// Darwin and Linux supply the required atomic no-replace rename; other
-// platforms fail closed when the destination directory is opened.
+// Unix platforms use descriptor-anchored rename primitives. Windows uses
+// handle/path operations with the same exclusive and identity checks; where
+// the platform cannot provide an operation safely, the lifecycle fails closed.
 func quarantineRemove(ops destinationOps, dir *anchoredDir, name, displayPath string, expected fileIdentity) error {
 	quarantineName, err := captureNamedRegular(ops, dir, name, displayPath, expected)
 	if err != nil {
@@ -693,6 +722,11 @@ func (d *Destination) publishAbsent(hook func(), collisionSentinel error) (bool,
 	if err != nil {
 		return false, err
 	}
+	probe, err := d.dir.open(privatePart, filepath.Join(filepath.Dir(d.PartPath), privatePart))
+	if err != nil {
+		return false, fmt.Errorf("open published download probe: %w", err)
+	}
+	defer probe.Close()
 	d.ops.beforeAbsentPublish()
 	if err := normalizeAtomicRenameError(d.ops.renameNoReplace(d.dir, privatePart, d.finalName), privatePart, d.finalName); err != nil {
 		publishErr := fmt.Errorf("atomic publish download: %w", err)
@@ -708,7 +742,7 @@ func (d *Destination) publishAbsent(hook func(), collisionSentinel error) (bool,
 			restorePrivateRegular(d.ops, d.dir, privatePart, d.partName, d.PartPath, d.partID),
 		)
 	}
-	if err := validateNamedRegular(d.dir, d.finalName, d.FinalPath, d.partID); err != nil {
+	if err := validatePublishedEntry(d.dir, d.finalName, d.FinalPath, probe); err != nil {
 		return true, errors.Join(ErrCleanupIncomplete, fmt.Errorf("download published but final identity changed: %w", err))
 	}
 	if err := d.capturePublishedIdentity(); err != nil {
@@ -773,6 +807,11 @@ func (d *Destination) publishOverwrite() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	probe, err := d.dir.open(privatePart, filepath.Join(filepath.Dir(d.PartPath), privatePart))
+	if err != nil {
+		return false, fmt.Errorf("open published download probe: %w", err)
+	}
+	defer probe.Close()
 
 	if err := normalizeAtomicRenameError(d.ops.exchange(d.dir, privatePart, d.finalName), privatePart, d.finalName); err != nil {
 		if errors.Is(err, ErrAtomicOverwriteUnsupported) {
@@ -787,7 +826,7 @@ func (d *Destination) publishOverwrite() (bool, error) {
 			restorePrivateRegular(d.ops, d.dir, privatePart, d.partName, d.PartPath, d.partID),
 		)
 	}
-	finalErr := validateNamedRegular(d.dir, d.finalName, d.FinalPath, d.partID)
+	finalErr := validatePublishedEntry(d.dir, d.finalName, d.FinalPath, probe)
 	if finalErr == nil {
 		finalErr = d.capturePublishedIdentity()
 	}
@@ -811,6 +850,27 @@ func (d *Destination) publishOverwrite() (bool, error) {
 		raceErr,
 		restorePrivateRegular(d.ops, d.dir, privatePart, d.partName, d.PartPath, d.partID),
 	)
+}
+
+// validatePublishedEntry compares the public name with an open descriptor to
+// the exact producer file. This catches an immediate unlink/recreate that
+// reuses the same inode, even when the replacement has the same size.
+func validatePublishedEntry(dir *anchoredDir, name, displayPath string, probe *os.File) error {
+	entry, err := dir.lstat(name)
+	if err != nil {
+		return fmt.Errorf("%w: %s", ErrDestinationChanged, displayPath)
+	}
+	if !entry.regular {
+		return fmt.Errorf("%w: %s", ErrUnsafeDestination, displayPath)
+	}
+	probeEntry, err := snapshotOpenFile(probe)
+	if err != nil {
+		return errors.Join(fmt.Errorf("%w: %s", ErrDestinationChanged, displayPath), err)
+	}
+	if !sameStrictFileIdentity(entry.identity, probeEntry.identity) || entry.size != probeEntry.size {
+		return fmt.Errorf("%w: %s", ErrDestinationChanged, displayPath)
+	}
+	return nil
 }
 
 func (d *Destination) validatePartEntry() error {

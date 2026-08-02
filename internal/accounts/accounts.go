@@ -166,17 +166,11 @@ func (m *Manager) writeCurrent(name string) (retErr error) {
 		return err
 	}
 	closed = true
-	if err := os.Rename(tempPath, m.currentPath()); err != nil {
+	if err := replaceCurrentFile(tempPath, m.currentPath()); err != nil {
 		return err
 	}
 	published = true
-	dir, err := os.Open(root)
-	if err != nil {
-		return err
-	}
-	syncErr := dir.Sync()
-	closeErr := dir.Close()
-	return errors.Join(syncErr, closeErr)
+	return syncCurrentDir(root)
 }
 
 // Remove deletes the account directory; if it was current, selection is
