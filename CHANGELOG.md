@@ -4,6 +4,14 @@
 
 Future changes will be listed here.
 
+## v0.1.7 — 2026-08-02
+
+### Fixed
+
+- Album uploads now recognize Telegram video documents from their
+  `DocumentAttributeVideo` metadata even when `messages.uploadMedia` omits the
+  response-level video flag.
+
 ## v0.1.6 — 2026-08-01
 
 ### Fixed

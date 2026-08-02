@@ -167,13 +167,25 @@ func reusableAlbumMedia(m tg.MessageMediaClass) (tg.InputMediaClass, string, err
 			return nil, "", errors.New("uploadMedia returned an unusable document")
 		}
 		kind := "document"
-		if v.Video {
+		if v.Video || documentHasVideoAttribute(doc) {
 			kind = "video"
 		}
 		return &tg.InputMediaDocument{ID: doc.AsInput()}, kind, nil
 	default:
 		return nil, "", fmt.Errorf("uploadMedia returned unsupported media %T", m)
 	}
+}
+
+func documentHasVideoAttribute(doc *tg.Document) bool {
+	if doc == nil {
+		return false
+	}
+	for _, attr := range doc.Attributes {
+		if _, ok := attr.(*tg.DocumentAttributeVideo); ok {
+			return true
+		}
+	}
+	return false
 }
 
 type albumUpdateData struct {

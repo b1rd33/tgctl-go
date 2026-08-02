@@ -210,6 +210,26 @@ func TestUploadAlbumVideoOnly(t *testing.T) {
 	}
 }
 
+func TestUploadAlbumRecognizesVideoAttributeWhenResponseVideoFlagIsUnset(t *testing.T) {
+	paths := writeAlbumFixtures(t, "one.mp4", "two.jpg")
+	api := &albumRPCFake{uploadMediaResp: []tg.MessageMediaClass{
+		&tg.MessageMediaDocument{Document: &tg.Document{ID: 1, Attributes: []tg.DocumentAttributeClass{&tg.DocumentAttributeVideo{}}}},
+		&tg.MessageMediaPhoto{Photo: &tg.Photo{ID: 2}},
+	}, sendResp: albumUpdates(601, 602)}
+
+	resp, err := (&GotdClient{albumAPI: api}).UploadAlbum(context.Background(), UploadAlbumReq{
+		ChatID: 1,
+		Peer:   &tg.InputPeerChat{ChatID: 1},
+		Items:  []UploadAlbumItem{{Path: paths[0], Kind: "video"}, {Path: paths[1], Kind: "photo"}},
+	})
+	if err != nil {
+		t.Fatalf("video attribute should classify as video: %v", err)
+	}
+	if len(resp.Items) != 2 || resp.Items[0].MediaType != "video" || resp.Items[1].MediaType != "photo" {
+		t.Fatalf("response=%#v", resp)
+	}
+}
+
 func TestUploadAlbumRejectsUnsupportedAndOversizedBeforeTransport(t *testing.T) {
 	paths := writeAlbumFixtures(t, "one.jpg", "two.jpg")
 	for name, req := range map[string]UploadAlbumReq{
