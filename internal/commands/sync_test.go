@@ -1,13 +1,29 @@
 package commands
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/b1rd33/tgctl-go/internal/client"
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
+
+type transportFailClient struct {
+	*client.FakeClient
+	err error
+}
+
+func (c *transportFailClient) ListenOnce(context.Context) (client.ListenEvent, error) {
+	if c.err != nil {
+		err := c.err
+		c.err = nil
+		return client.ListenEvent{}, err
+	}
+	return c.FakeClient.ListenOnce(context.Background())
+}
 
 func TestSyncOncePersistsBackfillAndCheckpoint(t *testing.T) {
 	cfg, fake, _ := setupWriteEnv(t)
@@ -81,5 +97,41 @@ func TestSyncRejectsOnceWithoutFollow(t *testing.T) {
 	}
 	if len(fake.Calls) != 0 {
 		t.Fatalf("client called: %#v", fake.Calls)
+	}
+}
+
+func TestSyncFollowReconnectsAfterTransportFailureBeforeAdvancing(t *testing.T) {
+	cfg, _, _ := setupWriteEnv(t)
+	first := &transportFailClient{FakeClient: &client.FakeClient{}, err: errors.New("transport interrupted")}
+	second := &client.FakeClient{ListenEvents: []client.ListenEvent{{
+		ChatID: 1, MessageID: 14, Date: "2026-08-02T12:02:00Z", Text: "reconnected",
+	}}}
+	factoryCalls := 0
+	cfg.ClientFactory = func(context.Context, string, string) (client.Client, error) {
+		factoryCalls++
+		if factoryCalls == 1 {
+			return first, nil
+		}
+		return second, nil
+	}
+
+	out, code := runRoot(t, cfg, "sync", "1", "--allow-write", "--follow", "--once", "--backoff-max-seconds", "0.001", "--json")
+	if code != 0 {
+		t.Fatalf("code=%d out=%s", code, out)
+	}
+	if factoryCalls != 2 || len(first.ListenCalls) != 0 || len(second.ListenCalls) != 1 {
+		t.Fatalf("factory=%d first_listens=%d second_listens=%d", factoryCalls, len(first.ListenCalls), len(second.ListenCalls))
+	}
+	if !strings.Contains(out, `"events":1`) || !strings.Contains(out, `"last_message_id":14`) {
+		t.Fatalf("output=%s", out)
+	}
+	db, err := store.ConnectReadonly(cfg.Paths.(stubPaths).db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	row, err := store.GetOne(db, 1, 14, true)
+	if err != nil || row.Text == nil || *row.Text != "reconnected" {
+		t.Fatalf("row=%+v err=%v", row, err)
 	}
 }

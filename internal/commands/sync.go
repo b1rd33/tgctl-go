@@ -163,6 +163,7 @@ func syncCommand(cfg CommandsConfig) *cobra.Command {
 						return result, err
 					}
 					result["events"] = result["events"].(int) + 1
+					result["last_message_id"] = state.LastMessageID
 					if once {
 						return result, nil
 					}
