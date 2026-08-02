@@ -709,3 +709,15 @@ func TestMapRPCErrClassifiesPremiumRequired(t *testing.T) {
 		t.Fatalf("got %T (%v), want *safety.PremiumRequired", out, out)
 	}
 }
+
+func TestMapRPCErrClassifiesPermissionDenied(t *testing.T) {
+	for _, rpcType := range []string{"CHAT_WRITE_FORBIDDEN", "CHAT_ADMIN_REQUIRED", "USER_BANNED_IN_CHANNEL"} {
+		t.Run(rpcType, func(t *testing.T) {
+			out := mapRPCErr(tgerr.New(403, rpcType))
+			var denied *safety.PermissionDenied
+			if !errors.As(out, &denied) || denied.RPCType != rpcType {
+				t.Fatalf("got %T (%v), want permission denial %s", out, out, rpcType)
+			}
+		})
+	}
+}

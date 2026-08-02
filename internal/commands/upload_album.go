@@ -62,7 +62,8 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 			}
 			paths := resolvedWritePaths{dbPath: dbPath, sessionPath: sessionPath, auditPath: auditPath}
 
-			items, identities, mediaTypes, err := validateAlbumFiles(args[1:], maxBytes, caption, supportsStreaming)
+			mediaKind, _ := cmd.Flags().GetString("media-kind")
+			items, identities, mediaTypes, err := validateAlbumFiles(args[1:], maxBytes, caption, supportsStreaming, mediaKind)
 
 			if err != nil {
 				return emitDispatchedFailure(cmd, name, err)
@@ -74,7 +75,7 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 			if err != nil {
 				return emitDispatchedFailure(cmd, name, err)
 			}
-			fingerprint, err := albumFingerprint(account, resolved.target.ChatID, identities, caption, replyTo, silent, supportsStreaming)
+			fingerprint, err := albumFingerprint(account, resolved.target.ChatID, identities, mediaKind, caption, replyTo, silent, supportsStreaming)
 			if err != nil {
 				return emitDispatchedFailure(cmd, name, err)
 			}
@@ -89,6 +90,7 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 				"reply_to":           replyTo,
 				"silent":             silent,
 				"supports_streaming": supportsStreaming,
+				"media_kind":         mediaKind,
 			}
 			if caption != "" {
 				payload["caption_position"] = 0
@@ -100,7 +102,7 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 					recoveryExtras["item_count"] = len(items)
 					resp, err := c.UploadAlbum(ctx, client.UploadAlbumReq{
 						ChatID: chatID, Items: items, Caption: caption, ReplyTo: replyTo,
-						Silent: silent, SupportsStreaming: supportsStreaming, MaxBytes: maxBytes,
+						Silent: silent, SupportsStreaming: supportsStreaming, MediaKind: mediaKind, MaxBytes: maxBytes,
 						MaxSizeMB: maxSizeMB,
 					})
 					if err != nil {
@@ -161,6 +163,7 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 		},
 	}
 	cmd.Flags().String("caption", "", "Album caption (placed on the first item)")
+	cmd.Flags().String("media-kind", "auto", "Album media kind: auto, photo, video, audio, or document")
 	cmd.Flags().Int64("reply-to", 0, "Reply-to message id")
 	cmd.Flags().Bool("silent", false, "Send silently")
 	cmd.Flags().Int64("max-size-mb", 100, "Maximum size per item in MiB")
@@ -197,7 +200,16 @@ func resolveAlbumTarget(paths AccountPathProvider, resolved resolvedWritePaths, 
 	return albumTarget{target: writes.ConfirmedTarget{ChatID: id, ChatTitle: title}}, nil
 }
 
-func validateAlbumFiles(paths []string, maxBytes int64, caption string, streaming bool) ([]client.UploadAlbumItem, []albumFileIdentity, []string, error) {
+func validateAlbumFiles(paths []string, maxBytes int64, caption string, streaming bool, mediaKind string) ([]client.UploadAlbumItem, []albumFileIdentity, []string, error) {
+	mediaKind = strings.ToLower(strings.TrimSpace(mediaKind))
+	if mediaKind == "" {
+		mediaKind = "auto"
+	}
+	switch mediaKind {
+	case "auto", "photo", "video", "audio", "document":
+	default:
+		return nil, nil, nil, safety.NewBadArgs("unsupported album media kind %q", mediaKind)
+	}
 	items := make([]client.UploadAlbumItem, len(paths))
 	identities := make([]albumFileIdentity, len(paths))
 	mediaTypes := make([]string, len(paths))
@@ -222,8 +234,15 @@ func validateAlbumFiles(paths []string, maxBytes int64, caption string, streamin
 			kind = "photo"
 		case "video", "video_note":
 			kind = "video"
+		case "audio", "voice":
+			kind = "audio"
+		case "document":
+			kind = "document"
 		default:
-			return nil, nil, nil, safety.NewBadArgs("album item %d is not a photo or video", i)
+			return nil, nil, nil, safety.NewBadArgs("album item %d has unsupported media type", i)
+		}
+		if mediaKind != "auto" && kind != mediaKind {
+			return nil, nil, nil, safety.NewBadArgs("album item %d is %s, but --media-kind=%s", i, kind, mediaKind)
 		}
 		hash, err := hashFile(abs)
 		if err != nil {
@@ -236,6 +255,22 @@ func validateAlbumFiles(paths []string, maxBytes int64, caption string, streamin
 		items[i] = client.UploadAlbumItem{Path: abs, Kind: kind, MediaType: kind, Caption: itemCaption, SupportsStreaming: streaming && kind == "video"}
 		identities[i] = albumFileIdentity{Path: filepath.Clean(abs), Size: info.Size(), SHA256: hash}
 		mediaTypes[i] = kind
+	}
+	containsAudio, containsDocument := false, false
+	for _, kind := range mediaTypes {
+		containsAudio = containsAudio || kind == "audio"
+		containsDocument = containsDocument || kind == "document"
+	}
+	if containsAudio || containsDocument {
+		wanted := "audio"
+		if containsDocument {
+			wanted = "document"
+		}
+		for i, kind := range mediaTypes {
+			if kind != wanted {
+				return nil, nil, nil, safety.NewBadArgs("Telegram requires %s albums to contain only %s items (item %d is %s)", wanted, wanted, i, kind)
+			}
+		}
 	}
 	return items, identities, mediaTypes, nil
 }
@@ -289,16 +324,17 @@ func redactAlbumUploadError(err error, items []client.UploadAlbumItem, caption s
 	return &redactedAlbumUploadError{message: redacted, err: err}
 }
 
-func albumFingerprint(account string, chatID int64, files []albumFileIdentity, caption string, replyTo int64, silent, streaming bool) (string, error) {
+func albumFingerprint(account string, chatID int64, files []albumFileIdentity, mediaKind, caption string, replyTo int64, silent, streaming bool) (string, error) {
 	value := struct {
 		Account string              `json:"account"`
 		ChatID  int64               `json:"chat_id"`
 		Files   []albumFileIdentity `json:"files"`
+		Kind    string              `json:"media_kind"`
 		Caption string              `json:"caption"`
 		ReplyTo int64               `json:"reply_to"`
 		Silent  bool                `json:"silent"`
 		Stream  bool                `json:"supports_streaming"`
-	}{account, chatID, files, caption, replyTo, silent, streaming}
+	}{account, chatID, files, mediaKind, caption, replyTo, silent, streaming}
 	b, err := json.Marshal(value)
 	if err != nil {
 		return "", err

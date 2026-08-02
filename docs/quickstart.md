@@ -11,6 +11,11 @@ export TG_CHAT_ID="<chat-id-from-your-own-account>"
 export TG_MESSAGE_ID="<message-id-containing-media>"
 ```
 
+If app credentials are not configured yet, run `tg setup` from the project
+directory. It writes only `TG_API_ID` and `TG_API_HASH` into a mode-0600 `.env`
+on Unix and preserves unrelated entries. Login can use `tg login --qr` in an
+interactive terminal; QR login still requires the same app credentials.
+
 ## 1. Sync a fast view of your dialogs
 
 ```bash

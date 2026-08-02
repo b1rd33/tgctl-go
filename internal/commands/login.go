@@ -6,9 +6,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -20,6 +22,7 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/store"
 
 	"github.com/gotd/td/tg"
+	"rsc.io/qr"
 )
 
 // registerLogin wires the interactive authorization flow against gotd/td.
@@ -44,6 +47,14 @@ func registerLogin(root *cobra.Command, mgr *accounts.Manager) {
 			if err != nil {
 				return emitDispatchedFailure(cmd, "login", err)
 			}
+			useQR, _ := cmd.Flags().GetBool("qr")
+			qrURI, _ := cmd.Flags().GetBool("qr-uri")
+			if useQR && jsonMode(cmd) {
+				return emitDispatchedFailure(cmd, "login", errors.New("QR login requires an interactive non-JSON terminal; use phone login for JSON automation"))
+			}
+			if qrURI && !useQR {
+				return emitDispatchedFailure(cmd, "login", errors.New("--qr-uri requires --qr"))
+			}
 			code := dispatch.Run("login", dispatch.Options{
 				JSON:      jsonMode(cmd),
 				Stdout:    cmd.OutOrStdout(),
@@ -51,12 +62,26 @@ func registerLogin(root *cobra.Command, mgr *accounts.Manager) {
 				AuditPath: paths.AuditPath,
 				Args:      map[string]any{"account": account},
 			}, func(ctx context.Context) (any, error) {
-				me, err := client.Login(ctx, client.LoginOptions{
+				loginOpts := client.LoginOptions{
 					APIID:   apiID,
 					APIHash: apiHash,
 					Session: paths.SessionPath,
 					Prompt:  newCLIPrompt(cmd),
-				})
+					QR:      useQR,
+				}
+				if useQR {
+					loginOpts.QRShow = func(_ context.Context, uri string, expires time.Time) error {
+						if qrURI {
+							_, err := fmt.Fprintf(cmd.ErrOrStderr(), "Telegram QR URI (expires %s): %s\n", expires.UTC().Format(time.RFC3339), uri)
+							return err
+						}
+						if !term.IsTerminal(int(os.Stderr.Fd())) {
+							return errors.New("QR login requires a TTY; retry with --qr-uri to print a text URI")
+						}
+						return renderQR(cmd.ErrOrStderr(), uri, expires)
+					}
+				}
+				me, err := client.Login(ctx, loginOpts)
 				if err != nil {
 					return nil, err
 				}
@@ -76,6 +101,7 @@ func registerLogin(root *cobra.Command, mgr *accounts.Manager) {
 				}
 				return map[string]any{
 					"account":      account,
+					"login_method": map[bool]string{true: "qr", false: "phone"}[useQR],
 					"user_id":      me.ID,
 					"username":     stringOrNil(me.Username),
 					"display_name": me.DisplayName,
@@ -87,7 +113,36 @@ func registerLogin(root *cobra.Command, mgr *accounts.Manager) {
 		},
 	}
 	AddOutputFlags(cmd)
+	cmd.Flags().Bool("qr", false, "Authorize by scanning a Telegram QR code (API credentials still required)")
+	cmd.Flags().Bool("qr-uri", false, "Print the QR login URI instead of rendering terminal blocks")
 	root.AddCommand(cmd)
+}
+
+func renderQR(w io.Writer, uri string, expires time.Time) error {
+	code, err := qr.Encode(uri, qr.M)
+	if err != nil {
+		return fmt.Errorf("encode QR login token: %w", err)
+	}
+	if _, err := fmt.Fprintf(w, "Scan this Telegram QR code before %s UTC:\n", expires.UTC().Format(time.RFC3339)); err != nil {
+		return err
+	}
+	// Two terminal columns per QR module preserve the square aspect ratio.
+	for y := -1; y <= code.Size; y++ {
+		for x := -1; x <= code.Size; x++ {
+			black := x >= 0 && y >= 0 && x < code.Size && y < code.Size && code.Black(x, y)
+			if black {
+				if _, err := io.WriteString(w, "██"); err != nil {
+					return err
+				}
+			} else if _, err := io.WriteString(w, "  "); err != nil {
+				return err
+			}
+		}
+		if _, err := io.WriteString(w, "\n"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func newCLIPrompt(cmd *cobra.Command) client.AuthPrompt {

@@ -56,8 +56,8 @@ type UploadFileResp struct {
 	Date      string
 }
 
-// UploadAlbumItem is one ordered local media file in an album. Version one
-// accepts photo and video items; Telegram creates one message per item.
+// UploadAlbumItem is one ordered local media file in an album. Telegram
+// accepts photo/video albums and same-type audio/document albums.
 type UploadAlbumItem struct {
 	Path              string
 	Kind              string
@@ -71,9 +71,12 @@ type UploadAlbumItem struct {
 // that already resolved it; normal production callers should provide ChatID
 // and let the account entity cache resolve the peer.
 type UploadAlbumReq struct {
-	ChatID            int64
-	Peer              tg.InputPeerClass
-	Items             []UploadAlbumItem
+	ChatID int64
+	Peer   tg.InputPeerClass
+	Items  []UploadAlbumItem
+	// MediaKind optionally forces every item to be one of auto, photo, video,
+	// audio, or document. Auto derives the kind from the local file.
+	MediaKind         string
 	Caption           string
 	ReplyTo           int64
 	Silent            bool

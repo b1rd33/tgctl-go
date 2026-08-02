@@ -12,6 +12,7 @@ import (
 	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/auth"
+	"github.com/gotd/td/telegram/auth/qrlogin"
 	"github.com/gotd/td/telegram/uploader"
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
@@ -91,6 +92,8 @@ type LoginOptions struct {
 	APIHash string
 	Session string
 	Prompt  AuthPrompt
+	QR      bool
+	QRShow  func(context.Context, string, time.Time) error
 }
 
 // Login runs an interactive auth flow that persists a session at
@@ -103,11 +106,37 @@ func Login(ctx context.Context, opts LoginOptions) (User, error) {
 		return User{}, safety.NewMissingCredentials("TG_API_ID and TG_API_HASH must be set")
 	}
 	storage := &session.FileStorage{Path: opts.Session}
-	client := telegram.NewClient(opts.APIID, opts.APIHash, telegram.Options{
-		SessionStorage: storage,
-	})
+	var dispatcher tg.UpdateDispatcher
+	var useDispatcher bool
+	if opts.QR {
+		dispatcher = tg.NewUpdateDispatcher()
+		useDispatcher = true
+	}
+	telegramOptions := telegram.Options{SessionStorage: storage}
+	if useDispatcher {
+		telegramOptions.UpdateHandler = dispatcher
+	}
+	client := telegram.NewClient(opts.APIID, opts.APIHash, telegramOptions)
 	var me User
 	err := client.Run(ctx, func(ctx context.Context) error {
+		if opts.QR {
+			if opts.QRShow == nil {
+				return errors.New("QR login display callback is not configured")
+			}
+			loggedIn := qrlogin.OnLoginToken(dispatcher)
+			authorization, err := client.QR().Auth(ctx, loggedIn, func(ctx context.Context, token qrlogin.Token) error {
+				return opts.QRShow(ctx, token.URL(), token.Expires())
+			})
+			if err != nil {
+				return err
+			}
+			self, ok := authorization.User.AsNotEmpty()
+			if !ok {
+				return fmt.Errorf("QR login returned unexpected user %T", authorization.User)
+			}
+			me = userFromSelf(self)
+			return nil
+		}
 		flow := auth.NewFlow(
 			fullAuthenticator{p: opts.Prompt},
 			auth.SendCodeOptions{},
@@ -517,6 +546,21 @@ func mimeForUpload(kind, path string) string {
 		return "audio/ogg"
 	case "video":
 		return "video/mp4"
+	case "audio":
+		switch strings.ToLower(filepath.Ext(path)) {
+		case ".mp3":
+			return "audio/mpeg"
+		case ".m4a":
+			return "audio/mp4"
+		case ".flac":
+			return "audio/flac"
+		case ".wav":
+			return "audio/wav"
+		case ".ogg", ".opus":
+			return "audio/ogg"
+		default:
+			return "audio/*"
+		}
 	case "photo":
 		return "image/jpeg"
 	}
@@ -1834,6 +1878,8 @@ func mapRPCErr(err error) error {
 		switch rpcErr.Type {
 		case "PREMIUM_ACCOUNT_REQUIRED":
 			return &safety.PremiumRequired{}
+		case "CHAT_WRITE_FORBIDDEN", "CHAT_ADMIN_REQUIRED", "USER_BANNED_IN_CHANNEL", "CHAT_FORBIDDEN", "CHANNEL_PRIVATE", "USER_NOT_PARTICIPANT", "RIGHT_FORBIDDEN":
+			return &safety.PermissionDenied{RPCType: rpcErr.Type}
 		}
 	}
 	return err

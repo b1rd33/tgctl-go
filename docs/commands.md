@@ -1,6 +1,6 @@
 # Commands
 
-`tg --help` shows 73 commands. This page is generated from Cobra help output.
+`tg --help` shows 74 commands. This page is generated from Cobra help output.
 
 Every command supports the global flags shown by `tg --help`: `--account`, `--full`, `--json`, `--human`, `--lock-wait`, `--read-only`, and `--version` where applicable.
 
@@ -61,6 +61,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg send`](#tg-send) | Send a text message |
 | [`tg send-by-username`](#tg-send-by-username) | Send a text message by resolving an @username (no entity cache required) |
 | [`tg set-permissions`](#tg-set-permissions) | Set default chat permissions |
+| [`tg setup`](#tg-setup) | Create or update a private .env with Telegram app credentials |
 | [`tg show`](#tg-show) | Show recent cached messages in a chat |
 | [`tg stats`](#tg-stats) | Show local cache statistics |
 | [`tg sync`](#tg-sync) | Synchronize cached messages and optionally follow updates |
@@ -805,9 +806,12 @@ tg export <chat> [flags] --json
 | `--include-media` | Include media paths relative to the account media root |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 | `--limit int` | Maximum rows (0 means all cached rows) |
+| `--manifest string` | Write an archive manifest JSON file |
+| `--manifest-hash` | Include SHA-256 hashes in --manifest |
 | `--output string` | Output file, or - for stdout (default "-") |
 | `--since string` | Inclusive lower date/time bound |
 | `--until string` | Inclusive upper date/time bound |
+| `--verify string` | Verify a local archive manifest instead of exporting |
 
 ## `tg folder-add-chat`
 
@@ -1278,6 +1282,8 @@ tg login
 | `-h, --help` | help for login |
 | `--human` | Force human-readable output (default on a TTY) |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--qr` | Authorize by scanning a Telegram QR code (API credentials still required) |
+| `--qr-uri` | Print the QR login URI instead of rendering terminal blocks |
 
 ## `tg mark-read`
 
@@ -1541,6 +1547,33 @@ tg set-permissions <group-chat-id> --send-messages --allow-write --json
 | `--idempotency-key string` | Per-account replay-safe key |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 | `--send-messages` | Allow sending messages |
+
+## `tg setup`
+
+Create or update a private .env with Telegram app credentials
+
+**Use**
+
+```text
+tg setup [flags]
+```
+
+**Example**
+
+```bash
+tg setup [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--api-hash string` | Telegram app API hash (never printed) |
+| `--api-id string` | Telegram app API ID (never printed) |
+| `--env-file string` | Environment file to create or update (default ".env") |
+| `-h, --help` | help for setup |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 
 ## `tg show`
 
@@ -1967,6 +2000,7 @@ tg upload-album <chat> <file>... [flags] --json
 | `--idempotency-key string` | Per-account replay-safe key |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 | `--max-size-mb int` | Maximum size per item in MiB (default 100) |
+| `--media-kind string` | Album media kind: auto, photo, video, audio, or document (default "auto") |
 | `--reply-to int` | Reply-to message id |
 | `--silent` | Send silently |
 | `--supports-streaming` | Mark video items as streamable |

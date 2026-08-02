@@ -105,6 +105,23 @@ func Classify(err error) (output.ExitCode, string, map[string]any) {
 			"telegram_error": "PREMIUM_ACCOUNT_REQUIRED",
 		}
 	}
+	var permission *safety.PermissionDenied
+	if errors.As(err, &permission) {
+		return output.PermissionDenied, permission.Error(), map[string]any{"telegram_error": permission.RPCType}
+	}
+	var archive *safety.ArchiveVerification
+	if errors.As(err, &archive) {
+		code := output.Generic
+		switch archive.Kind {
+		case "missing":
+			code = output.ArchiveMissing
+		case "changed":
+			code = output.ArchiveChanged
+		case "extra":
+			code = output.ArchiveExtra
+		}
+		return code, archive.Error(), archive.Results
+	}
 	return output.Generic, err.Error(), nil
 }
 

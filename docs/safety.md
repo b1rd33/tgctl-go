@@ -217,6 +217,10 @@ root's inherited ACL is the protection boundary instead.
 | 7 | NEEDS_CONFIRM | Destructive op without `--confirm <id>` |
 | 8 | LOCAL_RATE_LIMIT | In-process rate limiter tripped |
 | 9 | PREMIUM_REQUIRED | Telegram requires Premium for this action |
+| 10 | PERMISSION_DENIED | Telegram refused the operation because of chat/member permissions |
+| 11 | ARCHIVE_MISSING | Local archive manifest references missing media |
+| 12 | ARCHIVE_CHANGED | Local archive media size or hash changed |
+| 13 | ARCHIVE_EXTRA | Local media root contains an unrecorded artifact |
 
 ## Handling FloodWait
 

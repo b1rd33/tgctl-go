@@ -122,6 +122,48 @@ func TestExportCommandRefusesToOverwriteOutput(t *testing.T) {
 	}
 }
 
+func TestExportCommandWritesAndVerifiesManifest(t *testing.T) {
+	cfg, fake, dir := setupWriteEnv(t)
+	mediaPath := filepath.Join(dir, "media", "1", "photo.jpg")
+	if err := os.MkdirAll(filepath.Dir(mediaPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mediaPath, []byte("same-size"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	seedExportRows(t, cfg, mediaPath)
+	output := filepath.Join(dir, "exports", "chat.jsonl")
+	manifest := filepath.Join(dir, "exports", "chat.manifest.json")
+	out, code := runRoot(t, cfg, "export", "1", "--output", output, "--manifest", manifest, "--manifest-hash", "--include-media", "--json")
+	if code != 0 {
+		t.Fatalf("export code=%d out=%s", code, out)
+	}
+	if _, err := os.Stat(manifest); err != nil {
+		t.Fatal(err)
+	}
+	out, code = runRoot(t, cfg, "export", "--verify", manifest, "--json")
+	if code != 0 || !strings.Contains(out, `"checked":1`) {
+		t.Fatalf("verify code=%d out=%s", code, out)
+	}
+	if err := os.WriteFile(mediaPath, []byte("different"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, code = runRoot(t, cfg, "export", "--verify", manifest, "--json")
+	if code != 12 || !strings.Contains(out, "ARCHIVE_CHANGED") {
+		t.Fatalf("changed verify code=%d out=%s", code, out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "media", "extra.jpg"), []byte("extra"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, code = runRoot(t, cfg, "export", "--verify", manifest, "--json")
+	if code != 12 || !strings.Contains(out, "ARCHIVE_CHANGED") {
+		t.Fatalf("changed+extra priority code=%d out=%s", code, out)
+	}
+	if len(fake.Calls) != 0 {
+		t.Fatalf("Telegram client was called by local manifest operations: %#v", fake.Calls)
+	}
+}
+
 func TestExportCommandStdoutKeepsJSONEnvelopeValid(t *testing.T) {
 	cfg, fake, dir := setupWriteEnv(t)
 	seedExportRows(t, cfg, filepath.Join(dir, "media", "1", "photo.jpg"))

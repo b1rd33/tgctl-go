@@ -38,9 +38,16 @@ func exportCommand(cfg CommandsConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "export <chat>",
 		Short:        "Export cached Telegram history locally",
-		Args:         cobra.ExactArgs(1),
+		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			verifyPath, _ := cmd.Flags().GetString("verify")
+			if verifyPath != "" {
+				return runExportVerify(cmd, cfg, verifyPath)
+			}
+			if len(args) != 1 {
+				return emitDispatchedFailure(cmd, "export", safety.NewBadArgs("export requires <chat> unless --verify is used"))
+			}
 			format, _ := cmd.Flags().GetString("format")
 			format = strings.ToLower(strings.TrimSpace(format))
 			if format != "jsonl" && format != "csv" && format != "html" {
@@ -55,6 +62,18 @@ func exportCommand(cfg CommandsConfig) *cobra.Command {
 				outputPath = "-"
 			}
 			includeMedia, _ := cmd.Flags().GetBool("include-media")
+			manifestPath, _ := cmd.Flags().GetString("manifest")
+			manifestHash, _ := cmd.Flags().GetBool("manifest-hash")
+			if manifestHash && manifestPath == "" {
+				return emitDispatchedFailure(cmd, "export", safety.NewBadArgs("--manifest-hash requires --manifest"))
+			}
+			if manifestPath != "" && outputPath != "-" {
+				outputAbs, _ := filepath.Abs(outputPath)
+				manifestAbs, _ := filepath.Abs(manifestPath)
+				if outputAbs == manifestAbs {
+					return emitDispatchedFailure(cmd, "export", safety.NewBadArgs("--manifest and --output must be different files"))
+				}
+			}
 			account, err := selectedAccount(cmd, cfg.Paths)
 			if err != nil {
 				return emitDispatchedFailure(cmd, "export", err)
@@ -92,7 +111,7 @@ func exportCommand(cfg CommandsConfig) *cobra.Command {
 				}
 				records := make([]exportRecord, 0, len(rows))
 				for _, row := range rows {
-					records = append(records, makeExportRecord(row, includeMedia, paths.mediaDir))
+					records = append(records, makeExportRecord(row, includeMedia || manifestPath != "", paths.mediaDir))
 				}
 				content := ""
 				if outputPath == "-" {
@@ -109,6 +128,20 @@ func exportCommand(cfg CommandsConfig) *cobra.Command {
 					return nil, err
 				}
 				result := map[string]any{"chat_id": chatID, "title": title, "format": format, "rows": len(records), "output": outputPath, "include_media": includeMedia}
+				if manifestPath != "" {
+					manifest, warnings, err := store.BuildArchiveManifest(rows, account, chatID, format, outputPath, paths.mediaDir, manifestHash)
+					if err != nil {
+						return nil, err
+					}
+					if err := writeManifestAtomic(manifestPath, manifest); err != nil {
+						return nil, err
+					}
+					result["manifest"] = manifestPath
+					result["manifest_hashes"] = manifestHash
+					if len(warnings) > 0 {
+						result["manifest_warnings"] = warnings
+					}
+				}
 				if content != "" {
 					result["content"] = content
 				}
@@ -124,8 +157,45 @@ func exportCommand(cfg CommandsConfig) *cobra.Command {
 	cmd.Flags().String("until", "", "Inclusive upper date/time bound")
 	cmd.Flags().Int("limit", 0, "Maximum rows (0 means all cached rows)")
 	cmd.Flags().Bool("include-media", false, "Include media paths relative to the account media root")
+	cmd.Flags().String("manifest", "", "Write an archive manifest JSON file")
+	cmd.Flags().Bool("manifest-hash", false, "Include SHA-256 hashes in --manifest")
+	cmd.Flags().String("verify", "", "Verify a local archive manifest instead of exporting")
 	AddOutputFlags(cmd)
 	return cmd
+}
+
+func runExportVerify(cmd *cobra.Command, cfg CommandsConfig, manifestPath string) error {
+	account, err := selectedAccount(cmd, cfg.Paths)
+	if err != nil {
+		return emitDispatchedFailure(cmd, "export", err)
+	}
+	paths, err := resolveDownloadMediaPaths(cfg.Paths, account)
+	if err != nil {
+		return emitDispatchedFailure(cmd, "export", err)
+	}
+	absManifest, err := filepath.Abs(manifestPath)
+	if err != nil {
+		return emitDispatchedFailure(cmd, "export", err)
+	}
+	code := dispatch.Run("export", dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr()}, func(context.Context) (any, error) {
+		manifest, result, err := store.VerifyArchiveManifest(absManifest, paths.mediaDir)
+		if err != nil {
+			return nil, err
+		}
+		data := map[string]any{"manifest": absManifest, "chat_id": manifest.ChatID, "checked": result.Checked, "missing": result.Missing, "changed": result.Changed, "extra": result.Extra}
+		if len(result.Missing) > 0 {
+			return nil, &safety.ArchiveVerification{Kind: "missing", Message: fmt.Sprintf("archive verification found %d missing artifact(s)", len(result.Missing)), Results: data}
+		}
+		if len(result.Changed) > 0 {
+			return nil, &safety.ArchiveVerification{Kind: "changed", Message: fmt.Sprintf("archive verification found %d changed artifact(s)", len(result.Changed)), Results: data}
+		}
+		if len(result.Extra) > 0 {
+			return nil, &safety.ArchiveVerification{Kind: "extra", Message: fmt.Sprintf("archive verification found %d extra artifact(s)", len(result.Extra)), Results: data}
+		}
+		return data, nil
+	})
+	storeExitCode(cmd, code)
+	return nil
 }
 
 func flagString(cmd *cobra.Command, name string) string {
@@ -252,6 +322,51 @@ func writeExportAtomic(path, format string, records []exportRecord) error {
 	if _, err := os.Stat(abs); err == nil {
 		return fmt.Errorf("export output appeared during publish: %s", abs)
 	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Rename(tmpPath, abs); err != nil {
+		return err
+	}
+	published = true
+	return nil
+}
+
+func writeManifestAtomic(path string, manifest store.ArchiveManifest) error {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(abs)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	if _, err := os.Stat(abs); err == nil {
+		return fmt.Errorf("manifest output already exists: %s", abs)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".tgctl-manifest-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	published := false
+	defer func() {
+		_ = tmp.Close()
+		if !published {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+	if err := tmp.Chmod(0o600); err != nil {
+		return err
+	}
+	if err := store.WriteArchiveManifest(tmp, manifest); err != nil {
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		return err
+	}
+	if err := tmp.Close(); err != nil {
 		return err
 	}
 	if err := os.Rename(tmpPath, abs); err != nil {

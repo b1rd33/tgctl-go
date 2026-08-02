@@ -20,6 +20,10 @@ const (
 	albumMaxItems = 10
 )
 
+var albumMediaKinds = map[string]struct{}{
+	"auto": {}, "photo": {}, "video": {}, "audio": {}, "document": {},
+}
+
 func albumFailure(stage string, position int, err error) error {
 	if err == nil {
 		err = errors.New("unknown failure")
@@ -54,6 +58,13 @@ func validateAlbumItems(req UploadAlbumReq) ([]validatedAlbumItem, int64, error)
 	if req.MaxSizeMB < 0 {
 		return nil, 0, safety.NewBadArgs("album max size must not be negative")
 	}
+	forcedKind := strings.ToLower(strings.TrimSpace(req.MediaKind))
+	if forcedKind == "" {
+		forcedKind = "auto"
+	}
+	if _, ok := albumMediaKinds[forcedKind]; !ok {
+		return nil, 0, safety.NewBadArgs("unsupported album media kind %q", req.MediaKind)
+	}
 	maxBytes := req.MaxBytes
 	if req.MaxSizeMB > 0 {
 		mbBytes, err := media.MaxBytesFromMiB(req.MaxSizeMB)
@@ -71,7 +82,7 @@ func validateAlbumItems(req UploadAlbumReq) ([]validatedAlbumItem, int64, error)
 		if kind == "" {
 			kind = strings.ToLower(strings.TrimSpace(item.MediaType))
 		}
-		if kind != "" && kind != "photo" && kind != "video" {
+		if kind != "" && kind != "photo" && kind != "video" && kind != "audio" && kind != "document" {
 			return nil, 0, safety.NewBadArgs("unsupported album media type %q at item %d", item.Kind, i)
 		}
 		if strings.TrimSpace(item.Path) == "" {
@@ -98,22 +109,29 @@ func validateAlbumItems(req UploadAlbumReq) ([]validatedAlbumItem, int64, error)
 		if err != nil {
 			return nil, 0, err
 		}
-		if kind == "" {
-			switch detected {
-			case "photo", "image":
-				kind = "photo"
-			case "video":
-				kind = "video"
-			default:
-				return nil, 0, safety.NewBadArgs("unsupported album media type for %s", path)
-			}
+		detectedKind := ""
+		switch detected {
+		case "photo", "image":
+			detectedKind = "photo"
+		case "video", "video_note":
+			detectedKind = "video"
+		case "audio", "voice":
+			detectedKind = "audio"
+		case "document":
+			detectedKind = "document"
+		default:
+			return nil, 0, safety.NewBadArgs("unsupported album media type for %s", path)
 		}
-		if kind == "photo" {
-			if detected != "photo" && detected != "image" {
-				return nil, 0, safety.NewBadArgs("unsupported photo MIME for %s", path)
-			}
-		} else if detected != "video" {
-			return nil, 0, safety.NewBadArgs("unsupported video MIME for %s", path)
+		if kind == "" {
+			kind = detectedKind
+		} else if kind == "audio" && detectedKind == "audio" {
+			// Voice/audio containers are both represented as Telegram audio
+			// documents; the requested kind remains the stable CLI value.
+		} else if kind != detectedKind {
+			return nil, 0, safety.NewBadArgs("unsupported %s MIME for %s", kind, path)
+		}
+		if forcedKind != "auto" && kind != forcedKind {
+			return nil, 0, safety.NewBadArgs("album item %d is %s, but --media-kind=%s", i, kind, forcedKind)
 		}
 		item.Kind = kind
 		item.MediaType = kind
@@ -123,6 +141,22 @@ func validateAlbumItems(req UploadAlbumReq) ([]validatedAlbumItem, int64, error)
 		}
 		item.Filename = media.SanitizeDownloadName(item.Filename)
 		items[i] = validatedAlbumItem{UploadAlbumItem: item, sourcePath: sourcePath, path: path, kind: kind}
+	}
+	containsAudio, containsDocument := false, false
+	for _, item := range items {
+		containsAudio = containsAudio || item.kind == "audio"
+		containsDocument = containsDocument || item.kind == "document"
+	}
+	if containsAudio || containsDocument {
+		wanted := "audio"
+		if containsDocument {
+			wanted = "document"
+		}
+		for i, item := range items {
+			if item.kind != wanted {
+				return nil, 0, safety.NewBadArgs("Telegram requires %s albums to contain only %s items (item %d is %s)", wanted, wanted, i, item.kind)
+			}
+		}
 	}
 	return items, maxBytes, nil
 }
@@ -138,12 +172,18 @@ func albumUploadedMedia(item validatedAlbumItem, file tg.InputFileClass) tg.Inpu
 	if item.kind == "photo" {
 		return &tg.InputMediaUploadedPhoto{File: file}
 	}
-	attrs := []tg.DocumentAttributeClass{
-		&tg.DocumentAttributeFilename{FileName: item.Filename},
-		&tg.DocumentAttributeVideo{SupportsStreaming: item.SupportsStreaming},
+	attrs := []tg.DocumentAttributeClass{&tg.DocumentAttributeFilename{FileName: item.Filename}}
+	forceFile := false
+	switch item.kind {
+	case "video":
+		attrs = append(attrs, &tg.DocumentAttributeVideo{SupportsStreaming: item.SupportsStreaming})
+	case "audio":
+		attrs = append(attrs, &tg.DocumentAttributeAudio{})
+	case "document":
+		forceFile = true
 	}
 	return &tg.InputMediaUploadedDocument{
-		File: file, MimeType: mimeForUpload("video", item.path), Attributes: attrs,
+		File: file, MimeType: mimeForUpload(item.kind, item.path), Attributes: attrs, ForceFile: forceFile,
 	}
 }
 
@@ -169,6 +209,8 @@ func reusableAlbumMedia(m tg.MessageMediaClass) (tg.InputMediaClass, string, err
 		kind := "document"
 		if v.Video || documentHasVideoAttribute(doc) {
 			kind = "video"
+		} else if documentHasAudioAttribute(doc) {
+			kind = "audio"
 		}
 		return &tg.InputMediaDocument{ID: doc.AsInput()}, kind, nil
 	default:
@@ -182,6 +224,18 @@ func documentHasVideoAttribute(doc *tg.Document) bool {
 	}
 	for _, attr := range doc.Attributes {
 		if _, ok := attr.(*tg.DocumentAttributeVideo); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func documentHasAudioAttribute(doc *tg.Document) bool {
+	if doc == nil {
+		return false
+	}
+	for _, attr := range doc.Attributes {
+		if _, ok := attr.(*tg.DocumentAttributeAudio); ok {
 			return true
 		}
 	}

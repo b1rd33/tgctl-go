@@ -132,6 +132,16 @@ func TestRunClassifiesPremium(t *testing.T) {
 	}
 }
 
+func TestRunClassifiesPermissionDenied(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Run("send", Options{JSON: true, Stdout: &stdout, Stderr: &stderr}, func(context.Context) (any, error) {
+		return nil, &safety.PermissionDenied{RPCType: "CHAT_WRITE_FORBIDDEN"}
+	})
+	if code != int(output.PermissionDenied) || !bytes.Contains(stdout.Bytes(), []byte(`"code":"PERMISSION_DENIED"`)) {
+		t.Fatalf("code=%d stdout=%s", code, stdout.String())
+	}
+}
+
 func TestRunUnknownErrorMapsToGeneric(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := Run("x", Options{JSON: true, Stdout: &stdout, Stderr: &stderr},

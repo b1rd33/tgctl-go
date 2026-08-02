@@ -44,6 +44,7 @@ func setupWriteEnv(t *testing.T) (CommandsConfig, *client.FakeClient, string) {
 func runRoot(t *testing.T, cfg CommandsConfig, args ...string) (string, int) {
 	t.Helper()
 	root := NewRootCommand()
+	registerSetup(root)
 	registerWriteCommands(root, cfg)
 	registerMediaCommands(root, cfg)
 	registerTopicCommands(root, cfg)
