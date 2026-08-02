@@ -99,6 +99,21 @@ func TestBackfillMediaContractAndFake(t *testing.T) {
 	}
 }
 
+func TestListenEventsPreserveAlbumIdentityAndAuthoritativeDate(t *testing.T) {
+	events := listenEventsFromUpdates(&tg.Updates{Updates: []tg.UpdateClass{
+		&tg.UpdateNewMessage{Message: &tg.Message{
+			ID: 42, PeerID: &tg.PeerUser{UserID: 7}, FromID: &tg.PeerUser{UserID: 8},
+			Date: 1_700_000_000, Message: "album item", GroupedID: 9001,
+		}},
+	}})
+	if len(events) != 1 {
+		t.Fatalf("events=%d want 1", len(events))
+	}
+	if events[0].GroupedID != 9001 || events[0].Date != "2023-11-14T22:13:20Z" {
+		t.Fatalf("event identity/date = grouped_id=%d date=%q", events[0].GroupedID, events[0].Date)
+	}
+}
+
 func TestBackfillStructuredMediaOutcomeContract(t *testing.T) {
 	want := BackfillResult{MediaOutcomes: []BackfillMediaOutcome{{
 		ChatID: 42, MessageID: 9, MediaIdentity: "document:700", Status: BackfillMediaDownloaded,

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/b1rd33/tgctl-go/internal/client"
+	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
 func TestListenRejectsReadOnly(t *testing.T) {
@@ -20,13 +21,26 @@ func TestListenRejectsReadOnly(t *testing.T) {
 
 func TestListenOnceEmitsEventEnvelope(t *testing.T) {
 	cfg, fc, _ := setupWriteEnv(t)
-	fc.ListenEvents = []client.ListenEvent{{UpdateKind: "message", ChatID: 1, MessageID: 10, Text: "hi"}}
+	fc.ListenEvents = []client.ListenEvent{{UpdateKind: "message", ChatID: 1, MessageID: 10, Date: "2023-11-14T22:13:20Z", Text: "hi", GroupedID: 77}}
 	out, code := runRoot(t, cfg, "listen", "--once", "--allow-write", "--json")
 	if code != 0 {
 		t.Fatalf("code=%d\nout:%s", code, out)
 	}
 	if !strings.Contains(out, `"command":"listen.event"`) || !strings.Contains(out, `"message_id":10`) {
 		t.Fatalf("unexpected output: %s", out)
+	}
+	db, err := store.ConnectReadonly(cfg.Paths.(stubPaths).db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var date string
+	var groupedID int64
+	if err := db.QueryRow("SELECT date, grouped_id FROM tg_messages WHERE chat_id=1 AND message_id=10").Scan(&date, &groupedID); err != nil {
+		t.Fatal(err)
+	}
+	if date != "2023-11-14T22:13:20Z" || groupedID != 77 {
+		t.Fatalf("cached event = date=%q grouped_id=%d", date, groupedID)
 	}
 }
 

@@ -408,8 +408,10 @@ type ListenEvent struct {
 	ChatID     int64  `json:"chat_id"`
 	MessageID  int64  `json:"message_id"`
 	SenderID   int64  `json:"sender_id,omitempty"`
+	Date       string `json:"date,omitempty"`
 	Text       string `json:"text,omitempty"`
 	MediaType  string `json:"media_type,omitempty"`
+	GroupedID  int64  `json:"grouped_id,omitempty"`
 }
 
 // TerminateSessionReq mirrors account.ResetAuthorization.

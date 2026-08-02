@@ -105,10 +105,6 @@ func sameFileIdentity(a, b fileIdentity) bool {
 	return a.device == b.device && a.inode == b.inode
 }
 
-func sameStrictFileIdentity(a, b fileIdentity) bool {
-	return sameFileIdentity(a, b) && a.links == b.links && a.changeSec == b.changeSec && a.changeNsec == b.changeNsec
-}
-
 func (d *anchoredDir) remove(name string) error {
 	return unix.Unlinkat(d.fd, name, 0)
 }

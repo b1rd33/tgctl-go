@@ -118,9 +118,13 @@ func cacheListenEvent(dbPath string, event client.ListenEvent) error {
 	}
 	defer db.Close()
 	text := event.Text
+	date := event.Date
+	if date == "" {
+		date = time.Now().UTC().Format(time.RFC3339)
+	}
 	return store.InsertMessage(db, store.Message{
 		ChatID: event.ChatID, MessageID: event.MessageID, SenderID: optEventSender(event.SenderID),
-		Date: time.Now().UTC().Format(time.RFC3339), Text: &text, HasMedia: event.MediaType != "",
+		Date: date, Text: &text, GroupedID: event.GroupedID, HasMedia: event.MediaType != "",
 		MediaType: optEventString(event.MediaType),
 	})
 }

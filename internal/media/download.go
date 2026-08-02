@@ -357,6 +357,7 @@ func validAtomicRenameComponent(name string) bool {
 type atomicProbeEntry struct {
 	name     string
 	identity fileIdentity
+	probe    *os.File
 }
 
 func probeAtomicCapabilities(ops destinationOps, dir *anchoredDir, displayDir string, needExchange bool) error {
@@ -365,16 +366,16 @@ func probeAtomicCapabilities(ops destinationOps, dir *anchoredDir, displayDir st
 		return errors.Join(primary, cleanupAtomicProbeEntries(ops, dir, displayDir, entries))
 	}
 
-	firstName, firstID, err := createAtomicProbeEntry(ops, dir, displayDir)
+	firstName, firstID, firstProbe, err := createAtomicProbeEntry(ops, dir, displayDir)
 	if firstName != "" {
-		entries = append(entries, atomicProbeEntry{name: firstName, identity: firstID})
+		entries = append(entries, atomicProbeEntry{name: firstName, identity: firstID, probe: firstProbe})
 	}
 	if err != nil {
 		return cleanup(err)
 	}
-	secondName, secondID, err := createAtomicProbeEntry(ops, dir, displayDir)
+	secondName, secondID, secondProbe, err := createAtomicProbeEntry(ops, dir, displayDir)
 	if secondName != "" {
-		entries = append(entries, atomicProbeEntry{name: secondName, identity: secondID})
+		entries = append(entries, atomicProbeEntry{name: secondName, identity: secondID, probe: secondProbe})
 	}
 	if err != nil {
 		return cleanup(err)
@@ -384,7 +385,7 @@ func probeAtomicCapabilities(ops destinationOps, dir *anchoredDir, displayDir st
 	if !errors.Is(renameErr, os.ErrExist) {
 		if renameErr == nil {
 			renameErr = errors.Join(ErrAtomicOverwriteUnsupported, errors.New("no-replace rename replaced an existing probe entry"))
-			entries = []atomicProbeEntry{{name: secondName, identity: firstID}}
+			entries = []atomicProbeEntry{{name: secondName, identity: firstID, probe: firstProbe}}
 		}
 		return cleanup(renameErr)
 	}
@@ -399,12 +400,13 @@ func probeAtomicCapabilities(ops destinationOps, dir *anchoredDir, displayDir st
 	// A successful rename updates ctime on Unix. Refresh the identities after
 	// the probe operation so strict cleanup still detects later replacements
 	// without mistaking the probe's own rename for an attacker mutation.
-	firstCurrent, firstInspectErr := dir.lstat(firstName)
-	secondCurrent, secondInspectErr := dir.lstat(secondName)
+	firstCurrent, firstInspectErr := snapshotOpenFile(firstProbe)
+	secondCurrent, secondInspectErr := snapshotOpenFile(secondProbe)
 	if firstInspectErr != nil || secondInspectErr != nil {
 		return cleanup(errors.Join(firstInspectErr, secondInspectErr, ErrAtomicOverwriteUnsupported))
 	}
-	entries[0].identity, entries[1].identity = firstCurrent.identity, secondCurrent.identity
+	entries[0].identity, entries[1].identity = secondCurrent.identity, firstCurrent.identity
+	entries[0].probe, entries[1].probe = secondProbe, firstProbe
 	firstErr := validateNamedRegular(dir, entries[0].name, filepath.Join(displayDir, entries[0].name), entries[0].identity)
 	secondErr := validateNamedRegular(dir, entries[1].name, filepath.Join(displayDir, entries[1].name), entries[1].identity)
 	if firstErr != nil || secondErr != nil {
@@ -422,13 +424,23 @@ func cleanupAtomicProbeEntries(ops destinationOps, dir *anchoredDir, displayDir 
 	var cleanupErr error
 	for _, entry := range entries {
 		displayPath := filepath.Join(displayDir, entry.name)
-		if err := validateNamedRegularStrict(dir, entry.name, displayPath, entry.identity); err != nil {
+		probeEntry, probeErr := snapshotOpenFile(entry.probe)
+		if probeErr != nil {
+			cleanupErr = errors.Join(cleanupErr, ErrCleanupIncomplete, fmt.Errorf("inspect atomic capability probe before cleanup: %w", probeErr))
+			continue
+		}
+		if err := validateNamedRegularStrict(dir, entry.name, displayPath, probeEntry.identity); err != nil {
 			cleanupErr = errors.Join(cleanupErr, ErrCleanupIncomplete, fmt.Errorf("validate atomic capability probe before cleanup: %w", err))
 			continue
 		}
 		ops.beforeProbeDelete(entry.name)
-		if err := deletePrivateRegular(ops, dir, entry.name, displayPath, entry.identity); err != nil {
+		if err := deletePrivateRegular(ops, dir, entry.name, displayPath, probeEntry.identity); err != nil {
 			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("remove atomic capability probe: %w", err))
+		}
+	}
+	for _, entry := range entries {
+		if err := ops.closeFile(entry.probe); err != nil {
+			cleanupErr = errors.Join(cleanupErr, ErrCleanupIncomplete, fmt.Errorf("close atomic capability probe: %w", err))
 		}
 	}
 	return cleanupErr
@@ -454,37 +466,44 @@ func validateNamedRegularStrict(dir *anchoredDir, name, displayPath string, expe
 	return nil
 }
 
-func createAtomicProbeEntry(ops destinationOps, dir *anchoredDir, displayDir string) (string, fileIdentity, error) {
+func createAtomicProbeEntry(ops destinationOps, dir *anchoredDir, displayDir string) (string, fileIdentity, *os.File, error) {
 	for range 100 {
 		name, err := ops.randomPrivateName(".tgctl-probe-")
 		if err != nil {
-			return "", fileIdentity{}, fmt.Errorf("generate atomic capability probe name: %w", err)
+			return "", fileIdentity{}, nil, fmt.Errorf("generate atomic capability probe name: %w", err)
 		}
 		if !validAtomicRenameComponent(name) {
-			return "", fileIdentity{}, errors.Join(ErrInvalidDestination, errors.New("invalid atomic capability probe name"))
+			return "", fileIdentity{}, nil, errors.Join(ErrInvalidDestination, errors.New("invalid atomic capability probe name"))
 		}
 		file, err := ops.createExclusive(dir, name, filepath.Join(displayDir, name))
 		if errors.Is(err, os.ErrExist) {
 			continue
 		}
 		if err != nil {
-			return "", fileIdentity{}, fmt.Errorf("create atomic capability probe: %w", err)
+			return "", fileIdentity{}, nil, fmt.Errorf("create atomic capability probe: %w", err)
 		}
 		entry, inspectErr := snapshotOpenFile(file)
+		probe, probeErr := dir.open(name, filepath.Join(displayDir, name))
 		closeErr := ops.closeFile(file)
-		if inspectErr != nil || closeErr != nil || !entry.regular {
+		if inspectErr != nil || probeErr != nil || closeErr != nil || !entry.regular {
 			primary := inspectErr
+			if probeErr != nil {
+				primary = errors.Join(primary, fmt.Errorf("open atomic capability probe: %w", probeErr))
+			}
 			if closeErr != nil {
 				primary = errors.Join(primary, ErrCleanupIncomplete, fmt.Errorf("close atomic capability probe: %w", closeErr))
 			}
 			if !entry.regular && inspectErr == nil {
 				primary = errors.Join(primary, ErrUnsafeDestination, errors.New("atomic capability probe is not regular"))
 			}
-			return name, entry.identity, primary
+			if probe != nil && closeErr == nil {
+				_ = probe.Close()
+			}
+			return name, entry.identity, probe, primary
 		}
-		return name, entry.identity, nil
+		return name, entry.identity, probe, nil
 	}
-	return "", fileIdentity{}, errors.Join(
+	return "", fileIdentity{}, nil, errors.Join(
 		ErrAtomicOverwriteUnsupported,
 		errors.New("could not allocate atomic capability probe name after 100 attempts"),
 	)

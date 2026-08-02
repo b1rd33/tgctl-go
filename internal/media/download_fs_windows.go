@@ -9,6 +9,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"golang.org/x/sys/windows"
 )
 
 // Windows does not expose the Unix *at family through Go's portable syscall
@@ -30,7 +32,7 @@ type anchoredDir struct {
 }
 
 func openAnchoredDir(path string) (*anchoredDir, error) {
-	file, err := os.Open(path)
+	file, err := openWindowsPath(path, windows.GENERIC_READ, windows.FILE_FLAG_BACKUP_SEMANTICS|windows.FILE_FLAG_OPEN_REPARSE_POINT, windows.OPEN_EXISTING)
 	if err != nil {
 		return nil, err
 	}
@@ -40,11 +42,27 @@ func openAnchoredDir(path string) (*anchoredDir, error) {
 func (d *anchoredDir) entryPath(name string) string { return filepath.Join(d.path, name) }
 
 func (d *anchoredDir) createExclusive(name, displayPath string) (*os.File, error) {
-	return os.OpenFile(d.entryPath(name), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+	return openWindowsPath(d.entryPath(name), windows.GENERIC_READ|windows.GENERIC_WRITE, windows.FILE_ATTRIBUTE_NORMAL, windows.CREATE_NEW)
 }
 
 func (d *anchoredDir) open(name, displayPath string) (*os.File, error) {
-	return os.Open(d.entryPath(name))
+	return openWindowsPath(d.entryPath(name), windows.GENERIC_READ, windows.FILE_FLAG_OPEN_REPARSE_POINT, windows.OPEN_EXISTING)
+}
+
+func openWindowsPath(path string, access, attrs, disposition uint32) (*os.File, error) {
+	p, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return nil, err
+	}
+	h, err := windows.CreateFile(
+		p, access,
+		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
+		nil, disposition, attrs, 0,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return os.NewFile(uintptr(h), path), nil
 }
 
 func (d *anchoredDir) lstat(name string) (anchoredEntry, error) {

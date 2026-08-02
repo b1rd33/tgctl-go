@@ -1678,8 +1678,10 @@ func listenEventsFromUpdates(updates tg.UpdatesClass) []ListenEvent {
 			ChatID:     peerID(m.PeerID),
 			MessageID:  int64(m.ID),
 			SenderID:   peerID(m.FromID),
+			Date:       timeFromUnix(m.Date),
 			Text:       m.Message,
 			MediaType:  messageMediaType(m.Media),
+			GroupedID:  m.GroupedID,
 		})
 	}
 	switch u := updates.(type) {
