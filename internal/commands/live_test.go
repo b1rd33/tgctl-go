@@ -45,9 +45,9 @@ func TestListenOnceEmitsEventEnvelope(t *testing.T) {
 }
 
 func TestShouldEmitListenEventFilters(t *testing.T) {
-	dm := client.ListenEvent{UpdateKind: "new_message", ChatID: 1240314255, MessageID: 1, Text: "hi"}
+	dm := client.ListenEvent{UpdateKind: "new_message", ChatID: 123456789, MessageID: 1, Text: "hi"}
 	basicGroup := client.ListenEvent{UpdateKind: "new_message", ChatID: -200500300, MessageID: 1}
-	channel := client.ListenEvent{UpdateKind: "channel_message", ChatID: 1421106796, MessageID: 1}
+	channel := client.ListenEvent{UpdateKind: "channel_message", ChatID: 234567890, MessageID: 1}
 	statusUpdate := client.ListenEvent{UpdateKind: "user_status", ChatID: 0}
 
 	cases := []struct {
@@ -83,9 +83,9 @@ func TestShouldEmitListenEventFilters(t *testing.T) {
 func TestListenOnlyDMsFlagSkipsChannelEventsAndStops(t *testing.T) {
 	cfg, fc, _ := setupWriteEnv(t)
 	fc.ListenEvents = []client.ListenEvent{
-		{UpdateKind: "channel_message", ChatID: 1421106796, MessageID: 100, Text: "group noise 1"},
-		{UpdateKind: "channel_message", ChatID: 1421106796, MessageID: 101, Text: "group noise 2"},
-		{UpdateKind: "new_message", ChatID: 544822655, MessageID: 200, Text: "real DM"},
+		{UpdateKind: "channel_message", ChatID: 234567890, MessageID: 100, Text: "group noise 1"},
+		{UpdateKind: "channel_message", ChatID: 234567890, MessageID: 101, Text: "group noise 2"},
+		{UpdateKind: "new_message", ChatID: 345678901, MessageID: 200, Text: "synthetic DM"},
 	}
 	out, code := runRoot(t, cfg, "listen", "--once", "--only-dms", "--allow-write", "--json")
 	if code != 0 {

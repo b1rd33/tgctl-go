@@ -10,7 +10,7 @@ designed for autonomous agent use.
 ```bash
 go install github.com/b1rd33/tgctl-go/cmd/tg@latest
 tg login
-tg --help    # 70 commands
+tg --help    # 74 commands
 ```
 
 ## What is `tgctl-go`?
@@ -49,7 +49,7 @@ chat to address.
 
 - [Install](install.md) — `go install`, release binaries, `.env` setup
 - [Quickstart](quickstart.md) — first 5 commands
-- [Commands](commands.md) — full 70-command reference
+- [Commands](commands.md) — full 74-command reference
 - [Library use](sdk.md) — JSON envelope as the cross-language SDK surface
 - [Safety model](safety.md) — write gate, typed confirm, idempotency, audit log
 - [Multi-account](multi-account.md) — isolated stores per account
@@ -57,7 +57,7 @@ chat to address.
 
 ## Status
 
-- **v0.1.0** on GitHub Releases
-- 70 CLI commands across read / write / destructive / media / admin
+- **v0.1.8** on GitHub Releases
+- 74 CLI commands across read / write / destructive / media / admin
 - CI runs tests, vet, and race detector on Ubuntu + macOS
 - MIT licensed

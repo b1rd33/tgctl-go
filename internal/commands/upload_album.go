@@ -26,7 +26,7 @@ import (
 func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "upload-album <chat> <file>...",
-		Short:        "Upload a 2–10 item photo/video album",
+		Short:        "Upload a 2–10 item media album",
 		Args:         cobra.RangeArgs(3, 11),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

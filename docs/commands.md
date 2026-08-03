@@ -76,7 +76,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg unblock-user`](#tg-unblock-user) | Unblock a previously blocked user |
 | [`tg unpin-msg`](#tg-unpin-msg) | Unpin a previously pinned message |
 | [`tg unread`](#tg-unread) | List recently cached incoming messages |
-| [`tg upload-album`](#tg-upload-album) | Upload a 2–10 item photo/video album |
+| [`tg upload-album`](#tg-upload-album) | Upload a 2–10 item media album |
 | [`tg upload-document`](#tg-upload-document) | Upload a document |
 | [`tg upload-photo`](#tg-upload-photo) | Upload a photo |
 | [`tg upload-video`](#tg-upload-video) | Upload a video |
@@ -241,7 +241,7 @@ tg backfill <chat> [flags]
 **Example**
 
 ```bash
-tg backfill 1240314255 --max-messages 100 --allow-write --json
+tg backfill 123456789 --max-messages 100 --allow-write --json
 ```
 
 **Flags**
@@ -298,7 +298,7 @@ tg ban-from-chat <chat> <user-id> [flags]
 **Example**
 
 ```bash
-tg ban-from-chat <group-chat-id> 1240314255 --allow-write --confirm 1240314255 --json
+tg ban-from-chat <group-chat-id> 123456789 --allow-write --confirm 123456789 --json
 ```
 
 **Flags**
@@ -327,7 +327,7 @@ tg block-user <user> [flags]
 **Example**
 
 ```bash
-tg block-user 1240314255 --allow-write --confirm 1240314255 --json
+tg block-user 123456789 --allow-write --confirm 123456789 --json
 ```
 
 **Flags**
@@ -468,7 +468,7 @@ tg chat-pinned-list <chat> [flags]
 **Example**
 
 ```bash
-tg chat-pinned-list 1240314255 --json
+tg chat-pinned-list 123456789 --json
 ```
 
 **Flags**
@@ -521,7 +521,7 @@ tg chats-info <chat-ids> [flags]
 **Example**
 
 ```bash
-tg chats-info 1240314255 --json
+tg chats-info 123456789 --json
 ```
 
 **Flags**
@@ -593,7 +593,7 @@ tg delete-msg <chat> <message-ids> [flags]
 **Example**
 
 ```bash
-tg delete-msg 1240314255 1 --allow-write --confirm 1240314255 --json
+tg delete-msg 123456789 1 --allow-write --confirm 123456789 --json
 ```
 
 **Flags**
@@ -624,7 +624,7 @@ tg demote <chat> <user-id> [flags]
 **Example**
 
 ```bash
-tg demote 987654321 1240314255 --allow-write --confirm 987654321 --json
+tg demote 987654321 123456789 --allow-write --confirm 987654321 --json
 ```
 
 **Flags**
@@ -735,7 +735,7 @@ tg download-media <chat> <message-id> [flags]
 **Example**
 
 ```bash
-tg download-media 1240314255 42 --max-size-mb 100 --allow-write --json
+tg download-media 123456789 42 --max-size-mb 100 --allow-write --json
 ```
 
 **Flags**
@@ -764,7 +764,7 @@ tg edit-msg <chat> <message-id> <new-text> [flags]
 **Example**
 
 ```bash
-tg edit-msg 1240314255 1 "updated" --allow-write --json
+tg edit-msg 123456789 1 "updated" --allow-write --json
 ```
 
 **Flags**
@@ -826,7 +826,7 @@ tg folder-add-chat <id> <chat> [flags]
 **Example**
 
 ```bash
-tg folder-add-chat 2 1240314255 --allow-write --json
+tg folder-add-chat 2 123456789 --allow-write --json
 ```
 
 **Flags**
@@ -855,7 +855,7 @@ tg folder-create <name> [flags]
 **Example**
 
 ```bash
-tg folder-create "support" --include-chats 1240314255 --allow-write --json
+tg folder-create "support" --include-chats 123456789 --allow-write --json
 ```
 
 **Flags**
@@ -949,7 +949,7 @@ tg folder-remove-chat <id> <chat> [flags]
 **Example**
 
 ```bash
-tg folder-remove-chat 2 1240314255 --allow-write --json
+tg folder-remove-chat 2 123456789 --allow-write --json
 ```
 
 **Flags**
@@ -1056,7 +1056,7 @@ tg forward <from-chat> <to-chat> <message-ids> [flags]
 **Example**
 
 ```bash
-tg forward 1240314255 1240314255 1 --allow-write --json
+tg forward 123456789 123456789 1 --allow-write --json
 ```
 
 **Flags**
@@ -1086,7 +1086,7 @@ tg get-msg <chat> <message-id> [flags]
 **Example**
 
 ```bash
-tg get-msg 1240314255 1 --json
+tg get-msg 123456789 1 --json
 ```
 
 **Flags**
@@ -1157,7 +1157,7 @@ tg kick <chat> <user-id> [flags]
 **Example**
 
 ```bash
-tg kick <group-chat-id> 1240314255 --allow-write --confirm 1240314255 --json
+tg kick <group-chat-id> 123456789 --allow-write --confirm 123456789 --json
 ```
 
 **Flags**
@@ -1215,7 +1215,7 @@ tg list-msgs <chat> [flags]
 **Example**
 
 ```bash
-tg list-msgs 1240314255 --limit 10 --json
+tg list-msgs 123456789 --limit 10 --json
 ```
 
 **Flags**
@@ -1298,7 +1298,7 @@ tg mark-read <chat> [flags]
 **Example**
 
 ```bash
-tg mark-read 1240314255 --up-to 1 --allow-write --json
+tg mark-read 123456789 --up-to 1 --allow-write --json
 ```
 
 **Flags**
@@ -1353,7 +1353,7 @@ tg pin-msg <chat> <message-id> [flags]
 **Example**
 
 ```bash
-tg pin-msg 1240314255 1 --allow-write --json
+tg pin-msg 123456789 1 --allow-write --json
 ```
 
 **Flags**
@@ -1383,7 +1383,7 @@ tg promote <chat> <user-id> [flags]
 **Example**
 
 ```bash
-tg promote 987654321 1240314255 --allow-write --confirm 987654321 --json
+tg promote 987654321 123456789 --allow-write --confirm 987654321 --json
 ```
 
 **Flags**
@@ -1412,7 +1412,7 @@ tg react <chat> <message-id> <emoji> [flags]
 **Example**
 
 ```bash
-tg react 1240314255 1 "👍" --allow-write --json
+tg react 123456789 1 "👍" --allow-write --json
 ```
 
 **Flags**
@@ -1442,7 +1442,7 @@ tg search <chat> <query> [flags]
 **Example**
 
 ```bash
-tg search 1240314255 "shipping" --limit 20 --json
+tg search 123456789 "shipping" --limit 20 --json
 ```
 
 **Flags**
@@ -1469,7 +1469,7 @@ tg send <chat> <text> [flags]
 **Example**
 
 ```bash
-tg send 1240314255 "hello" --allow-write --json
+tg send 123456789 "hello" --allow-write --json
 ```
 
 **Flags**
@@ -1588,7 +1588,7 @@ tg show <chat> [flags]
 **Example**
 
 ```bash
-tg show 1240314255 --limit 5 --json
+tg show 123456789 --limit 5 --json
 ```
 
 **Flags**
@@ -1871,7 +1871,7 @@ tg unban-from-chat <chat> <user-id> [flags]
 **Example**
 
 ```bash
-tg unban-from-chat <group-chat-id> 1240314255 --allow-write --confirm 1240314255 --json
+tg unban-from-chat <group-chat-id> 123456789 --allow-write --confirm 123456789 --json
 ```
 
 **Flags**
@@ -1900,7 +1900,7 @@ tg unblock-user <user> [flags]
 **Example**
 
 ```bash
-tg unblock-user 1240314255 --allow-write --confirm 1240314255 --json
+tg unblock-user 123456789 --allow-write --confirm 123456789 --json
 ```
 
 **Flags**
@@ -1929,7 +1929,7 @@ tg unpin-msg <chat> <message-id> [flags]
 **Example**
 
 ```bash
-tg unpin-msg 1240314255 1 --allow-write --json
+tg unpin-msg 123456789 1 --allow-write --json
 ```
 
 **Flags**
@@ -1973,7 +1973,7 @@ tg unread --json
 
 ## `tg upload-album`
 
-Upload a 2–10 item photo/video album
+Upload a 2–10 item media album
 
 **Use**
 
@@ -2018,7 +2018,7 @@ tg upload-document <chat> <file> [flags]
 **Example**
 
 ```bash
-tg upload-document 1240314255 ./file.txt --allow-write --json
+tg upload-document 123456789 ./file.txt --allow-write --json
 ```
 
 **Flags**
@@ -2052,7 +2052,7 @@ tg upload-photo <chat> <file> [flags]
 **Example**
 
 ```bash
-tg upload-photo 1240314255 ./photo.png --allow-write --json
+tg upload-photo 123456789 ./photo.png --allow-write --json
 ```
 
 **Flags**
@@ -2085,7 +2085,7 @@ tg upload-video <chat> <file> [flags]
 **Example**
 
 ```bash
-tg upload-video 1240314255 ./video.mp4 --allow-write --json
+tg upload-video 123456789 ./video.mp4 --allow-write --json
 ```
 
 **Flags**
@@ -2119,7 +2119,7 @@ tg upload-voice <chat> <file> [flags]
 **Example**
 
 ```bash
-tg upload-voice 1240314255 ./voice.ogg --allow-write --json
+tg upload-voice 123456789 ./voice.ogg --allow-write --json
 ```
 
 **Flags**

@@ -212,43 +212,43 @@ func exampleFor(name, use string) string {
 	case "backfill-entities":
 		return "tg backfill-entities --allow-write --json"
 	case "download-media":
-		return "tg download-media 1240314255 42 --max-size-mb 100 --allow-write --json"
+		return "tg download-media 123456789 42 --max-size-mb 100 --allow-write --json"
 	case "backfill":
-		return "tg backfill 1240314255 --max-messages 100 --allow-write --json"
+		return "tg backfill 123456789 --max-messages 100 --allow-write --json"
 	case "show":
-		return "tg show 1240314255 --limit 5 --json"
+		return "tg show 123456789 --limit 5 --json"
 	case "search":
-		return "tg search 1240314255 \"shipping\" --limit 20 --json"
+		return "tg search 123456789 \"shipping\" --limit 20 --json"
 	case "list-msgs":
-		return "tg list-msgs 1240314255 --limit 10 --json"
+		return "tg list-msgs 123456789 --limit 10 --json"
 	case "get-msg":
-		return "tg get-msg 1240314255 1 --json"
+		return "tg get-msg 123456789 1 --json"
 	case "send":
-		return "tg send 1240314255 \"hello\" --allow-write --json"
+		return "tg send 123456789 \"hello\" --allow-write --json"
 	case "send-by-username":
 		return "tg send-by-username @username \"hello\" --allow-write --json"
 	case "edit-msg":
-		return "tg edit-msg 1240314255 1 \"updated\" --allow-write --json"
+		return "tg edit-msg 123456789 1 \"updated\" --allow-write --json"
 	case "delete-msg":
-		return "tg delete-msg 1240314255 1 --allow-write --confirm 1240314255 --json"
+		return "tg delete-msg 123456789 1 --allow-write --confirm 123456789 --json"
 	case "forward":
-		return "tg forward 1240314255 1240314255 1 --allow-write --json"
+		return "tg forward 123456789 123456789 1 --allow-write --json"
 	case "pin-msg":
-		return "tg pin-msg 1240314255 1 --allow-write --json"
+		return "tg pin-msg 123456789 1 --allow-write --json"
 	case "unpin-msg":
-		return "tg unpin-msg 1240314255 1 --allow-write --json"
+		return "tg unpin-msg 123456789 1 --allow-write --json"
 	case "mark-read":
-		return "tg mark-read 1240314255 --up-to 1 --allow-write --json"
+		return "tg mark-read 123456789 --up-to 1 --allow-write --json"
 	case "react":
-		return "tg react 1240314255 1 \"👍\" --allow-write --json"
+		return "tg react 123456789 1 \"👍\" --allow-write --json"
 	case "upload-photo":
-		return "tg upload-photo 1240314255 ./photo.png --allow-write --json"
+		return "tg upload-photo 123456789 ./photo.png --allow-write --json"
 	case "upload-document":
-		return "tg upload-document 1240314255 ./file.txt --allow-write --json"
+		return "tg upload-document 123456789 ./file.txt --allow-write --json"
 	case "upload-video":
-		return "tg upload-video 1240314255 ./video.mp4 --allow-write --json"
+		return "tg upload-video 123456789 ./video.mp4 --allow-write --json"
 	case "upload-voice":
-		return "tg upload-voice 1240314255 ./voice.ogg --allow-write --json"
+		return "tg upload-voice 123456789 ./voice.ogg --allow-write --json"
 	case "topics-list":
 		return "tg topics-list <forum-chat-id> --json"
 	case "topic-create":
@@ -264,19 +264,19 @@ func exampleFor(name, use string) string {
 	case "folder-show":
 		return "tg folder-show 2 --json"
 	case "folder-create":
-		return "tg folder-create \"support\" --include-chats 1240314255 --allow-write --json"
+		return "tg folder-create \"support\" --include-chats 123456789 --allow-write --json"
 	case "folder-edit":
 		return "tg folder-edit 2 --name \"support\" --allow-write --json"
 	case "folder-delete":
 		return "tg folder-delete 2 --allow-write --confirm 2 --json"
 	case "folder-add-chat":
-		return "tg folder-add-chat 2 1240314255 --allow-write --json"
+		return "tg folder-add-chat 2 123456789 --allow-write --json"
 	case "folder-remove-chat":
-		return "tg folder-remove-chat 2 1240314255 --allow-write --json"
+		return "tg folder-remove-chat 2 123456789 --allow-write --json"
 	case "folders-reorder":
 		return "tg folders-reorder 2,3,4 --allow-write --json"
 	case "chats-info":
-		return "tg chats-info 1240314255 --json"
+		return "tg chats-info 123456789 --json"
 	case "chat-members":
 		return "tg chat-members <group-chat-id> --limit 50 --json"
 	case "chat-title":
@@ -288,19 +288,19 @@ func exampleFor(name, use string) string {
 	case "chat-invite-link":
 		return "tg chat-invite-link <group-chat-id> --allow-write --json"
 	case "chat-pinned-list":
-		return "tg chat-pinned-list 1240314255 --json"
+		return "tg chat-pinned-list 123456789 --json"
 	case "set-permissions":
 		return "tg set-permissions <group-chat-id> --send-messages --allow-write --json"
 	case "promote":
-		return "tg promote 987654321 1240314255 --allow-write --confirm 987654321 --json"
+		return "tg promote 987654321 123456789 --allow-write --confirm 987654321 --json"
 	case "demote":
-		return "tg demote 987654321 1240314255 --allow-write --confirm 987654321 --json"
+		return "tg demote 987654321 123456789 --allow-write --confirm 987654321 --json"
 	case "ban-from-chat":
-		return "tg ban-from-chat <group-chat-id> 1240314255 --allow-write --confirm 1240314255 --json"
+		return "tg ban-from-chat <group-chat-id> 123456789 --allow-write --confirm 123456789 --json"
 	case "unban-from-chat":
-		return "tg unban-from-chat <group-chat-id> 1240314255 --allow-write --confirm 1240314255 --json"
+		return "tg unban-from-chat <group-chat-id> 123456789 --allow-write --confirm 123456789 --json"
 	case "kick":
-		return "tg kick <group-chat-id> 1240314255 --allow-write --confirm 1240314255 --json"
+		return "tg kick <group-chat-id> 123456789 --allow-write --confirm 123456789 --json"
 	case "listen":
 		return "tg listen --once --json"
 	case "account-sessions":
@@ -308,9 +308,9 @@ func exampleFor(name, use string) string {
 	case "terminate-session":
 		return "tg terminate-session <session-hash> --allow-write --confirm <session-hash> --json"
 	case "block-user":
-		return "tg block-user 1240314255 --allow-write --confirm 1240314255 --json"
+		return "tg block-user 123456789 --allow-write --confirm 123456789 --json"
 	case "unblock-user":
-		return "tg unblock-user 1240314255 --allow-write --confirm 1240314255 --json"
+		return "tg unblock-user 123456789 --allow-write --confirm 123456789 --json"
 	case "leave-chat":
 		return "tg leave-chat <group-chat-id> --allow-write --confirm <group-chat-id> --json"
 	case "accounts-add":
