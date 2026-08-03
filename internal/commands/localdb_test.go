@@ -503,7 +503,10 @@ func TestBackfillDownloadMediaPassesOptionsPersistsPathsAndReturnsCounters(t *te
 
 func TestBackfillFatalErrorAfterDownloadedPartialReturnsCommittedRecovery(t *testing.T) {
 	cfg, fc, _ := setupWriteEnv(t)
-	path := filepath.Join(filepath.Dir(cfg.Paths.(stubPaths).db), "media", "1", "42_9_document_700_asset.bin")
+	path, err := filepath.Abs(filepath.Join(filepath.Dir(cfg.Paths.(stubPaths).db), "media", "1", "42_9_document_700_asset.bin"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	fc.BackfillResult = client.BackfillResult{
 		Messages: []client.BackfillMessage{{ChatID: 1, MessageID: 9, Date: "2026-08-01T10:00:00Z"}},
 		MediaOutcomes: []client.BackfillMediaOutcome{{
@@ -513,7 +516,16 @@ func TestBackfillFatalErrorAfterDownloadedPartialReturnsCommittedRecovery(t *tes
 	}
 	fc.BackfillErr = errors.New("page 2 failed session=/secret access_hash=123")
 	out, code := runRoot(t, cfg, "backfill", "1", "--download-media", "--allow-write", "--json")
-	if code != 1 || !strings.Contains(out, `"committed":true`) || !strings.Contains(out, `"artifact_count":1`) || !strings.Contains(out, `"media_path":"`+path+`"`) {
+	var envelope struct {
+		Error struct {
+			Committed     bool `json:"committed"`
+			ArtifactCount int  `json:"artifact_count"`
+			Outcomes      []struct {
+				MediaPath string `json:"media_path"`
+			} `json:"media_outcomes"`
+		} `json:"error"`
+	}
+	if json.Unmarshal([]byte(out), &envelope) != nil || code != 1 || !envelope.Error.Committed || envelope.Error.ArtifactCount != 1 || len(envelope.Error.Outcomes) != 1 || envelope.Error.Outcomes[0].MediaPath != path {
 		t.Fatalf("code=%d\nout:%s", code, out)
 	}
 	if strings.Contains(out, "access_hash") || strings.Contains(out, "/secret") {

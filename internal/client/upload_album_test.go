@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/gotd/td/tg"
+	"github.com/gotd/td/tgerr"
 )
 
 type albumRPCFake struct {
@@ -230,10 +232,36 @@ func TestUploadAlbumRecognizesVideoAttributeWhenResponseVideoFlagIsUnset(t *test
 	}
 }
 
+func TestUploadAlbumCorrelatesOrderedMessagesWhenRandomMappingsAreOmitted(t *testing.T) {
+	paths := writeAlbumFixtures(t, "one.jpg", "two.jpg")
+	api := &albumRPCFake{
+		uploadMediaResp: []tg.MessageMediaClass{
+			&tg.MessageMediaPhoto{Photo: &tg.Photo{ID: 1}},
+			&tg.MessageMediaPhoto{Photo: &tg.Photo{ID: 2}},
+		},
+		sendResp: &tg.Updates{Updates: []tg.UpdateClass{
+			&tg.UpdateNewMessage{Message: &tg.Message{ID: 701, GroupedID: 77}},
+			&tg.UpdateNewMessage{Message: &tg.Message{ID: 702, GroupedID: 77}},
+		}},
+	}
+	resp, err := (&GotdClient{albumAPI: api}).UploadAlbum(context.Background(), UploadAlbumReq{
+		ChatID: 1,
+		Peer:   &tg.InputPeerChat{ChatID: 1},
+		Items:  []UploadAlbumItem{{Path: paths[0], Kind: "photo"}, {Path: paths[1], Kind: "photo"}},
+	})
+	if err != nil {
+		t.Fatalf("ordered update response should be accepted: %v", err)
+	}
+	if !reflect.DeepEqual(resp.MessageIDs, []int64{701, 702}) || resp.GroupedID != 77 {
+		t.Fatalf("response=%#v", resp)
+	}
+}
+
 func TestUploadAlbumRejectsUnsupportedAndOversizedBeforeTransport(t *testing.T) {
 	paths := writeAlbumFixtures(t, "one.jpg", "two.jpg")
 	for name, req := range map[string]UploadAlbumReq{
 		"unsupported": {ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, Items: []UploadAlbumItem{{Path: paths[0], Kind: "document"}, {Path: paths[1], Kind: "photo"}}},
+		"audio-mixed": {ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, Items: []UploadAlbumItem{{Path: paths[0], Kind: "audio"}, {Path: paths[1], Kind: "photo"}}},
 		"oversized":   {ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, MaxBytes: 1, Items: []UploadAlbumItem{{Path: paths[0], Kind: "photo"}, {Path: paths[1], Kind: "photo"}}},
 	} {
 		api := &albumRPCFake{}
@@ -241,6 +269,71 @@ func TestUploadAlbumRejectsUnsupportedAndOversizedBeforeTransport(t *testing.T) 
 		if err == nil || len(api.calls) != 0 {
 			t.Fatalf("%s err=%v calls=%#v", name, err, api.calls)
 		}
+	}
+}
+
+func TestUploadAlbumSupportsAudioAndDocumentItems(t *testing.T) {
+	dir := t.TempDir()
+	audioOne := filepath.Join(dir, "one.mp3")
+	audioTwo := filepath.Join(dir, "two.mp3")
+	docOne := filepath.Join(dir, "one.pdf")
+	docTwo := filepath.Join(dir, "two.pdf")
+	for _, path := range []string{audioOne, audioTwo, docOne, docTwo} {
+		if err := os.WriteFile(path, []byte("not a recognized container"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, tc := range map[string]struct {
+		paths []string
+		kind  string
+		resp  []tg.MessageMediaClass
+	}{
+		"audio": {
+			paths: []string{audioOne, audioTwo}, kind: "audio",
+			resp: []tg.MessageMediaClass{
+				&tg.MessageMediaDocument{Document: &tg.Document{ID: 1, Attributes: []tg.DocumentAttributeClass{&tg.DocumentAttributeAudio{}}}},
+				&tg.MessageMediaDocument{Document: &tg.Document{ID: 2, Attributes: []tg.DocumentAttributeClass{&tg.DocumentAttributeAudio{}}}},
+			},
+		},
+		"document": {
+			paths: []string{docOne, docTwo}, kind: "document",
+			resp: []tg.MessageMediaClass{
+				&tg.MessageMediaDocument{Document: &tg.Document{ID: 3}},
+				&tg.MessageMediaDocument{Document: &tg.Document{ID: 4}},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			api := &albumRPCFake{uploadMediaResp: tc.resp, sendResp: albumUpdates(801, 802)}
+			items := []UploadAlbumItem{{Path: tc.paths[0], Kind: tc.kind}, {Path: tc.paths[1], Kind: tc.kind}}
+			_, err := (&GotdClient{albumAPI: api}).UploadAlbum(context.Background(), UploadAlbumReq{ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, Items: items, MediaKind: tc.kind})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(api.uploadMedia) != 2 || len(api.uploadMedia) == 0 {
+				t.Fatalf("upload media calls=%d", len(api.uploadMedia))
+			}
+			for i, media := range api.uploadMedia {
+				doc, ok := media.(*tg.InputMediaUploadedDocument)
+				if !ok {
+					t.Fatalf("item %d upload media=%T, want document", i, media)
+				}
+				if name == "audio" {
+					foundAudio := false
+					for _, attr := range doc.Attributes {
+						if _, ok := attr.(*tg.DocumentAttributeAudio); ok {
+							foundAudio = true
+							break
+						}
+					}
+					if !foundAudio {
+						t.Fatalf("item %d missing audio attribute: %#v", i, doc.Attributes)
+					}
+				} else if !doc.ForceFile {
+					t.Fatalf("document item %d was not forced as a file", i)
+				}
+			}
+		})
 	}
 }
 
@@ -434,6 +527,23 @@ func TestUploadAlbumFinalSendErrorIsClassified(t *testing.T) {
 	_, err := (&GotdClient{albumAPI: api}).UploadAlbum(context.Background(), UploadAlbumReq{ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, Items: []UploadAlbumItem{{Path: paths[0], Kind: "photo"}, {Path: paths[1], Kind: "photo"}}})
 	if err == nil || !strings.Contains(err.Error(), "final-send") {
 		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestUploadAlbumTypedFinalSendRPCErrorIsDefinitive(t *testing.T) {
+	paths := writeAlbumFixtures(t, "one.jpg", "two.jpg")
+	api := &albumRPCFake{
+		uploadMediaResp: []tg.MessageMediaClass{
+			&tg.MessageMediaPhoto{Photo: &tg.Photo{ID: 11}},
+			&tg.MessageMediaPhoto{Photo: &tg.Photo{ID: 22}},
+		},
+		sendResp: albumUpdates(501, 502),
+		sendErr:  tgerr.New(400, "MEDIA_EMPTY"),
+	}
+	_, err := (&GotdClient{albumAPI: api}).UploadAlbum(context.Background(), UploadAlbumReq{ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, Items: []UploadAlbumItem{{Path: paths[0], Kind: "photo"}, {Path: paths[1], Kind: "photo"}}})
+	var albumErr *AlbumUploadError
+	if !errors.As(err, &albumErr) || albumErr.OutcomeUnknown {
+		t.Fatalf("err=%v, want definitive final-send error", err)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -506,6 +507,9 @@ func TestDestinationAbsentPublishDoesNotClobberTargetAppearingAfterCapture(t *te
 }
 
 func TestDestinationCommitStaysInOpenedDirectoryAfterPathReplacement(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not permit renaming an open directory handle")
+	}
 	root := t.TempDir()
 	dir := filepath.Join(root, "downloads")
 	d, err := OpenDestination(dir, "result.bin", false)
@@ -541,6 +545,9 @@ func TestDestinationCommitStaysInOpenedDirectoryAfterPathReplacement(t *testing.
 }
 
 func TestDestinationAbortStaysInOpenedDirectoryAfterPathReplacement(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not permit renaming an open directory handle")
+	}
 	root := t.TempDir()
 	dir := filepath.Join(root, "downloads")
 	d, err := OpenDestination(dir, "cancel.bin", false)
@@ -1541,6 +1548,10 @@ func (w *shortErrorWriter) Write(p []byte) (int, error) {
 
 func assertMode(t *testing.T, path string, want os.FileMode) {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		// Windows ACLs do not expose POSIX mode bits through FileInfo.Perm.
+		return
+	}
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)

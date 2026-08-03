@@ -37,6 +37,81 @@ type Message struct {
 	RawJSON   *string
 }
 
+// LiveMessage is the normalized mutation shape produced by Telegram update
+// handling. Deleted mutations only need ChatID/MessageID/Deleted; all other
+// fields are retained for idempotent upserts.
+type LiveMessage struct {
+	ChatID        int64
+	MessageID     int64
+	SenderID      *int64
+	Date          string
+	Text          *string
+	IsOutgoing    bool
+	ReplyToMsgID  *int64
+	HasMedia      bool
+	MediaType     *string
+	MediaPath     *string
+	MediaIdentity *string
+	GroupedID     int64
+	RawJSON       *string
+	Deleted       bool
+}
+
+// UpsertLiveMessage applies a new/edit mutation without allowing an older
+// update to overwrite newer cached text or media metadata. Message dates are
+// RFC3339 values, so lexical comparison is chronological for normalized rows.
+func UpsertLiveMessage(db *sql.DB, m LiveMessage) error {
+	if m.ChatID == 0 || m.MessageID == 0 {
+		return fmt.Errorf("live message chat_id and message_id must be positive")
+	}
+	if m.Date == "" {
+		m.Date = time.Now().UTC().Format(time.RFC3339)
+	}
+	_, err := db.Exec(`
+		INSERT INTO tg_messages(
+			chat_id, message_id, sender_id, date, text, is_outgoing,
+			reply_to_msg_id, has_media, media_type, media_path, media_id, grouped_id, raw_json, deleted
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(chat_id, message_id) DO UPDATE SET
+			sender_id = CASE WHEN excluded.date >= tg_messages.date THEN excluded.sender_id ELSE tg_messages.sender_id END,
+			date = CASE WHEN excluded.date >= tg_messages.date THEN excluded.date ELSE tg_messages.date END,
+			text = CASE WHEN excluded.date >= tg_messages.date THEN excluded.text ELSE tg_messages.text END,
+			is_outgoing = CASE WHEN excluded.date >= tg_messages.date THEN excluded.is_outgoing ELSE tg_messages.is_outgoing END,
+			reply_to_msg_id = CASE WHEN excluded.date >= tg_messages.date THEN excluded.reply_to_msg_id ELSE tg_messages.reply_to_msg_id END,
+			has_media = CASE WHEN excluded.date >= tg_messages.date THEN excluded.has_media ELSE tg_messages.has_media END,
+			media_type = CASE WHEN excluded.date >= tg_messages.date THEN COALESCE(excluded.media_type, tg_messages.media_type) ELSE tg_messages.media_type END,
+			media_path = CASE WHEN excluded.date >= tg_messages.date THEN COALESCE(excluded.media_path, tg_messages.media_path) ELSE tg_messages.media_path END,
+			media_id = CASE WHEN excluded.date >= tg_messages.date THEN COALESCE(excluded.media_id, tg_messages.media_id) ELSE tg_messages.media_id END,
+			grouped_id = CASE WHEN excluded.date >= tg_messages.date THEN COALESCE(excluded.grouped_id, tg_messages.grouped_id) ELSE tg_messages.grouped_id END,
+			raw_json = CASE WHEN excluded.date >= tg_messages.date THEN COALESCE(excluded.raw_json, tg_messages.raw_json) ELSE tg_messages.raw_json END,
+			deleted = CASE WHEN excluded.date >= tg_messages.date THEN excluded.deleted ELSE tg_messages.deleted END`,
+		m.ChatID, m.MessageID, optInt64(m.SenderID), m.Date, optStr(m.Text), boolInt(m.IsOutgoing), optInt64(m.ReplyToMsgID), boolInt(m.HasMedia), optStr(m.MediaType), optStr(m.MediaPath), optStr(m.MediaIdentity), nullInt64(m.GroupedID), optStr(m.RawJSON), boolInt(m.Deleted),
+	)
+	return err
+}
+
+// MarkLiveMessagesDeleted tombstones messages without deleting their cached
+// text/media fields, preserving auditability and idempotent replay behavior.
+func MarkLiveMessagesDeleted(db *sql.DB, chatID int64, messageIDs []int64) error {
+	if chatID == 0 || len(messageIDs) == 0 {
+		return fmt.Errorf("delete mutation requires chat_id and message ids")
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, messageID := range messageIDs {
+		if messageID == 0 {
+			return fmt.Errorf("delete mutation message id must not be zero")
+		}
+		if _, err := tx.Exec(`UPDATE tg_messages SET deleted = 1 WHERE chat_id = ? AND message_id = ?`, chatID, messageID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 // ShowOptions mirrors the Python `show` arg surface.
 type ShowOptions struct {
 	ChatID         int64

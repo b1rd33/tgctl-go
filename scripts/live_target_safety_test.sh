@@ -1,5 +1,5 @@
-#!/bin/sh
-set -eu
+#!/usr/bin/env bash
+set -euo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 IMPORT_SCRIPT="$SCRIPT_DIR/import_export_simulation.sh"
@@ -14,7 +14,7 @@ fail() {
 	exit 1
 }
 
-source "$SCRIPT_DIR/live_test_common.sh"
+. "$SCRIPT_DIR/live_test_common.sh"
 for valid_selector in 1 -1 9223372036854775807 -9223372036854775808; do
 	live_require_numeric_selector synthetic "$valid_selector" >/dev/null || fail "valid signed selector was rejected"
 done

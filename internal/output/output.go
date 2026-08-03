@@ -70,6 +70,14 @@ func ExitCodeFromString(name string) ExitCode {
 		return LocalRateLimit
 	case "PREMIUM_REQUIRED":
 		return PremiumRequired
+	case "PERMISSION_DENIED":
+		return PermissionDenied
+	case "ARCHIVE_MISSING":
+		return ArchiveMissing
+	case "ARCHIVE_CHANGED":
+		return ArchiveChanged
+	case "ARCHIVE_EXTRA":
+		return ArchiveExtra
 	default:
 		return Generic
 	}
@@ -96,6 +104,10 @@ const (
 	NeedsConfirm
 	LocalRateLimit
 	PremiumRequired
+	PermissionDenied
+	ArchiveMissing
+	ArchiveChanged
+	ArchiveExtra
 )
 
 func (c ExitCode) String() string {
@@ -120,6 +132,14 @@ func (c ExitCode) String() string {
 		return "LOCAL_RATE_LIMIT"
 	case PremiumRequired:
 		return "PREMIUM_REQUIRED"
+	case PermissionDenied:
+		return "PERMISSION_DENIED"
+	case ArchiveMissing:
+		return "ARCHIVE_MISSING"
+	case ArchiveChanged:
+		return "ARCHIVE_CHANGED"
+	case ArchiveExtra:
+		return "ARCHIVE_EXTRA"
 	default:
 		return "GENERIC"
 	}

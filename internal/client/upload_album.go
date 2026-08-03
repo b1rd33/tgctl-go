@@ -10,6 +10,7 @@ import (
 
 	"github.com/gotd/td/telegram/uploader"
 	"github.com/gotd/td/tg"
+	"github.com/gotd/td/tgerr"
 
 	"github.com/b1rd33/tgctl-go/internal/media"
 	"github.com/b1rd33/tgctl-go/internal/safety"
@@ -20,11 +21,22 @@ const (
 	albumMaxItems = 10
 )
 
+var albumMediaKinds = map[string]struct{}{
+	"auto": {}, "photo": {}, "video": {}, "audio": {}, "document": {},
+}
+
 func albumFailure(stage string, position int, err error) error {
 	if err == nil {
 		err = errors.New("unknown failure")
 	}
 	return &AlbumUploadError{Stage: stage, Position: position, Err: err}
+}
+
+func albumFailureUnknown(stage string, position int, err error) error {
+	if err == nil {
+		err = errors.New("unknown failure")
+	}
+	return &AlbumUploadError{Stage: stage, Position: position, Err: err, OutcomeUnknown: true}
 }
 
 func (g *GotdClient) uploadAlbumAPI() (albumUploadAPI, error) {
@@ -54,6 +66,13 @@ func validateAlbumItems(req UploadAlbumReq) ([]validatedAlbumItem, int64, error)
 	if req.MaxSizeMB < 0 {
 		return nil, 0, safety.NewBadArgs("album max size must not be negative")
 	}
+	forcedKind := strings.ToLower(strings.TrimSpace(req.MediaKind))
+	if forcedKind == "" {
+		forcedKind = "auto"
+	}
+	if _, ok := albumMediaKinds[forcedKind]; !ok {
+		return nil, 0, safety.NewBadArgs("unsupported album media kind %q", req.MediaKind)
+	}
 	maxBytes := req.MaxBytes
 	if req.MaxSizeMB > 0 {
 		mbBytes, err := media.MaxBytesFromMiB(req.MaxSizeMB)
@@ -71,7 +90,7 @@ func validateAlbumItems(req UploadAlbumReq) ([]validatedAlbumItem, int64, error)
 		if kind == "" {
 			kind = strings.ToLower(strings.TrimSpace(item.MediaType))
 		}
-		if kind != "" && kind != "photo" && kind != "video" {
+		if kind != "" && kind != "photo" && kind != "video" && kind != "audio" && kind != "document" {
 			return nil, 0, safety.NewBadArgs("unsupported album media type %q at item %d", item.Kind, i)
 		}
 		if strings.TrimSpace(item.Path) == "" {
@@ -98,22 +117,29 @@ func validateAlbumItems(req UploadAlbumReq) ([]validatedAlbumItem, int64, error)
 		if err != nil {
 			return nil, 0, err
 		}
-		if kind == "" {
-			switch detected {
-			case "photo", "image":
-				kind = "photo"
-			case "video":
-				kind = "video"
-			default:
-				return nil, 0, safety.NewBadArgs("unsupported album media type for %s", path)
-			}
+		detectedKind := ""
+		switch detected {
+		case "photo", "image":
+			detectedKind = "photo"
+		case "video", "video_note":
+			detectedKind = "video"
+		case "audio", "voice":
+			detectedKind = "audio"
+		case "document":
+			detectedKind = "document"
+		default:
+			return nil, 0, safety.NewBadArgs("unsupported album media type for %s", path)
 		}
-		if kind == "photo" {
-			if detected != "photo" && detected != "image" {
-				return nil, 0, safety.NewBadArgs("unsupported photo MIME for %s", path)
-			}
-		} else if detected != "video" {
-			return nil, 0, safety.NewBadArgs("unsupported video MIME for %s", path)
+		if kind == "" {
+			kind = detectedKind
+		} else if kind == "audio" && detectedKind == "audio" {
+			// Voice/audio containers are both represented as Telegram audio
+			// documents; the requested kind remains the stable CLI value.
+		} else if kind != detectedKind {
+			return nil, 0, safety.NewBadArgs("unsupported %s MIME for %s", kind, path)
+		}
+		if forcedKind != "auto" && kind != forcedKind {
+			return nil, 0, safety.NewBadArgs("album item %d is %s, but --media-kind=%s", i, kind, forcedKind)
 		}
 		item.Kind = kind
 		item.MediaType = kind
@@ -123,6 +149,22 @@ func validateAlbumItems(req UploadAlbumReq) ([]validatedAlbumItem, int64, error)
 		}
 		item.Filename = media.SanitizeDownloadName(item.Filename)
 		items[i] = validatedAlbumItem{UploadAlbumItem: item, sourcePath: sourcePath, path: path, kind: kind}
+	}
+	containsAudio, containsDocument := false, false
+	for _, item := range items {
+		containsAudio = containsAudio || item.kind == "audio"
+		containsDocument = containsDocument || item.kind == "document"
+	}
+	if containsAudio || containsDocument {
+		wanted := "audio"
+		if containsDocument {
+			wanted = "document"
+		}
+		for i, item := range items {
+			if item.kind != wanted {
+				return nil, 0, safety.NewBadArgs("Telegram requires %s albums to contain only %s items (item %d is %s)", wanted, wanted, i, item.kind)
+			}
+		}
 	}
 	return items, maxBytes, nil
 }
@@ -138,12 +180,18 @@ func albumUploadedMedia(item validatedAlbumItem, file tg.InputFileClass) tg.Inpu
 	if item.kind == "photo" {
 		return &tg.InputMediaUploadedPhoto{File: file}
 	}
-	attrs := []tg.DocumentAttributeClass{
-		&tg.DocumentAttributeFilename{FileName: item.Filename},
-		&tg.DocumentAttributeVideo{SupportsStreaming: item.SupportsStreaming},
+	attrs := []tg.DocumentAttributeClass{&tg.DocumentAttributeFilename{FileName: item.Filename}}
+	forceFile := false
+	switch item.kind {
+	case "video":
+		attrs = append(attrs, &tg.DocumentAttributeVideo{SupportsStreaming: item.SupportsStreaming})
+	case "audio":
+		attrs = append(attrs, &tg.DocumentAttributeAudio{})
+	case "document":
+		forceFile = true
 	}
 	return &tg.InputMediaUploadedDocument{
-		File: file, MimeType: mimeForUpload("video", item.path), Attributes: attrs,
+		File: file, MimeType: mimeForUpload(item.kind, item.path), Attributes: attrs, ForceFile: forceFile,
 	}
 }
 
@@ -169,6 +217,8 @@ func reusableAlbumMedia(m tg.MessageMediaClass) (tg.InputMediaClass, string, err
 		kind := "document"
 		if v.Video || documentHasVideoAttribute(doc) {
 			kind = "video"
+		} else if documentHasAudioAttribute(doc) {
+			kind = "audio"
 		}
 		return &tg.InputMediaDocument{ID: doc.AsInput()}, kind, nil
 	default:
@@ -188,14 +238,27 @@ func documentHasVideoAttribute(doc *tg.Document) bool {
 	return false
 }
 
+func documentHasAudioAttribute(doc *tg.Document) bool {
+	if doc == nil {
+		return false
+	}
+	for _, attr := range doc.Attributes {
+		if _, ok := attr.(*tg.DocumentAttributeAudio); ok {
+			return true
+		}
+	}
+	return false
+}
+
 type albumUpdateData struct {
-	mapping    map[int64]int64
-	grouped    map[int64]int64
-	messageIDs map[int64]struct{}
+	mapping      map[int64]int64
+	grouped      map[int64]int64
+	messageIDs   map[int64]struct{}
+	messageOrder []int64
 }
 
 func collectAlbumUpdates(u tg.UpdatesClass) (albumUpdateData, error) {
-	d := albumUpdateData{mapping: make(map[int64]int64), grouped: make(map[int64]int64), messageIDs: make(map[int64]struct{})}
+	d := albumUpdateData{mapping: make(map[int64]int64), grouped: make(map[int64]int64), messageIDs: make(map[int64]struct{}), messageOrder: make([]int64, 0)}
 	var updates []tg.UpdateClass
 	switch v := u.(type) {
 	case *tg.Updates:
@@ -209,6 +272,7 @@ func collectAlbumUpdates(u tg.UpdatesClass) (albumUpdateData, error) {
 	case *tg.UpdateShortSentMessage:
 		if v != nil {
 			d.messageIDs[int64(v.ID)] = struct{}{}
+			d.messageOrder = append(d.messageOrder, int64(v.ID))
 		}
 		return d, nil
 	case *tg.UpdateShort:
@@ -238,18 +302,21 @@ func collectAlbumUpdates(u tg.UpdatesClass) (albumUpdateData, error) {
 			d.mapping[v.RandomID] = int64(v.ID)
 		case *tg.UpdateNewMessage:
 			if v != nil {
-				collectAlbumMessage(d, v.Message)
+				collectAlbumMessage(&d, v.Message)
 			}
 		case *tg.UpdateNewChannelMessage:
 			if v != nil {
-				collectAlbumMessage(d, v.Message)
+				collectAlbumMessage(&d, v.Message)
 			}
 		}
 	}
 	return d, nil
 }
 
-func collectAlbumMessage(d albumUpdateData, class tg.MessageClass) {
+func collectAlbumMessage(d *albumUpdateData, class tg.MessageClass) {
+	if d == nil {
+		return
+	}
 	msg, ok := class.(*tg.Message)
 	if !ok || msg == nil || msg.ID <= 0 {
 		return
@@ -259,6 +326,7 @@ func collectAlbumMessage(d albumUpdateData, class tg.MessageClass) {
 		return
 	}
 	d.messageIDs[id] = struct{}{}
+	d.messageOrder = append(d.messageOrder, id)
 	if msg.GroupedID != 0 {
 		d.grouped[id] = msg.GroupedID
 	}
@@ -273,6 +341,16 @@ func extractAlbumResponse(u tg.UpdatesClass, randomIDs []int64, items []validate
 		for id := range d.messageIDs {
 			d.mapping[randomIDs[0]] = id
 			break
+		}
+	}
+	// Telegram normally returns UpdateMessageID entries that map every
+	// random_id. Some document/video album responses only contain the newly
+	// created messages, in request order, without those mappings. Preserve the
+	// update order while collecting messages so those responses can still be
+	// correlated safely; never fall back to unordered map iteration for albums.
+	if len(d.mapping) == 0 && len(d.messageOrder) == len(randomIDs) {
+		for i, random := range randomIDs {
+			d.mapping[random] = d.messageOrder[i]
 		}
 	}
 	if len(d.mapping) != len(randomIDs) {
@@ -400,15 +478,23 @@ func (g *GotdClient) UploadAlbum(ctx context.Context, req UploadAlbumReq) (Uploa
 		stage := "final-send"
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			stage = "final-send-cancel"
+			return UploadAlbumResp{}, albumFailureUnknown(stage, -1, mapRPCErr(err))
 		}
-		return UploadAlbumResp{}, albumFailure(stage, -1, mapRPCErr(err))
+		mapped := mapRPCErr(err)
+		// A typed Telegram RPC response is a definitive rejection: no album
+		// message was created, even though earlier uploadMedia calls remain
+		// non-transactional. Only transport/unknown failures are ambiguous.
+		if _, ok := tgerr.As(err); ok {
+			return UploadAlbumResp{}, albumFailure(stage, -1, mapped)
+		}
+		return UploadAlbumResp{}, albumFailureUnknown(stage, -1, mapped)
 	}
 	if err := ctx.Err(); err != nil {
-		return UploadAlbumResp{}, albumFailure("final-send-cancel", -1, err)
+		return UploadAlbumResp{}, albumFailureUnknown("final-send-cancel", -1, err)
 	}
 	resp, err := extractAlbumResponse(updates, randomIDs, items)
 	if err != nil {
-		return UploadAlbumResp{}, albumFailure("final-send", -1, err)
+		return UploadAlbumResp{}, albumFailureUnknown("final-send", -1, err)
 	}
 	resp.ChatID = req.ChatID
 	return resp, nil

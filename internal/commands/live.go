@@ -2,6 +2,8 @@ package commands
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -37,10 +39,13 @@ func registerLiveCommands(root *cobra.Command, cfg CommandsConfig) {
 					return nil, err
 				}
 				defer c.Close()
-				emit := func(event client.ListenEvent) {
-					_ = cacheListenEvent(dbPath, event)
+				emit := func(event client.ListenEvent) error {
+					if err := cacheListenEvent(dbPath, event); err != nil {
+						return fmt.Errorf("persist live update: %w", err)
+					}
 					env := output.Success("listen.event", event, output.NewRequestID(), nil)
 					output.Emit(env, output.EmitOptions{JSON: true, Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr()})
+					return nil
 				}
 				if once {
 					for {
@@ -51,7 +56,9 @@ func registerLiveCommands(root *cobra.Command, cfg CommandsConfig) {
 						if !shouldEmitListenEvent(event, onlyDMs, onlyGroups) {
 							continue
 						}
-						emit(event)
+						if err := emit(event); err != nil {
+							return nil, err
+						}
 						return map[string]any{"events": 1}, nil
 					}
 				}
@@ -63,7 +70,9 @@ func registerLiveCommands(root *cobra.Command, cfg CommandsConfig) {
 					if !shouldEmitListenEvent(event, onlyDMs, onlyGroups) {
 						continue
 					}
-					emit(event)
+					if err := emit(event); err != nil {
+						return nil, err
+					}
 					time.Sleep(100 * time.Millisecond)
 				}
 			})
@@ -117,11 +126,25 @@ func cacheListenEvent(dbPath string, event client.ListenEvent) error {
 		return err
 	}
 	defer db.Close()
+	return applyLiveEvent(db, event)
+}
+
+func applyLiveEvent(db *sql.DB, event client.ListenEvent) error {
+	if event.ChatID == 0 || event.MessageID == 0 {
+		return nil
+	}
+	if event.Deleted {
+		return store.MarkLiveMessagesDeleted(db, event.ChatID, []int64{event.MessageID})
+	}
 	text := event.Text
-	return store.InsertMessage(db, store.Message{
+	date := event.Date
+	if date == "" {
+		date = time.Now().UTC().Format(time.RFC3339)
+	}
+	return store.UpsertLiveMessage(db, store.LiveMessage{
 		ChatID: event.ChatID, MessageID: event.MessageID, SenderID: optEventSender(event.SenderID),
-		Date: time.Now().UTC().Format(time.RFC3339), Text: &text, HasMedia: event.MediaType != "",
-		MediaType: optEventString(event.MediaType),
+		Date: date, Text: &text, GroupedID: event.GroupedID, HasMedia: event.MediaType != "",
+		MediaType: optEventString(event.MediaType), Deleted: event.Deleted,
 	})
 }
 

@@ -9,16 +9,20 @@ import (
 
 func TestExitCodeValuesAreStable(t *testing.T) {
 	tests := map[ExitCode]int{
-		OK:              0,
-		Generic:         1,
-		BadArgs:         2,
-		NotAuthed:       3,
-		NotFound:        4,
-		FloodWait:       5,
-		WriteDisallowed: 6,
-		NeedsConfirm:    7,
-		LocalRateLimit:  8,
-		PremiumRequired: 9,
+		OK:               0,
+		Generic:          1,
+		BadArgs:          2,
+		NotAuthed:        3,
+		NotFound:         4,
+		FloodWait:        5,
+		WriteDisallowed:  6,
+		NeedsConfirm:     7,
+		LocalRateLimit:   8,
+		PremiumRequired:  9,
+		PermissionDenied: 10,
+		ArchiveMissing:   11,
+		ArchiveChanged:   12,
+		ArchiveExtra:     13,
 	}
 	for code, want := range tests {
 		if int(code) != want {
@@ -29,16 +33,20 @@ func TestExitCodeValuesAreStable(t *testing.T) {
 
 func TestExitCodeStringNamesMatchPythonEnum(t *testing.T) {
 	tests := map[ExitCode]string{
-		OK:              "OK",
-		Generic:         "GENERIC",
-		BadArgs:         "BAD_ARGS",
-		NotAuthed:       "NOT_AUTHED",
-		NotFound:        "NOT_FOUND",
-		FloodWait:       "FLOOD_WAIT",
-		WriteDisallowed: "WRITE_DISALLOWED",
-		NeedsConfirm:    "NEEDS_CONFIRM",
-		LocalRateLimit:  "LOCAL_RATE_LIMIT",
-		PremiumRequired: "PREMIUM_REQUIRED",
+		OK:               "OK",
+		Generic:          "GENERIC",
+		BadArgs:          "BAD_ARGS",
+		NotAuthed:        "NOT_AUTHED",
+		NotFound:         "NOT_FOUND",
+		FloodWait:        "FLOOD_WAIT",
+		WriteDisallowed:  "WRITE_DISALLOWED",
+		NeedsConfirm:     "NEEDS_CONFIRM",
+		LocalRateLimit:   "LOCAL_RATE_LIMIT",
+		PremiumRequired:  "PREMIUM_REQUIRED",
+		PermissionDenied: "PERMISSION_DENIED",
+		ArchiveMissing:   "ARCHIVE_MISSING",
+		ArchiveChanged:   "ARCHIVE_CHANGED",
+		ArchiveExtra:     "ARCHIVE_EXTRA",
 	}
 	for code, want := range tests {
 		if got := code.String(); got != want {

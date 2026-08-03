@@ -7,7 +7,7 @@ import (
 )
 
 func TestAddOutputFlagsAddsJSONAndHumanMutuallyExclusive(t *testing.T) {
-	cmd := &cobra.Command{Use: "x", RunE: func(*cobra.Command, []string) error { return nil }}
+	cmd := &cobra.Command{Use: "x", SilenceErrors: true, SilenceUsage: true, RunE: func(*cobra.Command, []string) error { return nil }}
 	AddOutputFlags(cmd)
 	if cmd.Flags().Lookup("json") == nil {
 		t.Fatalf("missing --json")

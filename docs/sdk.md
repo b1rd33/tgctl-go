@@ -158,6 +158,10 @@ The process exit code matches the envelope error code family:
 | 7 | NEEDS_CONFIRM |
 | 8 | LOCAL_RATE_LIMIT |
 | 9 | PREMIUM_REQUIRED |
+| 10 | PERMISSION_DENIED |
+| 11 | ARCHIVE_MISSING |
+| 12 | ARCHIVE_CHANGED |
+| 13 | ARCHIVE_EXTRA |
 
 Use both the exit code and `.error.code`. The numeric code is stable
 for shells; the string is better for logs and metrics.

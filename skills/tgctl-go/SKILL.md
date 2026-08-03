@@ -20,10 +20,11 @@ state, sessions, SQLite caches, and audit logs outside source control.
 - Do not put source paths, captions, API credentials, session files, or raw
   audit lines in prompts, logs, commits, or public issues.
 
-## Upload a photo/video album
+## Upload an album
 
-Albums are 2–10 ordered photo/video files. Validate every file before the
-network call, then preview and send with a stable idempotency key:
+Albums are 2–10 ordered files. Photo/video groups may be mixed; audio groups
+and document groups must each be same-type. Use `--media-kind auto` (the
+default) or force `photo`, `video`, `audio`, or `document`:
 
 ```bash
 tg --account test upload-album 123 \
@@ -34,6 +35,10 @@ tg --account test upload-album 123 \
   ./01.jpg ./02.jpg ./03.mp4 \
   --caption "release images" --idempotency-key album-release-001 \
   --allow-write --json
+
+tg --account test upload-album 123 \
+  ./01.mp3 ./02.mp3 --media-kind audio \
+  --caption "soundtrack" --allow-write --json
 ```
 
 The caption is placed on the first item. The client uploads each file through
@@ -94,6 +99,49 @@ cannot reconstruct old album membership. Run backfill after migration if
 album grouping is needed. A dry-run reads the local cache and cannot discover
 a remote album.
 
+## Durable sync and local export
+
+Use `sync` when a chat needs restart-safe catch-up plus optional live follow:
+
+```bash
+tg --account test sync 123 --allow-write --download-media --json
+tg --account test sync 123 --follow --once --allow-write --json
+```
+
+The command stores a per-account/chat checkpoint in SQLite, persists each
+backfill/live mutation before advancing that checkpoint, reconnects with
+bounded exponential backoff, and preserves message edits, deletions, and
+album `grouped_id` values. `--once` is useful for a deterministic probe; it
+requires `--follow`. A failed local persistence step stops before the cursor
+advances, so rerunning is safe.
+
+Export is local-only and never constructs a Telegram client:
+
+```bash
+tg --account test export 123 --format jsonl --output ./chat.jsonl --include-media --json
+tg --account test export 123 --format csv --since 2026-08-01 --limit 100
+tg --account test export 123 --format html --output ./chat.html
+```
+
+Exports read the cached SQLite snapshot oldest-first, exclude tombstoned rows
+by default, constrain media paths to the account media root, and refuse to
+overwrite an existing output file. Add and verify a manifest locally:
+
+```bash
+tg --account test export 123 --format jsonl --output ./chat.jsonl \
+  --manifest ./chat.manifest.json --manifest-hash --include-media
+tg --account test export --verify ./chat.manifest.json --json
+```
+
+Verification reports stable `ARCHIVE_MISSING`, `ARCHIVE_CHANGED`, or
+`ARCHIVE_EXTRA` codes. gotd's public downloader does not expose a safe resume
+offset; rerun downloads instead of appending to a partial file.
+
+For first-time credentials, use `tg setup`; it preserves unrelated `.env`
+entries, writes mode `0600` on Unix, and never prints the API hash. `tg login
+--qr` renders a QR in an interactive terminal; `--qr-uri` is an explicit
+text-URI fallback. Both still require `TG_API_ID` and `TG_API_HASH`.
+
 ## Verification and release hygiene
 
 Before calling a change ready, run:
@@ -137,7 +185,6 @@ unreviewed public history.
 
 ## Known scope
 
-Album v1 intentionally covers photo/video albums only. Audio/document albums,
-resumable transfers, manifests, thumbnails, disk-space preflight,
-all-or-nothing orchestration, and album-level download discovery are later
-hardening, not prerequisites for the current commands.
+Album download discovery remains cache/group based. Resumable transfers,
+thumbnails, disk-space preflight, concurrency controls, and all-or-nothing
+orchestration remain later hardening.

@@ -165,7 +165,10 @@ treat failure to finalize that audit record after a committed artifact as a
 partial committed error instead of silently reporting success.
 
 `audit.log` lives at `accounts/<name>/audit.log` and is append-only.
-File permissions are 0600 (owner-only read/write).
+On Unix, sensitive files are created with mode 0600 (owner-only
+read/write). Windows does not expose POSIX mode bits through Go's
+`os.FileMode`; there, protection comes from the inherited ACL on the
+private account root and the session lock remains exclusive.
 
 ## Local rate limiter
 
@@ -186,7 +189,7 @@ up to N seconds for the lock instead of failing immediately.
 
 ## File permissions
 
-Sensitive files in `accounts/<name>/` are chmod'd to owner-only:
+On Unix, sensitive files in `accounts/<name>/` are chmod'd to owner-only:
 
 | File | Mode |
 |---|---|
@@ -197,6 +200,8 @@ Sensitive files in `accounts/<name>/` are chmod'd to owner-only:
 | Account directories | 0700 |
 
 This is best-effort and never blocks the operation if it fails.
+On Windows, Go reports implementation-defined POSIX mode bits; the account
+root's inherited ACL is the protection boundary instead.
 
 ## Exit codes
 
@@ -212,6 +217,10 @@ This is best-effort and never blocks the operation if it fails.
 | 7 | NEEDS_CONFIRM | Destructive op without `--confirm <id>` |
 | 8 | LOCAL_RATE_LIMIT | In-process rate limiter tripped |
 | 9 | PREMIUM_REQUIRED | Telegram requires Premium for this action |
+| 10 | PERMISSION_DENIED | Telegram refused the operation because of chat/member permissions |
+| 11 | ARCHIVE_MISSING | Local archive manifest references missing media |
+| 12 | ARCHIVE_CHANGED | Local archive media size or hash changed |
+| 13 | ARCHIVE_EXTRA | Local media root contains an unrecorded artifact |
 
 ## Handling FloodWait
 

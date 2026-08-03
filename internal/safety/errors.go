@@ -66,6 +66,34 @@ func (e *PremiumRequired) Error() string {
 	return "Telegram Premium account required for this action"
 }
 
+// PermissionDenied represents a Telegram-side chat/member permission refusal.
+type PermissionDenied struct {
+	RPCType string
+}
+
+func (e *PermissionDenied) Error() string {
+	if e == nil || e.RPCType == "" {
+		return "Telegram denied this operation due to chat permissions"
+	}
+	return "Telegram denied this operation due to chat permissions (" + e.RPCType + ")"
+}
+
+// ArchiveVerification is returned by a local manifest verification when the
+// filesystem does not match the recorded archive. Kind is one of missing,
+// changed, or extra and Results contains bounded machine-readable details.
+type ArchiveVerification struct {
+	Kind    string
+	Message string
+	Results map[string]any
+}
+
+func (e *ArchiveVerification) Error() string {
+	if e == nil || e.Message == "" {
+		return "archive verification failed"
+	}
+	return e.Message
+}
+
 // CommittedWrite marks an error discovered after a write was durably
 // committed. Callers must not retry it as if the operation were rolled back.
 type CommittedWrite struct {

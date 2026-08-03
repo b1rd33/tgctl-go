@@ -76,4 +76,15 @@ CREATE TABLE IF NOT EXISTS tg_entities (
     access_hash INTEGER,
     updated_at  TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS tg_sync_state (
+    account         TEXT NOT NULL DEFAULT 'default',
+    chat_id         INTEGER NOT NULL,
+    last_message_id INTEGER NOT NULL DEFAULT 0,
+    last_sync_at    TEXT,
+    updated_at      TEXT NOT NULL,
+    PRIMARY KEY (account, chat_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sync_state_updated ON tg_sync_state(updated_at);
 `

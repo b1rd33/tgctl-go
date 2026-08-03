@@ -40,6 +40,7 @@ Live smoke tests require a real Telegram account and credentials in
 ```bash
 scripts/live_verify.sh
 scripts/import_export_simulation.sh
+scripts/live_permissions.sh
 ```
 
 `scripts/live_verify.sh` covers the command surface. The import/export
@@ -52,6 +53,12 @@ running these scripts. They fail closed when required targets are absent and
 write raw output to a private temporary workspace that is removed on exit.
 Raw-output retention variables are intentionally rejected. Never commit live
 output.
+For the permission smoke test, set `TGCTL_LIVE_PERMISSION_CHAT`,
+`TGCTL_LIVE_ALLOWED_ACCOUNT`, and `TGCTL_LIVE_DENIED_ACCOUNT` to two already
+authorized accounts and a disposable group/channel. The script sends one
+uniquely marked message from the allowed account and expects the denied account
+to return `PERMISSION_DENIED` (exit 10). It never deliberately creates a flood
+wait and never bans, promotes, deletes, or mass-messages.
 For the import/export simulation, set `TGCTL_LIVE_FORUM_CHAT` explicitly and set
 `TGCTL_LIVE_FOLDER_TARGETS` to four ordered, comma-separated dedicated test chat
 IDs. The script does not infer write targets from cached dialogs.

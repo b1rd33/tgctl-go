@@ -18,7 +18,7 @@ make_probe() {
   cat >"$probe" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
-source "$HELPER"
+. "$HELPER"
 live_workspace_init probe
 printf '%s\n' "\$LIVE_WORKSPACE" >"\$PROBE_PATH_FILE"
 : >"\$LIVE_WORKSPACE/private-output"

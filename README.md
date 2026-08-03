@@ -203,6 +203,31 @@ warnings while other rows continue. If files were committed before a later
 failure, the error envelope has `committed: true` and bounded recovery metadata;
 do not retry blindly.
 
+### Durable sync and local archive export
+
+Use `sync` to make a chat's history and live follow restart-safe. It stores a
+per-account/chat checkpoint only after local rows are persisted and reconnects
+with bounded backoff:
+
+```bash
+tg --account "$TG_ACCOUNT_NAME" sync "$TG_CHAT_ID" \
+  --follow --once --allow-write --json
+```
+
+Use `export` for a local-only snapshot; it never creates a Telegram client,
+excludes deleted rows by default, and refuses to overwrite an existing file:
+
+```bash
+tg --account "$TG_ACCOUNT_NAME" export "$TG_CHAT_ID" \
+  --format jsonl --output ./chat.jsonl --include-media --json
+```
+
+The first archive formats are JSONL, CSV, and HTML. Add a manifest with
+`--manifest ./chat.manifest.json`; use `--manifest-hash` for SHA-256 content
+identity, then verify locally with `tg export --verify ./chat.manifest.json`.
+Verification uses stable `ARCHIVE_MISSING`, `ARCHIVE_CHANGED`, and
+`ARCHIVE_EXTRA` exit codes.
+
 ## Safety contract
 
 Ordinary Telegram-side writes use this fixed pipeline:
@@ -232,7 +257,7 @@ handling; they do not use the ordinary pipeline above. See the
 | `--dry-run` | On commands that expose it, returns the resolved payload without contacting Telegram; it still requires the write and confirmation gates |
 | Audit log | NDJSON at `accounts/<name>/audit.log`; Telegram write-pipeline entries share a `request_id` across pre-call and final records, while local media/cache commands record final dispatch outcomes |
 
-Stable exit codes (0–9): `OK`, `GENERIC`, `BAD_ARGS`, `NOT_AUTHED`, `NOT_FOUND`, `FLOOD_WAIT`, `WRITE_DISALLOWED`, `NEEDS_CONFIRM`, `LOCAL_RATE_LIMIT`, `PREMIUM_REQUIRED`.
+Stable exit codes (0–13): `OK`, `GENERIC`, `BAD_ARGS`, `NOT_AUTHED`, `NOT_FOUND`, `FLOOD_WAIT`, `WRITE_DISALLOWED`, `NEEDS_CONFIRM`, `LOCAL_RATE_LIMIT`, `PREMIUM_REQUIRED`, `PERMISSION_DENIED`, `ARCHIVE_MISSING`, `ARCHIVE_CHANGED`, `ARCHIVE_EXTRA`.
 
 For typed destructive operations, an omitted `--confirm` is
 `NEEDS_CONFIRM` (exit 7); a supplied value that does not match the resolved
@@ -254,13 +279,16 @@ The reusable operating guide for agents is in
 uploads/downloads, selector and write gates, idempotent retries, backfill
 inspection, and the release verification checklist.
 
-## Album v1
+## Album support
 
 `upload-album` and `download-album` are available. Cached message rows expose
 Telegram's `grouped_id`, and history/backfill preserves it while grouping
-album rows by ascending message ID. The first version supports:
+album rows by ascending message ID. The current version supports:
 
 - upload 2–10 ordered photo/video items, including mixed photo/video albums;
+- upload same-type audio or document albums with `--media-kind audio` or
+  `--media-kind document`; unsupported mixed groups are rejected before any
+  upload;
 - put the CLI's single album caption on the first item;
 - prepare items in CLI order, sequentially uploading each file, converting it
   with `messages.uploadMedia`, and assigning its own unique random ID; only
@@ -272,9 +300,11 @@ album rows by ascending message ID. The first version supports:
 
 The upload phase is not transactional: if a later temporary upload fails,
 earlier temporary uploads may already exist on Telegram even though no album
-message was sent. Hashes, resumable downloads, disk-space preflight, manifests,
-thumbnails, concurrency controls, all-or-nothing orchestration, and audio or
-document albums are later hardening rather than album-v1 requirements.
+message was sent. Resumable downloads are intentionally not exposed: gotd's
+public downloader does not provide a safe restart offset, and the raw
+`upload.getFile` offset API would bypass CDN/hash handling. Rerun a download
+for a fresh atomic transfer. Disk-space preflight, thumbnails, concurrency
+controls, and all-or-nothing orchestration remain later hardening.
 Recommended later dry-run hardening would additionally guarantee zero database,
 audit, or session writes and no local file or directory creation; those local
 side-effect guarantees are not core album-v1 acceptance criteria. See the

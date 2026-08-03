@@ -2,7 +2,22 @@
 
 ## Unreleased
 
-Future changes will be listed here.
+### Added
+
+- `upload-album` now supports audio and document albums with Telegram's
+  same-type grouping restrictions and explicit `--media-kind` validation.
+- `export --manifest` writes an archive manifest with optional SHA-256 hashes;
+  `export --verify` reports missing, changed, and extra media safely offline.
+- `tg setup` creates or updates a mode-0600 `.env` without printing the API
+  hash, and `tg login --qr` provides an optional terminal QR flow.
+- Permission failures now have a stable `PERMISSION_DENIED` exit code and a
+  non-destructive disposable-target smoke-test script.
+
+### Changed
+
+- Resumable downloads are intentionally not exposed until gotd provides a
+  safe offset primitive that preserves Telegram CDN/hash handling; rerunning
+  the atomic full download remains the supported retry path.
 
 ## v0.1.7 — 2026-08-02
 

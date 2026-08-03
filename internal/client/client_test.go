@@ -99,6 +99,38 @@ func TestBackfillMediaContractAndFake(t *testing.T) {
 	}
 }
 
+func TestListenEventsPreserveAlbumIdentityAndAuthoritativeDate(t *testing.T) {
+	events := listenEventsFromUpdates(&tg.Updates{Updates: []tg.UpdateClass{
+		&tg.UpdateNewMessage{Message: &tg.Message{
+			ID: 42, PeerID: &tg.PeerUser{UserID: 7}, FromID: &tg.PeerUser{UserID: 8},
+			Date: 1_700_000_000, Message: "album item", GroupedID: 9001,
+		}},
+	}})
+	if len(events) != 1 {
+		t.Fatalf("events=%d want 1", len(events))
+	}
+	if events[0].GroupedID != 9001 || events[0].Date != "2023-11-14T22:13:20Z" {
+		t.Fatalf("event identity/date = grouped_id=%d date=%q", events[0].GroupedID, events[0].Date)
+	}
+}
+
+func TestListenEventsNormalizeEditsAndScopedDeletes(t *testing.T) {
+	events := listenEventsFromUpdates(&tg.Updates{Updates: []tg.UpdateClass{
+		&tg.UpdateEditMessage{Message: &tg.Message{ID: 4, PeerID: &tg.PeerUser{UserID: 2}, Message: "edited"}},
+		&tg.UpdateDeleteChannelMessages{ChannelID: 9, Messages: []int{5, 6}},
+		&tg.UpdateDeleteMessages{Messages: []int{7}},
+	}})
+	if len(events) != 4 {
+		t.Fatalf("events=%d want 4: %#v", len(events), events)
+	}
+	if events[0].UpdateKind != "edit_message" || events[0].Deleted || events[0].Text != "edited" {
+		t.Fatalf("edit event=%+v", events[0])
+	}
+	if events[1].ChatID != 9 || !events[1].Deleted || events[2].MessageID != 6 || events[3].ChatID != 0 || !events[3].Deleted {
+		t.Fatalf("delete events=%+v", events[1:])
+	}
+}
+
 func TestBackfillStructuredMediaOutcomeContract(t *testing.T) {
 	want := BackfillResult{MediaOutcomes: []BackfillMediaOutcome{{
 		ChatID: 42, MessageID: 9, MediaIdentity: "document:700", Status: BackfillMediaDownloaded,
@@ -675,5 +707,17 @@ func TestMapRPCErrClassifiesPremiumRequired(t *testing.T) {
 	var pr *safety.PremiumRequired
 	if !errors.As(out, &pr) {
 		t.Fatalf("got %T (%v), want *safety.PremiumRequired", out, out)
+	}
+}
+
+func TestMapRPCErrClassifiesPermissionDenied(t *testing.T) {
+	for _, rpcType := range []string{"CHAT_WRITE_FORBIDDEN", "CHAT_ADMIN_REQUIRED", "USER_BANNED_IN_CHANNEL"} {
+		t.Run(rpcType, func(t *testing.T) {
+			out := mapRPCErr(tgerr.New(403, rpcType))
+			var denied *safety.PermissionDenied
+			if !errors.As(out, &denied) || denied.RPCType != rpcType {
+				t.Fatalf("got %T (%v), want permission denial %s", out, out, rpcType)
+			}
+		})
 	}
 }

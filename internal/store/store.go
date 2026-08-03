@@ -92,6 +92,20 @@ func migrate(db *sql.DB) error {
 	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_messages_chat_grouped ON tg_messages(chat_id, grouped_id, message_id)"); err != nil {
 		return fmt.Errorf("migrate tg_messages grouped index: %w", err)
 	}
+	if _, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS tg_sync_state (
+			account TEXT NOT NULL DEFAULT 'default',
+			chat_id INTEGER NOT NULL,
+			last_message_id INTEGER NOT NULL DEFAULT 0,
+			last_sync_at TEXT,
+			updated_at TEXT NOT NULL,
+			PRIMARY KEY (account, chat_id)
+		)`); err != nil {
+		return fmt.Errorf("migrate tg_sync_state: %w", err)
+	}
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_sync_state_updated ON tg_sync_state(updated_at)"); err != nil {
+		return fmt.Errorf("migrate tg_sync_state index: %w", err)
+	}
 	return nil
 }
 
