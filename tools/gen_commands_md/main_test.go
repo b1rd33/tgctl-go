@@ -32,7 +32,7 @@ func TestGeneratorUsesSelectedBinaryAndRendersDynamicReference(t *testing.T) {
 		"`tg --help` shows 4 commands. This page is generated from Cobra help output.",
 		"tg discover --allow-write --json",
 		"tg backfill-entities --allow-write --json",
-		"tg download-media 1240314255 42 --max-size-mb 100 --allow-write --json",
+		"tg download-media 123456789 42 --max-size-mb 100 --allow-write --json",
 		"| [`tg import-telethon-session`]",
 	}
 	for _, want := range wants {

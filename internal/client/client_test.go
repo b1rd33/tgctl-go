@@ -298,7 +298,7 @@ func TestDisplayNameOrdering(t *testing.T) {
 
 func TestFirstTopicIDUsesTopicCreateServiceMessageID(t *testing.T) {
 	updates := &tg.Updates{Updates: []tg.UpdateClass{
-		&tg.UpdateChannel{ChannelID: 3957621025},
+		&tg.UpdateChannel{ChannelID: 234567890},
 		&tg.UpdateNewChannelMessage{Message: &tg.MessageService{
 			ID:     42,
 			Action: &tg.MessageActionTopicCreate{Title: "IE Germany - Status"},
@@ -333,9 +333,9 @@ func TestFolderInfoFromDialogFilterIncludesPeerIDs(t *testing.T) {
 		Title:    tg.TextWithEntities{Text: "Ops"},
 		Emoticon: "box",
 		IncludePeers: []tg.InputPeerClass{
-			&tg.InputPeerUser{UserID: 1240314255, AccessHash: 10},
-			&tg.InputPeerChannel{ChannelID: 3957621025, AccessHash: 20},
-			&tg.InputPeerChat{ChatID: 5122015159},
+			&tg.InputPeerUser{UserID: 123456789, AccessHash: 10},
+			&tg.InputPeerChannel{ChannelID: 234567890, AccessHash: 20},
+			&tg.InputPeerChat{ChatID: 345678901},
 		},
 		ExcludePeers: []tg.InputPeerClass{
 			&tg.InputPeerUser{UserID: 777000, AccessHash: 30},
@@ -347,7 +347,7 @@ func TestFolderInfoFromDialogFilterIncludesPeerIDs(t *testing.T) {
 	if info.ID != 6 || info.Title != "Ops" || info.Emoji != "box" {
 		t.Fatalf("info metadata = %#v", info)
 	}
-	wantInclude := []int64{1240314255, 3957621025, 5122015159}
+	wantInclude := []int64{123456789, 234567890, 345678901}
 	if len(info.IncludeChatIDs) != len(wantInclude) {
 		t.Fatalf("IncludeChatIDs = %#v, want %#v", info.IncludeChatIDs, wantInclude)
 	}
@@ -366,16 +366,16 @@ func TestMergeFolderUpdatePreservesExistingMetadataAndMembership(t *testing.T) {
 		ID:             6,
 		Title:          "Ops",
 		Emoji:          "box",
-		IncludeChatIDs: []int64{1240314255},
+		IncludeChatIDs: []int64{123456789},
 		ExcludeChatIDs: []int64{777000},
 	}
 
-	merged := mergeFolderUpdate(existing, FolderUpdateReq{ID: 6, IncludeChatIDs: []int64{3957621025}})
+	merged := mergeFolderUpdate(existing, FolderUpdateReq{ID: 6, IncludeChatIDs: []int64{234567890}})
 
 	if merged.Title != "Ops" || merged.Emoji != "box" {
 		t.Fatalf("merged metadata = title:%q emoji:%q", merged.Title, merged.Emoji)
 	}
-	wantInclude := []int64{1240314255, 3957621025}
+	wantInclude := []int64{123456789, 234567890}
 	if len(merged.IncludeChatIDs) != len(wantInclude) {
 		t.Fatalf("IncludeChatIDs = %#v, want %#v", merged.IncludeChatIDs, wantInclude)
 	}
