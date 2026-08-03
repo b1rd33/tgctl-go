@@ -731,6 +731,10 @@ account before running them:</p>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_CHAT_ID</span><span class="o">=</span><span class="s2">&quot;&lt;chat-id-from-your-own-account&gt;&quot;</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_MESSAGE_ID</span><span class="o">=</span><span class="s2">&quot;&lt;message-id-containing-media&gt;&quot;</span>
 </span></code></pre></div>
+<p>If app credentials are not configured yet, run <code>tg setup</code> from the project
+directory. It writes only <code>TG_API_ID</code> and <code>TG_API_HASH</code> into a mode-0600 <code>.env</code>
+on Unix and preserves unrelated entries. Login can use <code>tg login --qr</code> in an
+interactive terminal; QR login still requires the same app credentials.</p>
 <h2 id="1-sync-a-fast-view-of-your-dialogs">1. Sync a fast view of your dialogs<a class="headerlink" href="#1-sync-a-fast-view-of-your-dialogs" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TG_ACCOUNT_NAME</span><span class="s2">&quot;</span><span class="w"> </span>discover<span class="w"> </span>--allow-write
 </span></code></pre></div>

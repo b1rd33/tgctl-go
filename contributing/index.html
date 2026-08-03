@@ -838,6 +838,7 @@ clean.</p>
 <code>.env</code>.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>scripts/live_verify.sh
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>scripts/import_export_simulation.sh
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>scripts/live_permissions.sh
 </span></code></pre></div>
 <p><code>scripts/live_verify.sh</code> covers the command surface. The import/export
 simulation creates 20 synthetic self-chat inquiries, groups them into
@@ -848,6 +849,12 @@ running these scripts. They fail closed when required targets are absent and
 write raw output to a private temporary workspace that is removed on exit.
 Raw-output retention variables are intentionally rejected. Never commit live
 output.
+For the permission smoke test, set <code>TGCTL_LIVE_PERMISSION_CHAT</code>,
+<code>TGCTL_LIVE_ALLOWED_ACCOUNT</code>, and <code>TGCTL_LIVE_DENIED_ACCOUNT</code> to two already
+authorized accounts and a disposable group/channel. The script sends one
+uniquely marked message from the allowed account and expects the denied account
+to return <code>PERMISSION_DENIED</code> (exit 10). It never deliberately creates a flood
+wait and never bans, promotes, deletes, or mass-messages.
 For the import/export simulation, set <code>TGCTL_LIVE_FORUM_CHAT</code> explicitly and set
 <code>TGCTL_LIVE_FOLDER_TARGETS</code> to four ordered, comma-separated dedicated test chat
 IDs. The script does not infer write targets from cached dialogs.</p>

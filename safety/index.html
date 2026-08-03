@@ -1003,7 +1003,10 @@ their final dispatch outcome. <code>download-media</code> and <code>backfill</co
 treat failure to finalize that audit record after a committed artifact as a
 partial committed error instead of silently reporting success.</p>
 <p><code>audit.log</code> lives at <code>accounts/&lt;name&gt;/audit.log</code> and is append-only.
-File permissions are 0600 (owner-only read/write).</p>
+On Unix, sensitive files are created with mode 0600 (owner-only
+read/write). Windows does not expose POSIX mode bits through Go's
+<code>os.FileMode</code>; there, protection comes from the inherited ACL on the
+private account root and the session lock remains exclusive.</p>
 <h2 id="local-rate-limiter">Local rate limiter<a class="headerlink" href="#local-rate-limiter" title="Permanent link">&para;</a></h2>
 <p>A sliding window caps outbound Telegram writes at 20 per 60 seconds
 by default. Hitting it raises <code>LOCAL_RATE_LIMIT</code> with a
@@ -1017,7 +1020,7 @@ time to notice and stop.</p>
 <code>accounts/&lt;name&gt;/tg.session.lock</code>. Pass <code>--lock-wait &lt;secs&gt;</code> to wait
 up to N seconds for the lock instead of failing immediately.</p>
 <h2 id="file-permissions">File permissions<a class="headerlink" href="#file-permissions" title="Permanent link">&para;</a></h2>
-<p>Sensitive files in <code>accounts/&lt;name&gt;/</code> are chmod'd to owner-only:</p>
+<p>On Unix, sensitive files in <code>accounts/&lt;name&gt;/</code> are chmod'd to owner-only:</p>
 <table>
 <thead>
 <tr>
@@ -1048,7 +1051,9 @@ up to N seconds for the lock instead of failing immediately.</p>
 </tr>
 </tbody>
 </table>
-<p>This is best-effort and never blocks the operation if it fails.</p>
+<p>This is best-effort and never blocks the operation if it fails.
+On Windows, Go reports implementation-defined POSIX mode bits; the account
+root's inherited ACL is the protection boundary instead.</p>
 <h2 id="exit-codes">Exit codes<a class="headerlink" href="#exit-codes" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1108,6 +1113,26 @@ up to N seconds for the lock instead of failing immediately.</p>
 <td>9</td>
 <td>PREMIUM_REQUIRED</td>
 <td>Telegram requires Premium for this action</td>
+</tr>
+<tr>
+<td>10</td>
+<td>PERMISSION_DENIED</td>
+<td>Telegram refused the operation because of chat/member permissions</td>
+</tr>
+<tr>
+<td>11</td>
+<td>ARCHIVE_MISSING</td>
+<td>Local archive manifest references missing media</td>
+</tr>
+<tr>
+<td>12</td>
+<td>ARCHIVE_CHANGED</td>
+<td>Local archive media size or hash changed</td>
+</tr>
+<tr>
+<td>13</td>
+<td>ARCHIVE_EXTRA</td>
+<td>Local media root contains an unrecorded artifact</td>
 </tr>
 </tbody>
 </table>
