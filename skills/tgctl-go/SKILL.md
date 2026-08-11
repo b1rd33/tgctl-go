@@ -1,6 +1,6 @@
 ---
 name: tgctl-go
-description: Use when operating the tgctl-go Telegram CLI for account-scoped messages, media albums, backfills, downloads, synchronization, local archives, permissions, or releases
+description: Use when operating the tgctl-go Telegram CLI for account/auth, discovery/cache, messages, media, synchronization, exports, folders, moderation, forum topics, permissions, or releases
 ---
 
 # tgctl-go Telegram CLI
@@ -23,6 +23,94 @@ audit logs, and raw live transcripts out of source control.
 - Never place Telegram IDs, usernames, phone numbers, invite links, API
   credentials, session paths, captions, source/media paths, message contents,
   database files, or audit lines in logs, prompts, commits, or public issues.
+
+## Complete command coverage
+
+The CLI has 74 commands. Do not infer that the album workflow is the whole
+product. Use the bundled [complete command reference](references/commands.md)
+for the exact usage, flags, examples, and output fields; it is generated from
+the same Cobra help used to build `docs/commands.md`.
+
+- **Identity and account state:** `account-sessions`, `accounts-add`,
+  `accounts-list`, `accounts-remove`, `accounts-show`, `accounts-use`,
+  `import-telethon-session`, `login`, `me`, `setup`, `terminate-session`.
+- **Discovery, cache, and reads:** `backfill`, `backfill-entities`,
+  `chats-info`, `chat-members`, `chat-pinned-list`, `contacts`, `discover`,
+  `doctor`, `get-msg`, `list-msgs`, `search`, `show`, `stats`, `sync-contacts`,
+  `topics-list`, `unread`.
+- **Messages:** `delete-msg`, `edit-msg`, `forward`, `mark-read`, `pin-msg`,
+  `react`, `send`, `send-by-username`, `unpin-msg`.
+- **Media:** `download-album`, `download-media`, `upload-album`,
+  `upload-document`, `upload-photo`, `upload-video`, `upload-voice`.
+- **Synchronization and archives:** `export`, `listen`, `sync`.
+- **Dialog folders:** `folder-add-chat`, `folder-create`, `folder-delete`,
+  `folder-edit`, `folder-remove-chat`, `folder-show`, `folders-list`,
+  `folders-reorder`.
+- **Chat administration:** `ban-from-chat`, `block-user`, `chat-description`,
+  `chat-invite-link`, `chat-photo`, `chat-title`, `demote`, `kick`,
+  `leave-chat`, `promote`, `set-permissions`, `unban-from-chat`,
+  `unblock-user`.
+- **Forum topics:** `topic-create`, `topic-edit`, `topic-pin`, `topic-unpin`.
+- **Shell utilities:** `completion`, `help`, `version`.
+
+### Universal CLI contract
+
+The general form is `tg [global flags] <command> [command flags]`. Every
+command supports the applicable global flags `--account`, `--full`, `--json`,
+`--human`, `--lock-wait`, `--read-only`, and `--version`. Non-interactive
+stdout defaults to JSON; use `--human` only for a person at a terminal.
+
+- Resolve the account before resolving a chat. An explicit `--account` is
+  mandatory for automation, even when one account is currently selected.
+- Numeric IDs and `@usernames` are deterministic selectors. A title-like
+  selector on a write requires `--fuzzy`; never guess a write target.
+- `--allow-write` gates Telegram writes and local state/media writes. Commands
+  such as `discover`, `backfill`, `sync`, and `download-*` can need it even
+  when their primary purpose sounds read-only. `--read-only` wins and
+  prevents database, session, audit, and media-path creation too.
+- Destructive or administrative operations require typed `--confirm` after
+  the target is resolved. Treat `delete-msg`, `leave-chat`, bans/kicks,
+  block/unblock, promote/demote, `terminate-session`, folder deletion, and
+  permission changes as writes; inspect `tg <command> --help` for the exact
+  confirmation value.
+- `--dry-run` exists only on selected commands. It still enforces write and
+  confirmation gates, but must make zero Telegram/network calls. Never assume
+  every command has a dry-run mode.
+- `--idempotency-key` is per account and command. Reuse it only for an
+  identical request; a definitive rejection can be reported, but an unknown
+  transport result must not be retried blindly.
+- JSON is a stable envelope with `ok`, `command`, and `request_id`; success
+  puts command data in the result/payload, and failure puts a structured
+  `error.code` and `error.message` in the envelope. Preserve the envelope in
+  automation instead of scraping human text.
+
+### What each command family actually changes
+
+- **Account commands** create, select, inspect, import, authorize, or remove
+  isolated account state. `login`/`import-telethon-session` affect sessions;
+  `accounts-remove` deletes an account directory only after confirmation.
+- **Discovery/cache commands** populate or query the local SQLite mirror.
+  `backfill` fetches history and preserves album grouping; `discover` caches
+  dialogs/entities; `sync-contacts` and `backfill-entities` fill lookup data;
+  `doctor` diagnoses configuration; `stats` reports local counts.
+- **Message commands** operate on text or cached message IDs. `send` needs
+  an entity cache; `send-by-username` resolves an `@username` directly.
+  `forward`, edit, reactions, read markers, pins, and deletes are Telegram
+  writes and should return their JSON envelope for audit/retry decisions.
+- **Media commands** upload one file or a 2–10 item group, or download media
+  into the account-scoped media root. Use the album rules below and the
+  complete reference for per-kind flags and size limits.
+- **Folder and administration commands** mutate Telegram dialog folders,
+  chat metadata, membership, permissions, moderation, and forum topics.
+  They require explicit targets, write gates, and typed confirmations where
+  the command exposes `--confirm`; never run them against a real group for a
+  smoke test.
+- **`listen` and `sync`** are long-running/event workflows. `sync` persists
+  checkpoints and can use `--follow --once`; `listen` streams update envelopes
+  and should be bounded with `--once` in deterministic tests.
+- **`export`** is local-only: it reads the SQLite snapshot and media root,
+  emits JSONL/CSV/HTML, and can create/verify a manifest without contacting
+  Telegram. `completion`, `help`, and `version` are local shell utilities.
 
 ## Setup and login
 

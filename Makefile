@@ -30,7 +30,9 @@ docs-commands:
 	go build -ldflags "$(VERSION_LDFLAGS)" -o "$$work/tg" ./cmd/tg; \
 	TGCTL_DOCS_BINARY="$$work/tg" go run ./tools/gen_commands_md/main.go > "$$output"; \
 	chmod 0644 "$$output"; \
-	mv "$$output" docs/commands.md
+	mv "$$output" docs/commands.md; \
+	mkdir -p skills/tgctl-go/references; \
+	cp docs/commands.md skills/tgctl-go/references/commands.md
 
 docs-commands-check:
 	@set -eu; \
@@ -40,9 +42,10 @@ docs-commands-check:
 	trap cleanup EXIT HUP INT TERM; \
 	go build -ldflags "$(VERSION_LDFLAGS)" -o "$$work/tg" ./cmd/tg; \
 	TGCTL_DOCS_BINARY="$$work/tg" go run ./tools/gen_commands_md/main.go > "$$output"; \
-	if cmp -s docs/commands.md "$$output"; then exit 0; fi; \
+	if cmp -s docs/commands.md "$$output" && cmp -s skills/tgctl-go/references/commands.md "$$output"; then exit 0; fi; \
 	echo "docs/commands.md is out of date; run 'make docs-commands'" >&2; \
 	diff -u docs/commands.md "$$output" || true; \
+	diff -u skills/tgctl-go/references/commands.md "$$output" || true; \
 	exit 1
 
 public-hygiene:
