@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Telegram CLI for Go — same contract as Python tgctl, single static binary">
+        <meta name="description" content="Telegram CLI for Go — account operations in a single static binary">
       
       
       
@@ -436,7 +436,7 @@
   <span class="md-ellipsis">
     
   
-    Reliability and migration
+    Reliability
   
 
     
@@ -646,7 +646,7 @@
 
 
 <h1 id="reliability-roadmap">Reliability roadmap<a class="headerlink" href="#reliability-roadmap" title="Permanent link">&para;</a></h1>
-<p>Research dated 12 September 2026, against the v0.1.9-era implementation and pinned gotd v0.144.0. Reliability repairs were subsequently authorized. This document preserves the independently researched feature proposals; B/C features are not implied to have been implemented. See <a href="../reliability/">reliability and migration</a> for the repaired contract and verification scope.</p>
+<p>Research dated 12 September 2026, against the v0.1.9-era implementation and pinned gotd v0.144.0. Reliability repairs were subsequently authorized. This document preserves the independently researched feature proposals; B/C features are not implied to have been implemented. See <a href="../reliability/">reliability</a> for the repaired contract and verification scope.</p>
 <p>Priorities: A (correctness and reliability) precedes B (everyday additions), then C (optional); D is deliberately excluded. Keep gotd, Cobra and SQLite. No feature-parity rewrite or dependency upgrade is required to implement the selected repairs.</p>
 <p><strong>Primary-source comparison</strong></p>
 <p>The comparator sample is deliberately small: gotd/cli for practical CLI workflows, Telethon for mature account APIs, and official TDLib for update/storage behavior. Their documentation is capability evidence, not proof their implementations are bug-free or that every feature belongs here.</p>
@@ -785,7 +785,7 @@
 <h2 id="execution-order">Execution order<a class="headerlink" href="#execution-order" title="Permanent link">&para;</a></h2>
 <ol>
 <li>Complete A repairs and offline verification: peer/session identity, durable write outcomes, permissions/deletion semantics, recovery checkpoints, truthful reads, storage/privacy/waits.</li>
-<li>Review native OS CI and migration compatibility. Any live acceptance uses separately authorized test accounts and targets.</li>
+<li>Review native OS CI and current-schema validation. Any live acceptance uses separately authorized test accounts and targets.</li>
 <li>Consider B1–B5 individually, with the evidence, account-safety implications, complexity and tests above. B6–B8 follow demonstrated demand.</li>
 <li>C remains optional. Do not implement D.</li>
 </ol>

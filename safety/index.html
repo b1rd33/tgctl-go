@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Telegram CLI for Go — same contract as Python tgctl, single static binary">
+        <meta name="description" content="Telegram CLI for Go — account operations in a single static binary">
       
       
       
@@ -637,7 +637,7 @@
   <span class="md-ellipsis">
     
   
-    Reliability and migration
+    Reliability
   
 
     
@@ -985,8 +985,8 @@ requires <code>--allow-write</code> per invocation. Read commands do not.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_READONLY</span><span class="o">=</span><span class="m">1</span>
 </span></code></pre></div>
 <p>This rejects writes even with <code>--allow-write</code> flagged. It also prevents local
-state mutation or creation: account directories, SQLite databases and
-migrations, session state, audit logs, and startup migrations remain untouched.
+state mutation or creation: account directories, SQLite databases,
+session state, and audit logs remain untouched.
 Telegram reads use read-only session storage.</p>
 <p><code>--allow-write</code> is permission for the requested operation. For example,
 <code>backfill</code> and <code>download-media</code> require it because they update local state.</p>
@@ -1248,7 +1248,7 @@ original request actually landed before the FloodWait fired.</p>
 <li><a href="../quickstart/">Quickstart</a> — first safe send</li>
 </ul>
 <h2 id="durable-recovery-contract">Durable recovery contract<a class="headerlink" href="#durable-recovery-contract" title="Permanent link">&para;</a></h2>
-<p>See <a href="../reliability/">reliability and migration</a> for durable request records, non-expiring unknown outcomes, persistent account rate limits/server waits, marked peer IDs, event acknowledgments, private snapshots and read-only limitations. The local rate guard cannot guarantee Telegram account safety.</p>
+<p>See <a href="../reliability/">reliability</a> for durable request records, non-expiring unknown outcomes, persistent account rate limits/server waits, marked peer IDs, event acknowledgments, private snapshots and read-only limitations. The local rate guard cannot guarantee Telegram account safety.</p>
 
 
 

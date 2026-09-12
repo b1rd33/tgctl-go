@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Telegram CLI for Go — same contract as Python tgctl, single static binary">
+        <meta name="description" content="Telegram CLI for Go — account operations in a single static binary">
       
       
       
@@ -436,7 +436,7 @@
   <span class="md-ellipsis">
     
   
-    Reliability and migration
+    Reliability
   
 
     
@@ -625,17 +625,6 @@
     <span class="md-ellipsis">
       
         tg accounts-remove &lt;name&gt;
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#tg-import-telethon-session-path" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        tg import-telethon-session &lt;path&gt;
       
     </span>
   </a>
@@ -841,17 +830,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#tg-import-telethon-session-path" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        tg import-telethon-session &lt;path&gt;
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -992,12 +970,6 @@ an explicit <code>--account</code> uses this one.</p>
 if you want them.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>tg<span class="w"> </span>accounts-remove<span class="w"> </span>old-test-account<span class="w"> </span>--confirm<span class="w"> </span>old-test-account
 </span></code></pre></div>
-<h3 id="tg-import-telethon-session-path"><code>tg import-telethon-session &lt;path&gt;</code><a class="headerlink" href="#tg-import-telethon-session-path" title="Permanent link">&para;</a></h3>
-<p>Adopt a Python <code>tgctl</code> / Telethon session as the current Go account's
-session.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>tg<span class="w"> </span>import-telethon-session<span class="w"> </span><span class="s2">"</span><span class="nv">$TELETHON_SESSION_PATH</span><span class="s2">"</span>
-</span></code></pre></div>
-<p>Run <code>tg me</code> after import to verify the adopted account.</p>
 <h2 id="selecting-an-account-at-command-time">Selecting an account at command time<a class="headerlink" href="#selecting-an-account-at-command-time" title="Permanent link">&para;</a></h2>
 <p>Account selection has one exact precedence order, highest first:</p>
 <ol>
@@ -1006,30 +978,30 @@ session.</p>
 <li>The current selector at <code>accounts/.current</code></li>
 <li>Falls back to <code>default</code></li>
 </ol>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>tg<span class="w"> </span>--account<span class="w"> </span>work<span class="w"> </span>send<span class="w"> </span><span class="s2">"</span><span class="nv">$TG_CHAT_ID</span><span class="s2">"</span><span class="w"> </span><span class="s2">"..."</span><span class="w"> </span>--allow-write
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nv">TG_ACCOUNT</span><span class="o">=</span>work<span class="w"> </span>tg<span class="w"> </span>me
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>tg<span class="w"> </span>accounts-use<span class="w"> </span>work<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>tg<span class="w"> </span>me
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>tg<span class="w"> </span>--account<span class="w"> </span>work<span class="w"> </span>send<span class="w"> </span><span class="s2">"</span><span class="nv">$TG_CHAT_ID</span><span class="s2">"</span><span class="w"> </span><span class="s2">"..."</span><span class="w"> </span>--allow-write
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nv">TG_ACCOUNT</span><span class="o">=</span>work<span class="w"> </span>tg<span class="w"> </span>me
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>tg<span class="w"> </span>accounts-use<span class="w"> </span>work<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>tg<span class="w"> </span>me
 </span></code></pre></div>
 <h2 id="test-account-walkthrough">Test account walkthrough<a class="headerlink" href="#test-account-walkthrough" title="Permanent link">&para;</a></h2>
 <p>For agent development, create a separate account directory and keep the
 account selector explicit:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nb">cd</span><span class="w"> </span><span class="s2">"</span><span class="nv">$TGCTL_GO_CHECKOUT</span><span class="s2">"</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>tg<span class="w"> </span>accounts-add<span class="w"> </span><span class="nb">test</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>login
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>me
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>backfill-entities<span class="w"> </span>--allow-write
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>discover<span class="w"> </span>--allow-write
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>stats
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nb">cd</span><span class="w"> </span><span class="s2">"</span><span class="nv">$TGCTL_GO_CHECKOUT</span><span class="s2">"</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>tg<span class="w"> </span>accounts-add<span class="w"> </span><span class="nb">test</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>login
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>me
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>backfill-entities<span class="w"> </span>--allow-write
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>discover<span class="w"> </span>--allow-write
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>stats
 </span></code></pre></div>
 <p>The files are isolated under:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>accounts/test/tg.session
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>accounts/test/telegram.sqlite
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>accounts/test/audit.log
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>accounts/test/media/
+<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>accounts/test/tg.session
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>accounts/test/telegram.sqlite
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>accounts/test/audit.log
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>accounts/test/media/
 </span></code></pre></div>
 <p>Then test self-chat read/write:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>send<span class="w"> </span><span class="s2">"</span><span class="nv">$TG_CHAT_ID</span><span class="s2">"</span><span class="w"> </span><span class="s2">"hello from the sandbox account"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>show<span class="w"> </span><span class="s2">"</span><span class="nv">$TG_CHAT_ID</span><span class="s2">"</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">5</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>send<span class="w"> </span><span class="s2">"</span><span class="nv">$TG_CHAT_ID</span><span class="s2">"</span><span class="w"> </span><span class="s2">"hello from the sandbox account"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>show<span class="w"> </span><span class="s2">"</span><span class="nv">$TG_CHAT_ID</span><span class="s2">"</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">5</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p>If you rely on <code>.env</code>, run these from the directory containing <code>.env</code>.
 If you run from <code>~/accounts/test</code> or another directory, export
@@ -1039,7 +1011,7 @@ If you run from <code>~/accounts/test</code> or another directory, export
 default account is intentional.</p>
 <p>The default destination for <code>download-media</code> and media-enabled <code>backfill</code> is
 also selected-account scoped:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>accounts/&lt;account-name&gt;/media/&lt;chat-id&gt;/
+<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>accounts/&lt;account-name&gt;/media/&lt;chat-id&gt;/
 </span></code></pre></div>
 <p><code>download-media --output &lt;directory&gt;</code> overrides that destination for one
 call. Account selection still controls which session, cache, and audit log are

@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Telegram CLI for Go — same contract as Python tgctl, single static binary">
+        <meta name="description" content="Telegram CLI for Go — account operations in a single static binary">
       
       
       
@@ -593,7 +593,7 @@
   <span class="md-ellipsis">
     
   
-    Reliability and migration
+    Reliability
   
 
     
@@ -898,7 +898,7 @@ and <code>TG_API_HASH</code> in <code>.env</code>.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_API_ID</span><span class="o">=</span><span class="m">12345678</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_API_HASH</span><span class="o">=</span>abcdef0123456789abcdef0123456789
 </span></code></pre></div>
-<p><code>tg</code> reads <code>.env</code> from its stable data root. Set <code>TGCTL_HOME</code> to an absolute existing installation root, or use the OS user-configuration directory plus <code>tgctl</code>. See <a href="../reliability/">migration and reliability</a>. You can also export credentials in your shell profile.</p>
+<p><code>tg</code> reads <code>.env</code> from its stable data root. Set <code>TGCTL_HOME</code> to an absolute existing installation root, or use the OS user-configuration directory plus <code>tgctl</code>. See <a href="../reliability/">reliability</a>. You can also export credentials in your shell profile.</p>
 <h2 id="first-login">First login<a class="headerlink" href="#first-login" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>tg<span class="w"> </span>login
 </span></code></pre></div>

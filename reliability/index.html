@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Telegram CLI for Go — same contract as Python tgctl, single static binary">
+        <meta name="description" content="Telegram CLI for Go — account operations in a single static binary">
       
       
       
@@ -27,7 +27,7 @@
     
     
       
-        <title>Reliability and migration - tgctl-go</title>
+        <title>Reliability - tgctl-go</title>
       
     
     
@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#reliability-and-migration" class="md-skip">
+        <a href="#reliability" class="md-skip">
           Skip to content
         </a>
       
@@ -114,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Reliability and migration
+              Reliability
             
           </span>
         </div>
@@ -445,7 +445,7 @@
   <span class="md-ellipsis">
     
   
-    Reliability and migration
+    Reliability
   
 
     
@@ -463,7 +463,7 @@
   <span class="md-ellipsis">
     
   
-    Reliability and migration
+    Reliability
   
 
     
@@ -500,10 +500,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#marked-peer-ids-and-legacy-caches" class="md-nav__link">
+  <a href="#marked-peer-ids" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Marked peer IDs and legacy caches
+        Marked peer IDs
       
     </span>
   </a>
@@ -692,10 +692,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#marked-peer-ids-and-legacy-caches" class="md-nav__link">
+  <a href="#marked-peer-ids" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Marked peer IDs and legacy caches
+        Marked peer IDs
       
     </span>
   </a>
@@ -777,15 +777,15 @@
   
 
 
-<h1 id="reliability-and-migration">Reliability and migration<a class="headerlink" href="#reliability-and-migration" title="Permanent link">&para;</a></h1>
-<p>These repairs follow v0.1.9. They change several incorrect or unsafe behaviors. They do not promise complete historical coverage, exactly-once delivery, or immunity from Telegram restrictions.</p>
+<h1 id="reliability">Reliability<a class="headerlink" href="#reliability" title="Permanent link">&para;</a></h1>
+<p>The CLI does not promise complete historical coverage, exactly-once delivery, or immunity from Telegram restrictions.</p>
 <h2 id="account-location-and-ownership">Account location and ownership<a class="headerlink" href="#account-location-and-ownership" title="Permanent link">&para;</a></h2>
-<p><code>TGCTL_HOME</code> selects an absolute data directory. With no override, the directory is <code>tgctl</code> under Go's OS user-configuration directory (macOS: <code>~/Library/Application Support/tgctl</code>; Linux normally <code>~/.config/tgctl</code>; Windows normally <code>%AppData%/tgctl</code>). <code>.env</code> is loaded from that directory. For an existing checkout-based installation, set <code>TGCTL_HOME</code> to its existing absolute root before running the new binary. Changing the working directory no longer changes the selected account store.</p>
-<p>Every network client, login and session import acquires exclusive session ownership. <code>--lock-wait</code> is cancellable and bounded to 3600 seconds. Local cache reads remain possible while another client listens; simultaneous network commands wait or fail. Read-only network use requires an existing ownership sidecar and matching account-identity cache; it cannot create them. Session replacement is atomic and private. Imports refuse an existing destination session. Account paths reject symlinks; Unix sessions reject hard-link aliases. Windows file protection relies on private directory ACLs.</p>
-<p>Root-layout migration holds session ownership, stages moves and rolls back failures. It refuses an outstanding nonempty SQLite WAL: stop all users and checkpoint the legacy database before retrying. It does not silently move only the main database or ignore rename errors.</p>
-<h2 id="marked-peer-ids-and-legacy-caches">Marked peer IDs and legacy caches<a class="headerlink" href="#marked-peer-ids-and-legacy-caches" title="Permanent link">&para;</a></h2>
+<p><code>TGCTL_HOME</code> selects an absolute data directory. With no override, the directory is <code>tgctl</code> under Go's OS user-configuration directory (macOS: <code>~/Library/Application Support/tgctl</code>; Linux normally <code>~/.config/tgctl</code>; Windows normally <code>%AppData%/tgctl</code>). <code>.env</code> is loaded from that directory. Changing the working directory no longer changes the selected account store.</p>
+<p>Every network client and login acquires exclusive session ownership. <code>--lock-wait</code> is cancellable and bounded to 3600 seconds. Local cache reads remain possible while another client listens; simultaneous network commands wait or fail. Read-only network use requires an existing ownership sidecar and matching account-identity cache; it cannot create them. Session replacement is atomic and private. Account paths reject symlinks; Unix sessions reject hard-link aliases. Windows file protection relies on private directory ACLs.</p>
+<p>Account files live only under <code>accounts/&lt;name&gt;/</code>. Root-level files are never adopted or moved. There is no session import or database conversion path. Unsupported cache schemas fail explicitly; use a separate new account cache rather than guessing peer identities. Existing files are not deleted.</p>
+<h2 id="marked-peer-ids">Marked peer IDs<a class="headerlink" href="#marked-peer-ids" title="Permanent link">&para;</a></h2>
 <p>Users retain positive IDs; basic groups use <code>-raw_id</code>; channels/supergroups use <code>-1000000000000-raw_id</code>. Confirmation values, cached keys and emitted events use these marked IDs. Only raw IDs are sent inside the corresponding typed Telegram API peer.</p>
-<p>Old caches can contain irreversibly colliding user/group/channel IDs. Migration preserves their chat/entity/message/history-state tables under <code>_legacy_v1</code>, then creates empty active tables. It never guesses message ownership. <code>doctor</code> reports preserved legacy history. Re-discover and backfill the active cache; <code>export &lt;legacy-id&gt; --legacy-cache</code> reads the preserved history locally. Legacy rows cannot supply live write targets. Account/session identity mismatches stop startup.</p>
+<p>Account/session identity mismatches stop startup.</p>
 <h2 id="write-outcomes-and-retries">Write outcomes and retries<a class="headerlink" href="#write-outcomes-and-retries" title="Permanent link">&para;</a></h2>
 <p>Every supported Telegram mutation records its exact TL request, including random IDs and resolved peers, before invocation. Returned responses and accepted/rejected/unknown state are stored in the private account database. Audit logs omit message text, selectors, captions, paths, invite links and payload previews; they retain bounded operational metadata and are flushed.</p>
 <p>Use <code>--idempotency-key</code> for a retryable command, including <code>send-by-username</code>. Keys bind the command and full request fingerprint. A completed identical request replays its recorded result; a different request is rejected. Pending/unknown operations never expire into an automatic resend. <code>operations-list</code> exposes safe outcome metadata without exposing serialized requests. A rejected operation can be retried after correcting the refusal; prepared/unknown records require reconciliation. There is deliberately no force-resend or automatic reservation-release command.</p>
