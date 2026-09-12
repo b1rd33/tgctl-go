@@ -51,6 +51,8 @@ func TestSessionLockReadonlyDoesNotCreateOrTruncate(t *testing.T) {
 	if err := other.Acquire(path, 0); err == nil {
 		t.Fatal("contender acquired")
 	}
+	// Windows locks are mandatory for other handles, including in this process.
+	lock.Release()
 	b, err := os.ReadFile(path + ".lock")
 	if err != nil || string(b) != "owner" {
 		t.Fatalf("lock contents changed: %v", err)

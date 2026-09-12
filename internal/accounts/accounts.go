@@ -337,6 +337,13 @@ func (m *Manager) MaybeMigrateDefaultFromRoot() (moved bool, resultErr error) {
 	if len(present) == 0 {
 		return false, nil
 	}
+	// Sidecar contents are legacy metadata, not ownership. Snapshot them before
+	// acquisition: Windows byte-range locks forbid a second handle from reading
+	// the locked range even in the owning process.
+	lockBytes, readErr := os.ReadFile(filepath.Join(m.Root, "tg.session.lock"))
+	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+		return false, readErr
+	}
 	lock := &safety.SessionLock{}
 	if err := lock.Acquire(filepath.Join(m.Root, "tg.session"), 0); err != nil {
 		return false, err
@@ -370,11 +377,7 @@ func (m *Manager) MaybeMigrateDefaultFromRoot() (moved bool, resultErr error) {
 		}
 	}()
 	// Keep the original ownership inode in place until the migration completes.
-	b, err := os.ReadFile(filepath.Join(m.Root, "tg.session.lock"))
-	if err != nil {
-		return false, err
-	}
-	if err := os.WriteFile(filepath.Join(stage, "tg.session.lock"), b, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(stage, "tg.session.lock"), lockBytes, 0600); err != nil {
 		return false, err
 	}
 	for _, name := range present {
