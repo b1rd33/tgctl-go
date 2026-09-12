@@ -20,9 +20,14 @@ package writes
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/b1rd33/tgctl-go/internal/output"
+	"io"
+	"os"
 	"strconv"
 	"strings"
 
@@ -52,8 +57,10 @@ type ConfirmedTarget struct {
 
 // PipelineInput is what the caller hands the pipeline.
 type PipelineInput struct {
-	Cmd            string
-	RawSelector    string
+	Cmd         string
+	RawSelector string
+	// LiveSelector defers username resolution to the action after reservation.
+	LiveSelector   bool
 	Args           Args
 	DBPath         string
 	AuditPath      string
@@ -83,7 +90,34 @@ func Run(ctx context.Context, db *sql.DB, in PipelineInput) (any, error) {
 		return nil, err
 	}
 
+	digests := map[string]string{}
+	for _, key := range []string{"file_path", "photo"} {
+		if path, ok := in.PayloadPreview[key].(string); ok && path != "" {
+			f, err := os.Open(path)
+			if err != nil {
+				return nil, err
+			}
+			h := sha256.New()
+			_, err = io.Copy(h, f)
+			_ = f.Close()
+			if err != nil {
+				return nil, err
+			}
+			in.PayloadPreview[key+"_sha256"] = fmt.Sprintf("%x", h.Sum(nil))
+			digests[path] = fmt.Sprintf("%x", h.Sum(nil))
+		}
+	}
+	if in.Args.IdempotencyFingerprint == "" {
+		encoded, err := json.Marshal(map[string]any{"command": in.Cmd, "selector": in.RawSelector, "payload": in.PayloadPreview, "confirmed": in.ConfirmedTarget})
+		if err != nil {
+			return nil, err
+		}
+		in.Args.IdempotencyFingerprint = fmt.Sprintf("%x", sha256.Sum256(encoded))
+	}
 	requestID := dispatch.RequestIDFrom(ctx)
+	if requestID == "" {
+		requestID = output.NewRequestID()
+	}
 	albumReservation := false
 	releaseAlbumReservation := func() {
 		if albumReservation {
@@ -96,7 +130,7 @@ func Run(ctx context.Context, db *sql.DB, in PipelineInput) (any, error) {
 		if expected := strings.TrimSpace(in.Args.IdempotencyFingerprint); expected != "" {
 			actual := strings.TrimSpace(fmt.Sprintf("%v", cached["idempotency_fingerprint"]))
 			if actual == "" || actual != expected {
-				return nil, safety.NewBadArgs("Idempotency key %q was already used for a different album request", in.Args.IdempotencyKey)
+				return nil, safety.NewBadArgs("Idempotency key %q was already used for a different request", in.Args.IdempotencyKey)
 			}
 		}
 		if err := validateConfirmedReplay(in.Args.IdempotencyKey, cached, in.ConfirmedTarget); err != nil {
@@ -126,7 +160,7 @@ func Run(ctx context.Context, db *sql.DB, in PipelineInput) (any, error) {
 			}
 			if !reserved {
 				if idempotency.IsPending(cached) {
-					return nil, safety.NewBadArgs("Idempotency key %q is already in progress", in.Args.IdempotencyKey)
+					return nil, safety.NewBadArgs("Idempotency key %q has an unresolved operation; do not retry it blindly", in.Args.IdempotencyKey)
 				}
 				return replay(cached)
 			}
@@ -143,6 +177,8 @@ func Run(ctx context.Context, db *sql.DB, in PipelineInput) (any, error) {
 	if in.ConfirmedTarget != nil {
 		chatID = in.ConfirmedTarget.ChatID
 		chatTitle = in.ConfirmedTarget.ChatTitle
+	} else if in.LiveSelector {
+		chatTitle = in.RawSelector
 	} else {
 		// 3. Fuzzy gate
 		if err := safety.RequireExplicitOrFuzzy(in.Args.Args, in.RawSelector); err != nil {
@@ -192,20 +228,25 @@ func Run(ctx context.Context, db *sql.DB, in PipelineInput) (any, error) {
 		}
 	}
 
+	// Once execution begins an arbitrary error cannot prove absence of a commit.
+	ctx = safety.WithOperationRandomIDs(ctx, requestID)
+	ctx = safety.WithFileDigests(ctx, digests)
 	// 8. Telegram call
 	data, err := in.Run(ctx, chatID, chatTitle)
 	if err != nil {
+		var rejected *safety.DefinitiveRejection
 		var committed *safety.CommittedWrite
-		if errors.As(err, &committed) {
-			albumReservation = false
-		} else {
+		if errors.As(err, &rejected) && !errors.As(err, &committed) {
 			releaseAlbumReservation()
-		}
+		} else {
+			albumReservation = false
+		} // retain unknown outcomes durably
+
 		return nil, err
 	}
 
 	// Always include the resolved chat in the data so envelopes are uniform.
-	if _, ok := data["chat"]; !ok {
+	if _, ok := data["chat"]; !ok && !in.LiveSelector {
 		data["chat"] = map[string]any{"chat_id": chatID, "title": chatTitle}
 	}
 
@@ -238,7 +279,7 @@ func Run(ctx context.Context, db *sql.DB, in PipelineInput) (any, error) {
 		if recordErr != nil {
 			if strings.TrimSpace(in.Args.IdempotencyFingerprint) != "" {
 				albumReservation = false
-				return nil, safety.NewCommittedWriteWithExtras("album committed but idempotency finalization failed; do not retry blindly", errors.New("idempotency cache finalization failed"), in.CommittedExtras)
+				return nil, safety.NewCommittedWriteWithExtras("operation committed but idempotency finalization failed; do not retry blindly", errors.New("idempotency cache finalization failed"), in.CommittedExtras)
 			}
 			return nil, recordErr
 		}

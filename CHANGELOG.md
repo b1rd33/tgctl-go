@@ -1,5 +1,43 @@
 # Changelog
 
+## v0.2.0 — 2026-09-12
+
+### Compatibility changes
+
+- Use a stable OS configuration directory, or set an absolute `TGCTL_HOME`
+  to retain an existing installation root.
+- Use marked peer IDs to separate users, groups and channels. Ambiguous legacy
+  caches are preserved separately for local export; rediscover active peers.
+- `set-permissions` requires confirmation, promotion takes explicit rights,
+  and `chat-pinned-list` now lists pins in the selected chat.
+
+### Fixed
+
+- Enforce session ownership and atomic private session storage, including
+  cancellable lock waits, import protection and account-identity checks.
+- Persist exact write requests/outcomes and non-expiring idempotency markers;
+  correlate response IDs and snapshot upload bytes against their fingerprints.
+- Preserve moderation/folder restrictions, verify deletion ownership, and
+  expose partial kick and post-commit cache failures.
+- Persist update checkpoints and event delivery, recover paginated gaps, stop
+  on incomplete recovery, and preserve edits/deletions across stale history.
+- Use real dialog read markers, archived dialog pagination, scoped pins and
+  live peer details; add stable cursors for cached history/search.
+- Persist write limits and server cooldowns; redact audit payloads; refuse
+  unsupported expiring downloads and purge managed expiring cache content.
+- Serialize SQLite migrations and preserve old state on migration failure.
+
+### Added
+
+- `operations-list` for safe write-outcome inspection.
+- `db-backup` and `db-restore` for verified, no-overwrite cache snapshots
+  including committed WAL data (sessions/media excluded).
+- Migration guidance and an evidence-backed A/B/C/D capability roadmap.
+
+All offline unit/race/vet/build/docs/hygiene gates passed. No live Telegram
+account tests were performed. See [reliability and migration](docs/reliability.md)
+for recovery limits, upgrade steps and deliberately unsupported behavior.
+
 ## v0.1.9 — 2026-09-12
 
 ### Fixed

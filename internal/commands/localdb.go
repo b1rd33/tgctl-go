@@ -167,6 +167,7 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 				auditArgs["cap_skipped_media"] = capSkippedMedia
 				return map[string]any{
 					"chats_processed":   1,
+					"history_truncated": result.Truncated, "history_next_offset_id": result.NextOffsetID,
 					"messages_inserted": inserted,
 					"messages_skipped":  skipped,
 					"db_size_bytes":     dbSize,
@@ -707,7 +708,7 @@ func discoverCommand(cfg CommandsConfig) *cobra.Command {
 				for _, d := range dialogs {
 					upsertChatRow(db, d.ID, d.Type, d.Title, d.Username)
 				}
-				return map[string]any{"chats": dialogs, "discovered": len(dialogs)}, nil
+				return map[string]any{"chats": dialogs, "discovered": len(dialogs), "source": "telegram", "limit": limit, "may_have_more": len(dialogs) >= limit}, nil
 			})
 			storeExitCode(cmd, code)
 			return nil
@@ -943,8 +944,8 @@ func insertBackfillMessageContext(ctx context.Context, db sqliteContextExecer, r
 	}
 	_, err := db.ExecContext(ctx, `
 		INSERT INTO tg_messages(chat_id, message_id, sender_id, date, text, is_outgoing,
-			reply_to_msg_id, has_media, media_type, media_path, media_id, grouped_id, raw_json, deleted)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+			reply_to_msg_id, has_media, media_type, media_path, media_id, grouped_id, raw_json, deleted, edit_date)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
 		ON CONFLICT(chat_id, message_id) DO UPDATE SET
 			sender_id=excluded.sender_id, date=excluded.date, text=excluded.text,
 			is_outgoing=excluded.is_outgoing, reply_to_msg_id=excluded.reply_to_msg_id,
@@ -964,9 +965,11 @@ func insertBackfillMessageContext(ctx context.Context, db sqliteContextExecer, r
 				WHEN ?='failed' AND excluded.media_id IS NOT NULL AND tg_messages.media_id=excluded.media_id THEN tg_messages.media_id
 				WHEN ?='' THEN excluded.media_id
 				ELSE NULL END,
-			raw_json=excluded.raw_json, deleted=0`,
+			raw_json=excluded.raw_json, edit_date=excluded.edit_date
+ WHERE COALESCE(tg_messages.deleted,0)=0 AND
+ (excluded.edit_date>COALESCE(tg_messages.edit_date,0) OR (excluded.edit_date=COALESCE(tg_messages.edit_date,0) AND excluded.date>=tg_messages.date))`,
 		row.ChatID, row.MessageID, sender, date, nullIfEmpty(row.Text), localDBBoolInt(row.IsOutgoing),
-		reply, localDBBoolInt(row.HasMedia), nullIfEmpty(row.MediaType), nullIfEmpty(row.MediaPath), nullIfEmpty(row.MediaIdentity), nullInt64(row.GroupedID), nullIfEmpty(row.RawJSON),
+		reply, localDBBoolInt(row.HasMedia), nullIfEmpty(row.MediaType), nullIfEmpty(row.MediaPath), nullIfEmpty(row.MediaIdentity), nullInt64(row.GroupedID), nullIfEmpty(row.RawJSON), row.EditDate,
 		row.MediaDisposition, row.MediaDisposition, row.MediaDisposition,
 		row.MediaDisposition, row.MediaDisposition, row.MediaDisposition,
 		row.MediaDisposition, row.MediaDisposition, row.MediaDisposition)

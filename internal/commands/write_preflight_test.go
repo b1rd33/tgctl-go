@@ -105,7 +105,7 @@ func idempotencyCount(t *testing.T, dbPath, key string) int {
 	return count
 }
 
-func auditResolvedChatID(t *testing.T, auditPath string) int64 {
+func assertAuditTargetRedacted(t *testing.T, auditPath string) {
 	t.Helper()
 	file, err := os.Open(auditPath)
 	if err != nil {
@@ -120,11 +120,10 @@ func auditResolvedChatID(t *testing.T, auditPath string) int64 {
 	if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
 		t.Fatal(err)
 	}
-	value, ok := entry["resolved_chat_id"].(float64)
-	if !ok {
+	_, exists := entry["resolved_chat_id"]
+	if exists {
 		t.Fatalf("audit resolved_chat_id=%#v", entry["resolved_chat_id"])
 	}
-	return int64(value)
 }
 
 func TestConfirmedWriteUsesSingleAccountSnapshot(t *testing.T) {
@@ -163,9 +162,7 @@ func TestConfirmedWriteUsesSingleAccountSnapshot(t *testing.T) {
 	if _, err := os.Stat(alpha.audit); err != nil {
 		t.Fatalf("confirmed account audit missing: %v", err)
 	}
-	if got := auditResolvedChatID(t, alpha.audit); got != 1 {
-		t.Fatalf("audit resolved chat=%d want confirmed chat 1", got)
-	}
+	assertAuditTargetRedacted(t, alpha.audit)
 	assertPathMissing(t, beta.audit)
 }
 
@@ -205,9 +202,7 @@ func TestConfirmedWriteDoesNotResolveSelectorAgainAfterCacheChange(t *testing.T)
 	if len(fc.AdminActions) != 1 || fc.AdminActions[0].ChatID != 1 {
 		t.Fatalf("AdminActions=%#v, want confirmed chat 1", fc.AdminActions)
 	}
-	if got := auditResolvedChatID(t, alpha.audit); got != 1 {
-		t.Fatalf("audit resolved chat=%d want confirmed chat 1", got)
-	}
+	assertAuditTargetRedacted(t, alpha.audit)
 }
 
 func TestAdminConfirmedReplayBindsDestinationChat(t *testing.T) {

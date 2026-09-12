@@ -98,25 +98,40 @@ func syncCommand(cfg CommandsConfig) *cobra.Command {
 				defer closeClient()
 
 				backfill, backfillErr := telegramClient.BackfillMessages(ctx, client.BackfillReq{
-					ChatID: chatID, Limit: maxMessages, DownloadMedia: downloadMedia,
+					ChatID: chatID, Limit: maxMessages, DownloadMedia: downloadMedia, AfterMessageID: state.LastMessageID,
 					MediaDir: filepath.Join(paths.mediaDir, strconv.FormatInt(chatID, 10)), MaxMediaBytes: maxMediaBytes, OverwriteMedia: overwriteMedia,
 				})
-				persisted, highest, persistErr := persistSyncBackfill(db, backfill)
+				if backfill.Truncated && state.LastMessageID > 0 && backfillErr == nil {
+					backfillErr = fmt.Errorf("catch-up exceeds --max-messages; increase the limit before advancing history coverage")
+				}
+				tx, err := db.Begin()
+				if err != nil {
+					return nil, err
+				}
+				defer tx.Rollback()
+				persisted, highest, persistErr := persistSyncBackfill(tx, backfill)
 				if persistErr != nil {
 					return nil, persistErr
+				}
+				if backfillErr != nil {
+					if err := tx.Commit(); err != nil {
+						return nil, err
+					}
+					return map[string]any{"chat_id": chatID, "title": title, "messages_persisted": persisted, "last_message_id": state.LastMessageID}, backfillErr
 				}
 				if highest > state.LastMessageID {
 					state.LastMessageID = highest
 				}
 				state.LastSyncAt = time.Now().UTC().Format(time.RFC3339)
 				state.UpdatedAt = state.LastSyncAt
-				if err := store.SaveSyncState(db, state); err != nil {
+				if err := store.SaveSyncState(tx, state); err != nil {
 					return nil, err
 				}
-				if backfillErr != nil {
-					return map[string]any{"chat_id": chatID, "title": title, "messages_persisted": persisted, "last_message_id": state.LastMessageID}, backfillErr
+
+				if err := tx.Commit(); err != nil {
+					return nil, err
 				}
-				result := map[string]any{"chat_id": chatID, "title": title, "messages_persisted": persisted, "last_message_id": state.LastMessageID, "events": 0, "following": follow}
+				result := map[string]any{"history_truncated": backfill.Truncated, "history_next_offset_id": backfill.NextOffsetID, "chat_id": chatID, "title": title, "messages_persisted": persisted, "last_message_id": state.LastMessageID, "events": 0, "following": follow}
 				if !follow {
 					return result, nil
 				}
@@ -129,6 +144,9 @@ func syncCommand(cfg CommandsConfig) *cobra.Command {
 				for {
 					event, listenErr := telegramClient.ListenOnce(ctx)
 					if listenErr != nil {
+						if stopSyncReconnect(listenErr) {
+							return result, listenErr
+						}
 						if ctx.Err() != nil {
 							return result, ctx.Err()
 						}
@@ -139,6 +157,9 @@ func syncCommand(cfg CommandsConfig) *cobra.Command {
 							}
 							telegramClient, err = factory(ctx, paths.sessionPath, paths.dbPath)
 							if err != nil {
+								if stopSyncReconnect(err) {
+									return result, err
+								}
 								telegramClient = nil
 								backoff = min(backoff*2, maxDelay)
 								continue
@@ -152,6 +173,9 @@ func syncCommand(cfg CommandsConfig) *cobra.Command {
 					}
 					backoff = min(100*time.Millisecond, maxDelay)
 					if event.ChatID != chatID {
+						if err := client.AcknowledgeListenEvent(ctx, telegramClient, event); err != nil {
+							return result, err
+						}
 						continue
 					}
 					if err := applyLiveEvent(db, event); err != nil {
@@ -163,6 +187,9 @@ func syncCommand(cfg CommandsConfig) *cobra.Command {
 					state.LastSyncAt = time.Now().UTC().Format(time.RFC3339)
 					state.UpdatedAt = state.LastSyncAt
 					if err := store.SaveSyncState(db, state); err != nil {
+						return result, err
+					}
+					if err := client.AcknowledgeListenEvent(ctx, telegramClient, event); err != nil {
 						return result, err
 					}
 					result["events"] = result["events"].(int) + 1
@@ -198,14 +225,14 @@ func sleepContext(ctx context.Context, delay time.Duration) error {
 	}
 }
 
-func persistSyncBackfill(db *sql.DB, result client.BackfillResult) (persisted int, highest int64, err error) {
+func persistSyncBackfill(db store.DBTX, result client.BackfillResult) (persisted int, highest int64, err error) {
 	for _, row := range result.Messages {
 		text, mediaType, mediaPath, mediaIdentity := row.Text, row.MediaType, row.MediaPath, row.MediaIdentity
 		if upsertErr := store.UpsertLiveMessage(db, store.LiveMessage{
 			ChatID: row.ChatID, MessageID: row.MessageID, SenderID: optEventSender(row.SenderID), Date: row.Date,
 			Text: optEventString(text), IsOutgoing: row.IsOutgoing, ReplyToMsgID: optEventSender(row.ReplyToMsgID), HasMedia: row.HasMedia,
 			MediaType: optEventString(mediaType), MediaPath: optEventString(mediaPath), MediaIdentity: optEventString(mediaIdentity), GroupedID: row.GroupedID,
-			RawJSON: optEventString(row.RawJSON),
+			RawJSON: optEventString(row.RawJSON), EditDate: row.EditDate,
 		}); upsertErr != nil {
 			return persisted, highest, upsertErr
 		}
@@ -215,4 +242,13 @@ func persistSyncBackfill(db *sql.DB, result client.BackfillResult) (persisted in
 		}
 	}
 	return persisted, highest, nil
+}
+
+func stopSyncReconnect(err error) bool {
+	var credentials *safety.MissingCredentials
+	var permission *safety.PermissionDenied
+	var wait *safety.FloodWait
+	var locked *safety.SessionLocked
+	var args *safety.BadArgs
+	return errors.Is(err, client.ErrRecoveryIncomplete) || errors.As(err, &credentials) || errors.As(err, &permission) || errors.As(err, &wait) || errors.As(err, &locked) || errors.As(err, &args)
 }

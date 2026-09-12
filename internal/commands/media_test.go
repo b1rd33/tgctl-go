@@ -42,7 +42,7 @@ func writeMediaFixture(t *testing.T, name string, data []byte) string {
 	return path
 }
 
-func TestUploadDocumentInvokesClientAndAuditsPath(t *testing.T) {
+func TestUploadDocumentInvokesClientWithoutAuditingPath(t *testing.T) {
 	cfg, fc, dir := setupWriteEnv(t)
 	path := writeMediaFixture(t, "doc.bin", []byte("document"))
 
@@ -73,8 +73,8 @@ func TestUploadDocumentInvokesClientAndAuditsPath(t *testing.T) {
 	// doubled. Marshal the expected path and strip the surrounding quotes
 	// to get the same byte form.
 	needle, _ := json.Marshal(filepath.Clean(path))
-	if !strings.Contains(string(auditBytes), string(needle[1:len(needle)-1])) {
-		t.Fatalf("audit missing source path:\n%s", auditBytes)
+	if strings.Contains(string(auditBytes), string(needle[1:len(needle)-1])) {
+		t.Fatalf("audit leaked source path:\n%s", auditBytes)
 	}
 }
 

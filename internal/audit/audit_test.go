@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -59,7 +60,7 @@ func TestWriteCreatesParentDirs(t *testing.T) {
 	}
 }
 
-func TestPreIncludesAllFields(t *testing.T) {
+func TestPreOmitsPrivatePayloadAndTarget(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "audit.log")
 	err := Pre(path, PreEntry{
@@ -85,7 +86,22 @@ func TestPreIncludesAllFields(t *testing.T) {
 	if e["dry_run"] != true {
 		t.Fatalf("dry_run = %#v", e["dry_run"])
 	}
-	if e["resolved_chat_title"] != "Bjørn" {
+	if e["resolved_chat_title"] != nil || e["resolved_chat_id"] != nil || e["payload_preview"] != nil {
 		t.Fatalf("title = %#v", e["resolved_chat_title"])
+	}
+}
+
+func TestAuditDropsNestedPrivatePayloads(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.log")
+	err := Write(path, "send", "synthetic", map[string]any{"limit": map[string]any{"text": "secret-sentinel"}, "text": "secret-sentinel"}, "error", map[string]any{"telegram_error": map[string]any{"nested": "secret-sentinel"}, "error": "secret-sentinel"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "secret-sentinel") {
+		t.Fatal("nested private data leaked")
 	}
 }

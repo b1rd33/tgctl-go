@@ -56,6 +56,10 @@ func Classify(err error) (output.ExitCode, string, map[string]any) {
 		}
 		return output.Generic, committed.Error(), extra
 	}
+	var unknown *safety.UnknownWrite
+	if errors.As(err, &unknown) {
+		return output.Generic, unknown.Error(), map[string]any{"outcome": "unknown", "retry_safe": false, "operation_id": unknown.OperationID}
+	}
 	var ambiguous *resolve.Ambiguous
 	if errors.As(err, &ambiguous) {
 		return output.BadArgs, ambiguous.Error(), map[string]any{"candidates": ambiguous.Candidates}

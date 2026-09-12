@@ -3,11 +3,8 @@ package commands
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"math"
 
-	"github.com/gotd/td/session"
-	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/tg"
 	"github.com/spf13/cobra"
 
@@ -15,7 +12,6 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/client"
 	"github.com/b1rd33/tgctl-go/internal/dispatch"
 	"github.com/b1rd33/tgctl-go/internal/safety"
-	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
 // registerBackfillEntities adds `tg backfill-entities`. It calls
@@ -71,85 +67,33 @@ func runBackfillEntities(ctx context.Context, apiID int, apiHash, sessionPath, d
 	if apiID <= 0 || int64(apiID) > math.MaxInt32 {
 		return nil, safety.NewMissingCredentials("TG_API_ID must be a positive 32-bit integer")
 	}
-	var err error
-	limit, err = defaultedInt32Limit(limit, 200, "limit")
+	if limit <= 0 {
+		limit = 200
+	}
+	if limit > 10000 {
+		return nil, safety.NewBadArgs("limit exceeds 10000")
+	}
+	c, err := client.New(ctx, apiID, apiHash, sessionPath, dbPath)
 	if err != nil {
 		return nil, err
 	}
-	storage := &session.FileStorage{Path: sessionPath}
-	tgc := telegram.NewClient(apiID, apiHash, telegram.Options{SessionStorage: storage})
-
-	db, err := store.Connect(dbPath)
+	defer c.Close()
+	dialogs, err := c.DiscoverDialogs(ctx, limit)
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
-
-	var (
-		users    int
-		channels int
-		basic    int
-	)
-	err = tgc.Run(ctx, func(rctx context.Context) error {
-		api := tgc.API()
-		dialogs, err := api.MessagesGetDialogs(rctx, &tg.MessagesGetDialogsRequest{
-			OffsetPeer: &tg.InputPeerEmpty{},
-			Limit:      limit,
-		})
-		if err != nil {
-			return err
+	users, channels, groups := 0, 0, 0
+	for _, d := range dialogs {
+		switch d.Type {
+		case "user":
+			users++
+		case "channel", "supergroup":
+			channels++
+		case "group":
+			groups++
 		}
-		var (
-			respUsers []tg.UserClass
-			respChats []tg.ChatClass
-		)
-		switch d := dialogs.(type) {
-		case *tg.MessagesDialogs:
-			respUsers, respChats = d.Users, d.Chats
-		case *tg.MessagesDialogsSlice:
-			respUsers, respChats = d.Users, d.Chats
-		default:
-			return fmt.Errorf("unexpected dialogs response type %T", dialogs)
-		}
-		for _, u := range respUsers {
-			if user, ok := u.(*tg.User); ok && !user.Min {
-				if err := store.UpsertEntity(db, user.ID, store.EntityUser, user.AccessHash); err != nil {
-					return err
-				}
-				upsertChatRow(db, user.ID, "user", chatTitleFromUser(user), user.Username)
-				users++
-			}
-		}
-		for _, c := range respChats {
-			switch v := c.(type) {
-			case *tg.Channel:
-				if !v.Min {
-					if err := store.UpsertEntity(db, v.ID, store.EntityChannel, v.AccessHash); err != nil {
-						return err
-					}
-					upsertChatRow(db, v.ID, "channel", v.Title, v.Username)
-					channels++
-				}
-			case *tg.Chat:
-				if err := store.UpsertEntity(db, v.ID, store.EntityChat, 0); err != nil {
-					return err
-				}
-				upsertChatRow(db, v.ID, "group", v.Title, "")
-				basic++
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
 	}
-	return map[string]any{
-		"users_cached":    users,
-		"channels_cached": channels,
-		"basic_groups":    basic,
-		"entities_cached": users + channels + basic,
-		"db_path":         dbPath,
-	}, nil
+	return map[string]any{"users_cached": users, "channels_cached": channels, "basic_groups": groups, "entities_cached": len(dialogs), "limit": limit, "may_have_more": len(dialogs) == limit}, nil
 }
 
 func chatTitleFromUser(u *tg.User) string {

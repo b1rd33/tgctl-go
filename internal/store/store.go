@@ -16,7 +16,23 @@ func Connect(path string) (*sql.DB, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", path)
+	if info, err := os.Lstat(path); err == nil && !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("database must be a regular file without symlinks")
+	} else if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return nil, err
+	}
+	if err := f.Chmod(0600); err != nil {
+		f.Close()
+		return nil, err
+	}
+	if err := f.Close(); err != nil {
+		return nil, err
+	}
+	db, err := sql.Open("sqlite", "file:"+url.PathEscape(path)+"?_pragma=busy_timeout(5000)&_pragma=synchronous(FULL)&_txlock=immediate")
 	if err != nil {
 		return nil, err
 	}
@@ -24,15 +40,30 @@ func Connect(path string) (*sql.DB, error) {
 		db.Close()
 		return nil, err
 	}
-	if _, err := db.Exec(Schema); err != nil {
+	db.SetMaxOpenConns(4)
+	tx, err := db.Begin()
+	if err != nil {
 		db.Close()
 		return nil, err
 	}
-	if err := migrate(db); err != nil {
+	if err = archiveLegacyIdentity(tx); err != nil {
+		_ = tx.Rollback()
 		db.Close()
 		return nil, err
 	}
-	_ = os.Chmod(path, 0o600)
+	if _, err = tx.Exec(Schema); err == nil {
+		err = migrate(tx)
+	}
+	if err != nil {
+		_ = tx.Rollback()
+		db.Close()
+		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		db.Close()
+		return nil, err
+	}
+
 	return db, nil
 }
 
@@ -45,14 +76,24 @@ func ConnectReadonly(path string) (*sql.DB, error) {
 		}
 		return nil, err
 	}
-	uri := "file:" + url.PathEscape(path) + "?mode=ro"
+	uri := "file:" + url.PathEscape(path) + "?mode=ro&_pragma=busy_timeout(5000)"
 	return sql.Open("sqlite", uri)
 }
 
 // migrate runs idempotent post-schema upgrades. The Schema constant already
 // reflects the final migrated state, so this exists to handle DBs created by
 // older versions in the field.
-func migrate(db *sql.DB) error {
+func migrate(db schemaDB) error {
+	if !columnExists(db, "tg_write_calls", "response") {
+		if _, err := db.Exec("ALTER TABLE tg_write_calls ADD COLUMN response BLOB"); err != nil {
+			return err
+		}
+	}
+	if !columnExists(db, "tg_messages", "edit_date") {
+		if _, err := db.Exec("ALTER TABLE tg_messages ADD COLUMN edit_date INTEGER NOT NULL DEFAULT 0"); err != nil {
+			return err
+		}
+	}
 	if !columnExists(db, "tg_messages", "media_path") {
 		if _, err := db.Exec("ALTER TABLE tg_messages ADD COLUMN media_path TEXT"); err != nil {
 			return err
@@ -109,7 +150,7 @@ func migrate(db *sql.DB) error {
 	return nil
 }
 
-func tableExists(db *sql.DB, name string) bool {
+func tableExists(db schemaDB, name string) bool {
 	var got string
 	err := db.QueryRow(
 		"SELECT name FROM sqlite_master WHERE type='table' AND name=?", name,
@@ -117,7 +158,7 @@ func tableExists(db *sql.DB, name string) bool {
 	return err == nil
 }
 
-func columnExists(db *sql.DB, table, column string) bool {
+func columnExists(db schemaDB, table, column string) bool {
 	rows, err := db.Query("PRAGMA table_info(" + table + ")")
 	if err != nil {
 		return false
@@ -137,3 +178,12 @@ func columnExists(db *sql.DB, table, column string) bool {
 	}
 	return false
 }
+
+type schemaDB interface {
+	Exec(string, ...any) (sql.Result, error)
+	Query(string, ...any) (*sql.Rows, error)
+	QueryRow(string, ...any) *sql.Row
+}
+
+// DBTX permits applying a cache batch and checkpoint in the same transaction.
+type DBTX = schemaDB

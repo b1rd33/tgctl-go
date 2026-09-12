@@ -284,7 +284,7 @@ func foldersReorderCommand(cfg CommandsConfig) *cobra.Command {
 func chatPinnedListCommand(cfg CommandsConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "chat-pinned-list <chat>",
-		Short:        "List pinned dialogs for a chat",
+		Short:        "List up to 100 pinned messages in a chat",
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -307,11 +307,11 @@ func chatPinnedListCommand(cfg CommandsConfig) *cobra.Command {
 					return nil, err
 				}
 				defer c.Close()
-				dialogs, err := c.ListPinnedDialogs(ctx, chatID)
+				dialogs, err := c.ListPinnedMessages(ctx, chatID)
 				if err != nil {
 					return nil, err
 				}
-				return map[string]any{"pinned": dialogs}, nil
+				return map[string]any{"pinned": dialogs, "limit": 100, "source": "telegram", "may_have_more": len(dialogs) == 100}, nil
 			})
 			storeExitCode(cmd, code)
 			return nil

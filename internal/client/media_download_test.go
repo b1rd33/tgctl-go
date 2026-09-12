@@ -37,10 +37,10 @@ func TestDownloadMediaContractAndFake(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantReq := DownloadMediaReq{
-		ChatID: 42, MessageID: 99, OutputDir: "raw/output", MaxBytes: 1024, Overwrite: true,
+		ChatID: -1000000000000 - 42, MessageID: 99, OutputDir: "raw/output", MaxBytes: 1024, Overwrite: true,
 	}
 	wantResp := DownloadMediaResp{
-		ChatID: 42, MessageID: 99, MediaType: "video", MIMEType: "video/mp4",
+		ChatID: -1000000000000 - 42, MessageID: 99, MediaType: "video", MIMEType: "video/mp4",
 		Filename: "clip.mp4", Path: "/tmp/clip.mp4", Bytes: 123, Skipped: true,
 		MessageDate:      time.Date(2026, 8, 1, 10, 11, 12, 0, time.UTC),
 		ArtifactIdentity: identity,
@@ -62,7 +62,7 @@ func TestDownloadMediaContractAndFake(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantJSON := `{"chat_id":42,"message_id":99,"media_type":"video","mime_type":"video/mp4","filename":"clip.mp4","media_path":"/tmp/clip.mp4","bytes":123,"skipped":true}`
+	wantJSON := `{"chat_id":-1000000000042,"message_id":99,"media_type":"video","mime_type":"video/mp4","filename":"clip.mp4","media_path":"/tmp/clip.mp4","bytes":123,"skipped":true}`
 	if string(encoded) != wantJSON {
 		t.Fatalf("JSON = %s, want %s", encoded, wantJSON)
 	}
@@ -86,7 +86,7 @@ func TestBackfillHistoryDownloadsRawPageMediaAndContinuesAfterItemFailures(t *te
 	g := &GotdClient{fileDownloader: downloader, mediaAPI: lookupSpy}
 
 	result, err := g.paginateBackfillHistory(context.Background(), BackfillReq{
-		ChatID: 42, Limit: 10, DownloadMedia: true, MediaDir: outputDir, MaxMediaBytes: 4,
+		ChatID: -1000000000000 - 42, Limit: 10, DownloadMedia: true, MediaDir: outputDir, MaxMediaBytes: 4,
 	}, func(context.Context, int, int) (historyPage, error) { return page, nil }, waitForThrottle)
 	if err != nil {
 		t.Fatal(err)
@@ -95,8 +95,8 @@ func TestBackfillHistoryDownloadsRawPageMediaAndContinuesAfterItemFailures(t *te
 		t.Fatalf("media counters = downloaded:%d skipped:%d failed:%d", result.MediaDownloaded, result.MediaSkipped, result.MediaFailed)
 	}
 	wantWarnings := []string{
-		"chat_id=42 message_id=3 media=skipped code=UNSUPPORTED",
-		"chat_id=42 message_id=2 media=failed code=BAD_ARGS",
+		"chat_id=-1000000000042 message_id=3 media=skipped code=UNSUPPORTED",
+		"chat_id=-1000000000042 message_id=2 media=failed code=BAD_ARGS",
 	}
 	if !reflect.DeepEqual(result.Warnings, wantWarnings) {
 		t.Fatalf("warnings = %#v, want %#v", result.Warnings, wantWarnings)
@@ -113,7 +113,7 @@ func TestBackfillHistoryDownloadsRawPageMediaAndContinuesAfterItemFailures(t *te
 			t.Fatalf("message %d path = %q, want downloaded absolute path", id, byID[id].MediaPath)
 		}
 	}
-	if filepath.Base(byID[4].MediaPath) != "42_4_photo_700_photo_700.jpg" || filepath.Base(byID[1].MediaPath) != "42_1_document_800_same.bin" {
+	if filepath.Base(byID[4].MediaPath) != "-1000000000042_4_photo_700_photo_700.jpg" || filepath.Base(byID[1].MediaPath) != "-1000000000042_1_document_800_same.bin" {
 		t.Fatalf("unique paths = photo:%q document:%q", byID[4].MediaPath, byID[1].MediaPath)
 	}
 	if byID[3].MediaPath != "" || byID[2].MediaPath != "" {
@@ -148,7 +148,7 @@ func TestGotdBackfillMediaUsesHistoryRPCWithoutExactMessageRefetch(t *testing.T)
 	}
 
 	result, err := g.BackfillMessages(context.Background(), BackfillReq{
-		ChatID: 42, Limit: 10, DownloadMedia: true, MediaDir: t.TempDir(), MaxMediaBytes: 4,
+		ChatID: -1000000000000 - 42, Limit: 10, DownloadMedia: true, MediaDir: t.TempDir(), MaxMediaBytes: 4,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -173,7 +173,7 @@ func TestBackfillMediaTransferFailureDoesNotStopLaterMessages(t *testing.T) {
 	}}
 	g := &GotdClient{fileDownloader: downloader}
 	result, err := g.paginateBackfillHistory(context.Background(), BackfillReq{
-		ChatID: 42, Limit: 2, DownloadMedia: true, MediaDir: dir,
+		ChatID: -1000000000000 - 42, Limit: 2, DownloadMedia: true, MediaDir: dir,
 	}, func(context.Context, int, int) (historyPage, error) {
 		return historyPage{Messages: []tg.MessageClass{first, second}, Total: 2, TotalKnown: true}, nil
 	}, waitForThrottle)
@@ -183,10 +183,10 @@ func TestBackfillMediaTransferFailureDoesNotStopLaterMessages(t *testing.T) {
 	if result.MediaFailed != 1 || result.MediaDownloaded != 1 || len(result.Messages) != 2 {
 		t.Fatalf("result=%#v", result)
 	}
-	if got := result.Warnings; !reflect.DeepEqual(got, []string{"chat_id=42 message_id=20 media=failed code=TRANSFER"}) {
+	if got := result.Warnings; !reflect.DeepEqual(got, []string{"chat_id=-1000000000042 message_id=20 media=failed code=TRANSFER"}) {
 		t.Fatalf("warnings=%#v", got)
 	}
-	if result.Messages[0].MediaPath != "" || filepath.Base(result.Messages[1].MediaPath) != "42_10_document_10_same.bin" {
+	if result.Messages[0].MediaPath != "" || filepath.Base(result.Messages[1].MediaPath) != "-1000000000042_10_document_10_same.bin" {
 		t.Fatalf("message paths=%#v", result.Messages)
 	}
 	if result.Messages[0].MediaType != "document" || result.Messages[0].MediaIdentity != "document:20" {
@@ -205,14 +205,14 @@ func TestBackfillCommittedFinalizationErrorPreservesRecoveryOutcomeEvenWhenCance
 			message := documentMessageWithSize(700, 4, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "asset.bin"})
 			message.ID = 9
 			destination := &fakeDownloadDestination{
-				path:      filepath.Join(t.TempDir(), "42_9_document_700_asset.bin"),
+				path:      filepath.Join(t.TempDir(), "-1000000000042_9_document_700_asset.bin"),
 				commitErr: errors.New("directory sync failed"), abortErr: media.ErrDestinationCommitted,
 			}
 			if cancelDuringCommit {
 				destination.commitHook = cancel
 			}
 			g := &GotdClient{fileDownloader: &recordingFileDownloader{chunks: [][]byte{[]byte("data")}}, destinationOpener: fakeDestinationOpener{destination: destination}}
-			result, err := g.paginateBackfillHistory(ctx, BackfillReq{ChatID: 42, Limit: 1, DownloadMedia: true, MediaDir: t.TempDir()}, func(context.Context, int, int) (historyPage, error) {
+			result, err := g.paginateBackfillHistory(ctx, BackfillReq{ChatID: -1000000000000 - 42, Limit: 1, DownloadMedia: true, MediaDir: t.TempDir()}, func(context.Context, int, int) (historyPage, error) {
 				return historyPage{Messages: []tg.MessageClass{message}, Total: 1, TotalKnown: true}, nil
 			}, waitForThrottle)
 			if len(result.MediaOutcomes) != 1 || (cancelDuringCommit && !errors.Is(err, context.Canceled)) || (!cancelDuringCommit && err != nil) {
@@ -234,14 +234,14 @@ func TestBackfillDuplicateTelegramFilenamesUseDistinctMessagePaths(t *testing.T)
 	b.ID = 1
 	g := &GotdClient{fileDownloader: &recordingFileDownloader{chunks: [][]byte{[]byte("data")}}}
 	result, err := g.paginateBackfillHistory(context.Background(), BackfillReq{
-		ChatID: 42, Limit: 2, DownloadMedia: true, MediaDir: dir,
+		ChatID: -1000000000000 - 42, Limit: 2, DownloadMedia: true, MediaDir: dir,
 	}, func(context.Context, int, int) (historyPage, error) {
 		return historyPage{Messages: []tg.MessageClass{a, b}, Total: 2, TotalKnown: true}, nil
 	}, waitForThrottle)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.MediaDownloaded != 2 || filepath.Base(result.Messages[0].MediaPath) != "42_2_document_2_duplicate.bin" || filepath.Base(result.Messages[1].MediaPath) != "42_1_document_1_duplicate.bin" || result.Messages[0].MediaPath == result.Messages[1].MediaPath {
+	if result.MediaDownloaded != 2 || filepath.Base(result.Messages[0].MediaPath) != "-1000000000042_2_document_2_duplicate.bin" || filepath.Base(result.Messages[1].MediaPath) != "-1000000000042_1_document_1_duplicate.bin" || result.Messages[0].MediaPath == result.Messages[1].MediaPath {
 		t.Fatalf("result=%#v", result)
 	}
 }
@@ -260,13 +260,13 @@ func TestBackfillDestinationNameSeparatesChatAndEditedMediaProvenance(t *testing
 		}
 		return result.Messages[0]
 	}
-	chatA := download(42, 700)
-	chatB := download(43, 700)
-	edited := download(42, 701)
+	chatA := download(-1000000000042, 700)
+	chatB := download(-1000000000043, 700)
+	edited := download(-1000000000042, 701)
 	if chatA.MediaPath == chatB.MediaPath || chatA.MediaPath == edited.MediaPath || chatB.MediaPath == edited.MediaPath {
 		t.Fatalf("paths collide: %q %q %q", chatA.MediaPath, chatB.MediaPath, edited.MediaPath)
 	}
-	result, err := g.paginateBackfillHistory(context.Background(), BackfillReq{ChatID: 42, Limit: 1, DownloadMedia: true, MediaDir: dir}, func(context.Context, int, int) (historyPage, error) {
+	result, err := g.paginateBackfillHistory(context.Background(), BackfillReq{ChatID: -1000000000000 - 42, Limit: 1, DownloadMedia: true, MediaDir: dir}, func(context.Context, int, int) (historyPage, error) {
 		message := documentMessageWithSize(700, 4, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "same.bin"})
 		message.ID = 9
 		return historyPage{Messages: []tg.MessageClass{message}, Total: 1, TotalKnown: true}, nil
@@ -285,7 +285,7 @@ func TestBackfillReturnsDownloadedPartialResultOnLaterPageFailure(t *testing.T) 
 	}
 	calls := 0
 	g := &GotdClient{fileDownloader: &recordingFileDownloader{chunks: [][]byte{[]byte("data")}}}
-	result, err := g.paginateBackfillHistory(context.Background(), BackfillReq{ChatID: 42, Limit: 101, DownloadMedia: true, MediaDir: t.TempDir()}, func(context.Context, int, int) (historyPage, error) {
+	result, err := g.paginateBackfillHistory(context.Background(), BackfillReq{ChatID: -1000000000000 - 42, Limit: 101, DownloadMedia: true, MediaDir: t.TempDir()}, func(context.Context, int, int) (historyPage, error) {
 		calls++
 		if calls == 1 {
 			return historyPage{Messages: messages, Total: 101, TotalKnown: true}, nil
@@ -305,7 +305,7 @@ func TestBackfillCancellationDuringLaterDownloadReturnsPromptPartialWithoutFailu
 	second.ID = 1
 	downloader := &scriptedFileDownloader{steps: []downloadStep{{data: []byte("data")}, {before: cancel, err: context.Canceled}}}
 	g := &GotdClient{fileDownloader: downloader}
-	result, err := g.paginateBackfillHistory(ctx, BackfillReq{ChatID: 42, Limit: 2, DownloadMedia: true, MediaDir: t.TempDir()}, func(context.Context, int, int) (historyPage, error) {
+	result, err := g.paginateBackfillHistory(ctx, BackfillReq{ChatID: -1000000000000 - 42, Limit: 2, DownloadMedia: true, MediaDir: t.TempDir()}, func(context.Context, int, int) (historyPage, error) {
 		return historyPage{Messages: []tg.MessageClass{first, second}, Total: 2, TotalKnown: true}, nil
 	}, waitForThrottle)
 	if !errors.Is(err, context.Canceled) || result.MediaDownloaded != 1 || result.MediaFailed != 0 || len(result.Messages) != 1 || len(result.MediaOutcomes) != 1 {
@@ -327,7 +327,7 @@ func TestGotdBackfillWithoutDownloadPreservesHistoryBehaviorAndDoesNotCreateMedi
 	mediaDir := filepath.Join(t.TempDir(), "must-not-exist")
 	historySpy := &fakeBackfillHistoryAPI{resp: &tg.MessagesMessages{Messages: []tg.MessageClass{message}}}
 	g := &GotdClient{db: db, backfillAPI: historySpy}
-	result, err := g.BackfillMessages(context.Background(), BackfillReq{ChatID: 42, Limit: 1, MediaDir: mediaDir})
+	result, err := g.BackfillMessages(context.Background(), BackfillReq{ChatID: -1000000000000 - 42, Limit: 1, MediaDir: mediaDir})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -341,8 +341,8 @@ func TestGotdBackfillWithoutDownloadPreservesHistoryBehaviorAndDoesNotCreateMedi
 
 func TestGotdBackfillValidatesMediaOptionsBeforePeerOrHistoryRPC(t *testing.T) {
 	for _, req := range []BackfillReq{
-		{ChatID: 42, Limit: 1, DownloadMedia: true, MediaDir: " "},
-		{ChatID: 42, Limit: 1, MaxMediaBytes: -1},
+		{ChatID: -1000000000000 - 42, Limit: 1, DownloadMedia: true, MediaDir: " "},
+		{ChatID: -1000000000000 - 42, Limit: 1, MaxMediaBytes: -1},
 	} {
 		spy := &fakeBackfillHistoryAPI{}
 		_, err := (&GotdClient{backfillAPI: spy}).BackfillMessages(context.Background(), req)
@@ -706,14 +706,14 @@ func TestGotdDownloadMediaStreamsAtomicallyAndReturnsSafeMetadata(t *testing.T) 
 	g := &GotdClient{db: db, mediaAPI: api, fileDownloader: downloader}
 
 	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{
-		ChatID: 321, MessageID: 77, OutputDir: outputDir, MaxBytes: int64(len(data)), Overwrite: true,
+		ChatID: -1000000000000 - 321, MessageID: 77, OutputDir: outputDir, MaxBytes: int64(len(data)), Overwrite: true,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantPath := filepath.Join(outputDir, "telegram-name.mp4")
 	want := DownloadMediaResp{
-		ChatID: 321, MessageID: 77, MediaType: "video", MIMEType: "video/mp4", Filename: "telegram-name.mp4",
+		ChatID: -1000000000000 - 321, MessageID: 77, MediaType: "video", MIMEType: "video/mp4", Filename: "telegram-name.mp4",
 		Path: wantPath, Bytes: int64(len(data)), MessageDate: time.Unix(1_700_000_123, 0).UTC(),
 	}
 	identity := got.ArtifactIdentity
@@ -750,7 +750,7 @@ func TestGotdDownloadMediaZeroByteAndPhotoLocation(t *testing.T) {
 	message := photoMessageWithSizes(91, &tg.PhotoSize{Type: "x", W: 1, H: 1, Size: 0})
 	message.ID = 17
 	g, outputDir, downloader := downloadTestClient(t, message, nil)
-	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 17, OutputDir: outputDir})
+	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 17, OutputDir: outputDir})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -778,7 +778,7 @@ func TestGotdDownloadMediaPhotoSizeMatchesSelectedLocation(t *testing.T) {
 	)
 	message.ID = 33
 	g, outputDir, downloader := downloadTestClient(t, message, []byte("data"))
-	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 33, OutputDir: outputDir, MaxBytes: 5})
+	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 33, OutputDir: outputDir, MaxBytes: 5})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -798,7 +798,7 @@ func TestGotdDownloadMediaPhotoSizeMatchesSelectedLocation(t *testing.T) {
 func TestGotdDownloadMediaKnownSizeLimitRejectsBeforeDestinationAndDownloader(t *testing.T) {
 	message := documentMessageWithSize(18, 10, "application/pdf", &tg.DocumentAttributeFilename{FileName: "large.pdf"})
 	g, outputDir, downloader := downloadTestClient(t, message, []byte("unused"))
-	_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 18, OutputDir: outputDir, MaxBytes: 9})
+	_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 18, OutputDir: outputDir, MaxBytes: 9})
 	var badArgs *safety.BadArgs
 	if !errors.As(err, &badArgs) || !errors.Is(err, media.ErrLimitExceeded) {
 		t.Fatalf("error = %T %v, want BadArgs and ErrLimitExceeded", err, err)
@@ -823,7 +823,7 @@ func TestGotdDownloadMediaUnknownSizeLimitIsEnforcedWhileStreaming(t *testing.T)
 		t.Run(tc.name, func(t *testing.T) {
 			message := documentMessageWithSize(19, -1, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "unknown.bin"})
 			g, outputDir, _ := downloadTestClient(t, message, tc.data)
-			got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 19, OutputDir: outputDir, MaxBytes: 4})
+			got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 19, OutputDir: outputDir, MaxBytes: 4})
 			if tc.wantErr {
 				if !errors.Is(err, media.ErrLimitExceeded) {
 					t.Fatalf("error = %v, want ErrLimitExceeded", err)
@@ -841,7 +841,7 @@ func TestGotdDownloadMediaUnknownSizeLimitIsEnforcedWhileStreaming(t *testing.T)
 func TestGotdDownloadMediaAuthoritativeSizeDetectsTruncation(t *testing.T) {
 	message := documentMessageWithSize(20, 5, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "short.bin"})
 	g, outputDir, _ := downloadTestClient(t, message, []byte("1234"))
-	_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 20, OutputDir: outputDir})
+	_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 20, OutputDir: outputDir})
 	if !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Fatalf("error = %v, want io.ErrUnexpectedEOF", err)
 	}
@@ -861,7 +861,7 @@ func TestGotdDownloadMediaTransferErrorsAndCancellationCleanParts(t *testing.T) 
 		t.Run(tc.name, func(t *testing.T) {
 			message := documentMessageWithSize(21, -1, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "failed.bin"})
 			g, outputDir, _ := downloadTestClientWithDownloader(t, message, tc.downloader)
-			_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 21, OutputDir: outputDir})
+			_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 21, OutputDir: outputDir})
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("error = %v, want %v", err, tc.want)
 			}
@@ -877,7 +877,7 @@ func TestGotdDownloadMediaJoinsTransferAndAbortCleanupErrors(t *testing.T) {
 	message := documentMessageWithSize(22, -1, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "failed.bin"})
 	g, _, _ := downloadTestClientWithDownloader(t, message, &recordingFileDownloader{err: primary})
 	g.destinationOpener = fakeDestinationOpener{destination: destination}
-	_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 22, OutputDir: t.TempDir()})
+	_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 22, OutputDir: t.TempDir()})
 	if !errors.Is(err, primary) || !errors.Is(err, cleanup) || !errors.Is(err, media.ErrCleanupIncomplete) {
 		t.Fatalf("error = %v, want primary and cleanup errors", err)
 	}
@@ -897,7 +897,7 @@ func TestGotdDownloadMediaJoinsCommitAndAbortErrors(t *testing.T) {
 	message := documentMessageWithSize(30, 4, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "commit.bin"})
 	g, _, _ := downloadTestClientWithDownloader(t, message, &recordingFileDownloader{chunks: [][]byte{[]byte("data")}})
 	g.destinationOpener = fakeDestinationOpener{destination: destination}
-	_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 30, OutputDir: t.TempDir()})
+	_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 30, OutputDir: t.TempDir()})
 	if !errors.Is(err, commitErr) || !errors.Is(err, cleanupErr) || !errors.Is(err, media.ErrCleanupIncomplete) {
 		t.Fatalf("error = %v, want commit and cleanup errors", err)
 	}
@@ -926,7 +926,7 @@ func TestGotdDownloadMediaPublishedCommitErrorSignalsConservativeArtifact(t *tes
 	message := documentMessageWithSize(32, 4, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "published.bin"})
 	g, _, _ := downloadTestClientWithDownloader(t, message, &recordingFileDownloader{chunks: [][]byte{[]byte("data")}})
 	g.destinationOpener = fakeDestinationOpener{destination: destination}
-	resp, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 32, OutputDir: outputDir})
+	resp, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 32, OutputDir: outputDir})
 	var committed *CommittedMediaDownloadError
 	if !errors.Is(err, commitErr) || !errors.Is(err, media.ErrDestinationCommitted) || !errors.Is(err, media.ErrCleanupIncomplete) {
 		t.Fatalf("error = %v, want commit, committed, and cleanup-incomplete errors", err)
@@ -949,7 +949,7 @@ func TestGotdDownloadMediaExistingRegularSkipsWithoutDownloading(t *testing.T) {
 	if err := os.WriteFile(final, []byte("old data"), 0o640); err != nil {
 		t.Fatal(err)
 	}
-	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 23, OutputDir: outputDir})
+	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 23, OutputDir: outputDir})
 	if err != nil || !got.Skipped || got.Path != final || got.Bytes != 8 {
 		t.Fatalf("response=%#v error=%v", got, err)
 	}
@@ -981,7 +981,7 @@ func TestGotdDownloadMediaInitialCollisionUsesAnchoredSnapshotAfterSwap(t *testi
 			}
 			g.destinationOpener = swapAfterCollisionOpener{swap: func() { swapCollisionPath(t, swapKind, outputDir, final) }}
 
-			got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 34, OutputDir: outputDir})
+			got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 34, OutputDir: outputDir})
 			if err != nil || !got.Skipped || got.Path != final || got.Bytes != 3 {
 				t.Fatalf("response=%#v error=%v, want anchored original size=3", got, err)
 			}
@@ -1002,7 +1002,7 @@ func TestGotdDownloadMediaCollisionCleanupFailureIsNotSkipped(t *testing.T) {
 		media.ErrCleanupIncomplete,
 		cleanupErr,
 	)}
-	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 39, OutputDir: t.TempDir()})
+	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 39, OutputDir: t.TempDir()})
 	var collision *media.DestinationExistsError
 	if got.Skipped || !errors.As(err, &collision) || !errors.Is(err, media.ErrCleanupIncomplete) || !errors.Is(err, cleanupErr) {
 		t.Fatalf("response=%#v error=%v collision=%#v, want collision+cleanup error without skip", got, err, collision)
@@ -1036,7 +1036,7 @@ func TestGotdDownloadMediaOverwriteSuccessAndFailuresPreserveOriginal(t *testing
 			if err := os.WriteFile(final, []byte("old"), 0o640); err != nil {
 				t.Fatal(err)
 			}
-			_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 24, OutputDir: outputDir, Overwrite: true, MaxBytes: tc.max})
+			_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 24, OutputDir: outputDir, Overwrite: true, MaxBytes: tc.max})
 			if tc.wantErr == nil && err != nil {
 				t.Fatal(err)
 			}
@@ -1076,7 +1076,7 @@ func TestGotdDownloadMediaUnsafeExistingTargetsAreNeverSkipped(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 25, OutputDir: outputDir})
+			got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 25, OutputDir: outputDir})
 			if !errors.Is(err, media.ErrUnsafeDestination) || got.Skipped {
 				t.Fatalf("response=%#v error=%v", got, err)
 			}
@@ -1099,7 +1099,7 @@ func TestGotdDownloadMediaCollisionDuringTransferReturnsSafeSkip(t *testing.T) {
 		return os.WriteFile(final, []byte("winner"), 0o640)
 	}}
 	g, _, _ := downloadTestClientAt(t, message, downloader, outputDir)
-	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 26, OutputDir: outputDir})
+	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 26, OutputDir: outputDir})
 	if err != nil || !got.Skipped || got.Bytes != 6 {
 		t.Fatalf("response=%#v error=%v", got, err)
 	}
@@ -1126,7 +1126,7 @@ func TestGotdDownloadMediaCommitCollisionUsesAnchoredSnapshotAfterSwap(t *testin
 			g, _, _ := downloadTestClientAt(t, message, downloader, outputDir)
 			g.destinationOpener = swapCommitCollisionOpener{swap: func() { swapCollisionPath(t, swapKind, outputDir, final) }}
 
-			got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 35, OutputDir: outputDir})
+			got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 35, OutputDir: outputDir})
 			if err != nil || !got.Skipped || got.Path != final || got.Bytes != 6 {
 				t.Fatalf("response=%#v error=%v, want anchored winner size=6", got, err)
 			}
@@ -1138,7 +1138,7 @@ func TestGotdDownloadMediaCommitCollisionUsesAnchoredSnapshotAfterSwap(t *testin
 func TestGotdDownloadMediaMapsTransferRPCErrors(t *testing.T) {
 	message := documentMessageWithSize(36, -1, "application/octet-stream", &tg.DocumentAttributeFilename{FileName: "rpc.bin"})
 	g, outputDir, _ := downloadTestClientWithDownloader(t, message, &recordingFileDownloader{err: tgerr.New(420, "FLOOD_WAIT_7")})
-	_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 36, OutputDir: outputDir})
+	_, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 36, OutputDir: outputDir})
 	var floodWait *safety.FloodWait
 	if !errors.As(err, &floodWait) || floodWait.Seconds != 7 {
 		t.Fatalf("error = %T %v, want FloodWait(7)", err, err)
@@ -1155,7 +1155,7 @@ func TestGotdDownloadMediaJoinsConcurrentCancellationAndMappedTransferError(t *t
 		err:        tgerr.New(420, "FLOOD_WAIT_8"),
 	}
 	g, outputDir, _ := downloadTestClientWithDownloader(t, message, downloader)
-	_, err := g.DownloadMedia(ctx, DownloadMediaReq{ChatID: 321, MessageID: 37, OutputDir: outputDir})
+	_, err := g.DownloadMedia(ctx, DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 37, OutputDir: outputDir})
 	var floodWait *safety.FloodWait
 	if !errors.As(err, &floodWait) || floodWait.Seconds != 8 || !errors.Is(err, context.Canceled) {
 		t.Fatalf("error = %T %v, want FloodWait(8) joined with canceled", err, err)
@@ -1171,7 +1171,7 @@ func TestGotdDownloadMediaCancellationAfterSuccessfulStreamAbortsBeforeCommit(t 
 		afterWrite: func() error { cancel(); return nil },
 	}
 	g, outputDir, _ := downloadTestClientWithDownloader(t, message, downloader)
-	_, err := g.DownloadMedia(ctx, DownloadMediaReq{ChatID: 321, MessageID: 38, OutputDir: outputDir})
+	_, err := g.DownloadMedia(ctx, DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 38, OutputDir: outputDir})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("error = %v, want context.Canceled", err)
 	}
@@ -1193,7 +1193,7 @@ func TestGotdDownloadMediaRelativeOutputAndTraversalNameStayContained(t *testing
 		t.Fatal(err)
 	}
 	g, _, _ := downloadTestClientAt(t, message, &recordingFileDownloader{chunks: [][]byte{[]byte("safe")}}, relOutput)
-	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 27, OutputDir: relOutput})
+	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 27, OutputDir: relOutput})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1212,7 +1212,7 @@ func TestGotdDownloadMediaConcurrentCallsHaveIsolatedDestinations(t *testing.T) 
 	for i := 0; i < calls; i++ {
 		dir := filepath.Join(t.TempDir(), fmt.Sprintf("d-%d", i))
 		go func() {
-			resp, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 28, OutputDir: dir})
+			resp, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 28, OutputDir: dir})
 			if err == nil {
 				contents, readErr := os.ReadFile(resp.Path)
 				if readErr != nil || string(contents) != "data" {
@@ -1244,7 +1244,7 @@ func TestGotdDownloadMediaConcurrentSameTargetPublishesOnce(t *testing.T) {
 	errs := make(chan error, 2)
 	for i := 0; i < 2; i++ {
 		go func() {
-			resp, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 31, OutputDir: outputDir})
+			resp, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 31, OutputDir: outputDir})
 			results <- resp
 			errs <- err
 		}()

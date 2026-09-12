@@ -3,9 +3,11 @@ package client
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -14,11 +16,14 @@ import (
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/telegram/auth/qrlogin"
+	"github.com/gotd/td/telegram/updates"
 	"github.com/gotd/td/telegram/uploader"
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 
 	"github.com/b1rd33/tgctl-go/internal/media"
+	"github.com/b1rd33/tgctl-go/internal/output"
+	"github.com/b1rd33/tgctl-go/internal/peerid"
 	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
@@ -42,6 +47,10 @@ type GotdClient struct {
 	closeErr          error
 	db                *sql.DB // per-account entity cache; may be nil for ephemeral clients
 	events            chan ListenEvent
+	updateStore       *updateStorage
+	listenMu          sync.Mutex
+	lastEvent         int64
+	selfID            int64
 }
 
 // albumUploadAPI is the narrow Telegram surface needed by UploadAlbum. It is
@@ -107,7 +116,12 @@ func Login(ctx context.Context, opts LoginOptions) (User, error) {
 	if opts.APIHash == "" {
 		return User{}, safety.NewMissingCredentials("TG_API_ID and TG_API_HASH must be set")
 	}
-	storage := &session.FileStorage{Path: opts.Session}
+	lock := &safety.SessionLock{}
+	if err := lock.AcquireContext(ctx, opts.Session, safety.LockWait(ctx), false); err != nil {
+		return User{}, err
+	}
+	defer lock.Release()
+	storage := &AtomicSessionStorage{Path: opts.Session}
 	var dispatcher tg.UpdateDispatcher
 	var useDispatcher bool
 	if opts.QR {
@@ -130,7 +144,16 @@ func Login(ctx context.Context, opts LoginOptions) (User, error) {
 				return opts.QRShow(ctx, token.URL(), token.Expires())
 			})
 			if err != nil {
-				return err
+				if rpc, ok := tgerr.As(err); ok && rpc.Type == "SESSION_PASSWORD_NEEDED" {
+					password, promptErr := (fullAuthenticator{p: opts.Prompt}).Password(ctx)
+					if promptErr != nil {
+						return promptErr
+					}
+					authorization, err = client.Auth().Password(ctx, password)
+				}
+				if err != nil {
+					return err
+				}
 			}
 			self, ok := authorization.User.AsNotEmpty()
 			if !ok {
@@ -205,7 +228,7 @@ func New(ctx context.Context, apiID int, apiHash, sessionPath, dbPath string) (*
 	if err != nil {
 		return nil, err
 	}
-	return newClient(ctx, apiID, apiHash, sessionPath, dbPath, storage)
+	return newLockedClient(ctx, apiID, apiHash, sessionPath, dbPath, storage, false)
 }
 
 // NewReadonly opens a gotd client with an in-memory snapshot of sessionPath.
@@ -215,20 +238,30 @@ func NewReadonly(ctx context.Context, apiID int, apiHash, sessionPath string) (*
 	if err := validateAPIID(apiID); err != nil {
 		return nil, err
 	}
-	storage, err := sessionStorageForMode(ctx, sessionPath, true)
-	if errors.Is(err, session.ErrNotFound) {
-		return nil, safety.NewMissingCredentials(
-			"not authorized; run `tg login` first to create a session at " + sessionPath,
-		)
-	}
+	gc, err := newLockedClient(ctx, apiID, apiHash, sessionPath, "", nil, true)
 	if err != nil {
 		return nil, err
 	}
-	return newClient(ctx, apiID, apiHash, sessionPath, "", storage)
+	db, dbErr := store.ConnectReadonly(filepath.Join(filepath.Dir(sessionPath), "telegram.sqlite"))
+	var missing *store.DatabaseMissing
+	if dbErr != nil && !errors.As(dbErr, &missing) {
+		_ = gc.Close()
+		return nil, dbErr
+	}
+	if db != nil {
+		var bound int64
+		if err := db.QueryRow("SELECT user_id FROM tg_account_identity WHERE slot=1").Scan(&bound); err != nil || bound != gc.selfID {
+			db.Close()
+			gc.Close()
+			return nil, safety.NewBadArgs("read-only cache identity is missing or differs from the session; initialize a matching cache with a writable account operation")
+		}
+	}
+	gc.db = db
+	return gc, nil
 }
 
 func sessionStorageForMode(ctx context.Context, sessionPath string, readOnly bool) (session.Storage, error) {
-	fileStorage := &session.FileStorage{Path: sessionPath}
+	fileStorage := &AtomicSessionStorage{Path: sessionPath}
 	if !readOnly {
 		return fileStorage, nil
 	}
@@ -243,6 +276,32 @@ func sessionStorageForMode(ctx context.Context, sessionPath string, readOnly boo
 	return memoryStorage, nil
 }
 
+func newLockedClient(ctx context.Context, apiID int, apiHash, sessionPath, dbPath string, storage session.Storage, readOnly bool) (*GotdClient, error) {
+	if apiHash == "" {
+		return nil, safety.NewMissingCredentials("TG_API_ID and TG_API_HASH must be set")
+	}
+	lock := &safety.SessionLock{}
+	if err := lock.AcquireContext(ctx, sessionPath, safety.LockWait(ctx), readOnly); err != nil {
+		return nil, err
+	}
+	if readOnly {
+		var err error
+		storage, err = sessionStorageForMode(ctx, sessionPath, true)
+		if err != nil {
+			lock.Release()
+			return nil, err
+		}
+	}
+
+	return newClient(safetySessionContext(ctx, lock), apiID, apiHash, sessionPath, dbPath, storage)
+}
+
+type sessionLockKey struct{}
+
+func safetySessionContext(ctx context.Context, lock *safety.SessionLock) context.Context {
+	return context.WithValue(ctx, sessionLockKey{}, lock)
+}
+
 func newClient(ctx context.Context, apiID int, apiHash, sessionPath, dbPath string, storage session.Storage) (*GotdClient, error) {
 	if err := validateAPIID(apiID); err != nil {
 		return nil, err
@@ -250,22 +309,33 @@ func newClient(ctx context.Context, apiID int, apiHash, sessionPath, dbPath stri
 	if apiHash == "" {
 		return nil, safety.NewMissingCredentials("TG_API_ID and TG_API_HASH must be set")
 	}
-	events := make(chan ListenEvent, 32)
-	tgc := telegram.NewClient(apiID, apiHash, telegram.Options{
-		SessionStorage: storage,
-		UpdateHandler: telegram.UpdateHandlerFunc(func(ctx context.Context, u tg.UpdatesClass) error {
-			for _, event := range listenEventsFromUpdates(u) {
-				select {
-				case events <- event:
-				default:
-				}
+	var db *sql.DB
+	if dbPath != "" {
+		var err error
+		db, err = store.Connect(dbPath)
+		if err != nil {
+			if lock, ok := ctx.Value(sessionLockKey{}).(*safety.SessionLock); ok {
+				lock.Release()
 			}
-			return nil
-		}),
-	})
+			return nil, err
+		}
+	}
+	var updateStore *updateStorage
+	var manager *updates.Manager
+	options := telegram.Options{SessionStorage: storage, NoUpdates: db == nil}
+	if db != nil {
+		updateStore = newUpdateStorage(db)
+		manager = updates.New(updates.Config{Handler: updateStore, Storage: updateStore, AccessHasher: updateStore, OnChannelTooLong: func(int64) { updateStore.fail(errors.New("channel gap cannot be completely recovered")) }})
+		options.UpdateHandler = manager
+	}
+	tgc := telegram.NewClient(apiID, apiHash, options)
 
 	var api *tg.Client
+	var selfID int64
 	life, err := startClientRun(ctx, func(runCtx context.Context, ready chan<- error) error {
+		if lock, ok := ctx.Value(sessionLockKey{}).(*safety.SessionLock); ok {
+			defer lock.Release()
+		}
 		return tgc.Run(runCtx, func(rctx context.Context) error {
 			status, err := tgc.Auth().Status(rctx)
 			if err != nil {
@@ -279,29 +349,65 @@ func newClient(ctx context.Context, apiID int, apiHash, sessionPath, dbPath stri
 				ready <- err
 				return err
 			}
-			api = tgc.API()
-			ready <- nil
-			<-rctx.Done()
-			return rctx.Err()
+			selfID = status.User.ID
+			if db != nil {
+				var bound int64
+				bindErr := db.QueryRow("SELECT user_id FROM tg_account_identity WHERE slot=1").Scan(&bound)
+				if errors.Is(bindErr, sql.ErrNoRows) {
+					_, bindErr = db.Exec("INSERT INTO tg_account_identity(slot,user_id) VALUES(1,?)", status.User.ID)
+					bound = status.User.ID
+				}
+				if bindErr != nil {
+					return bindErr
+				}
+				if bound != status.User.ID {
+					return safety.NewBadArgs("session identity differs from the account cache; use a separate account directory")
+				}
+			}
+			ledger := &writeLedgerInvoker{next: tgc.API().Invoker(), db: db, owner: output.NewRequestID()}
+			if manager != nil {
+				ledger.apply = manager.Handle
+			}
+			api = tg.NewClient(ledger)
+			if manager == nil {
+				ready <- nil
+				<-rctx.Done()
+				return rctx.Err()
+			}
+			recoveryCtx, cancel := context.WithCancel(rctx)
+			defer cancel()
+			stopped := make(chan error, 1)
+			go func() {
+				stopped <- manager.Run(recoveryCtx, recoveryAPI{Client: api, storage: updateStore}, status.User.ID, updates.AuthOptions{OnStart: func(context.Context) { ready <- nil }})
+			}()
+			select {
+			case err := <-stopped:
+				return err
+			case <-updateStore.failed:
+				cancel()
+				<-stopped
+				return updateStore.err()
+			case <-rctx.Done():
+				cancel()
+				<-stopped
+				return rctx.Err()
+			}
+
 		})
 	})
 	if err != nil {
+		if db != nil {
+			_ = db.Close()
+		}
 		return nil, err
 	}
 	gc := &GotdClient{
-		api: api, mediaAPI: api,
+		api: api, mediaAPI: api, selfID: selfID,
 		fileDownloader:    gotdFileDownloader{client: tgc, api: api},
 		destinationOpener: atomicDestinationOpener{},
-		tgc:               tgc, lifecycle: life, events: events,
+		tgc:               tgc, lifecycle: life, updateStore: updateStore,
 	}
-	if dbPath != "" {
-		db, err := store.Connect(dbPath)
-		if err != nil {
-			_ = gc.Close()
-			return nil, err
-		}
-		gc.db = db
-	}
+	gc.db = db
 	return gc, nil
 }
 
@@ -359,7 +465,9 @@ func (g *GotdClient) resolvePeer(ctx context.Context, selector string) (tg.Input
 	if err != nil {
 		return nil, err
 	}
-	g.persistEntitiesFromResolved(resolved.Users, resolved.Chats)
+	if err := g.persistEntitiesFromResolved(resolved.Users, resolved.Chats); err != nil {
+		return nil, err
+	}
 	switch p := resolved.Peer.(type) {
 	case *tg.PeerUser:
 		for _, u := range resolved.Users {
@@ -384,25 +492,36 @@ func (g *GotdClient) resolvePeer(ctx context.Context, selector string) (tg.Input
 // persistEntitiesFromResolved writes user/chat/channel access_hashes into the
 // entity cache so future chat_id-keyed operations can run without hitting
 // ContactsResolveUsername. No-op when db is nil.
-func (g *GotdClient) persistEntitiesFromResolved(users []tg.UserClass, chats []tg.ChatClass) {
+func (g *GotdClient) persistEntitiesFromResolved(users []tg.UserClass, chats []tg.ChatClass) error {
 	if g.db == nil {
-		return
+		return nil
+	}
+	// Read-only clients resolve from their snapshot without changing it.
+	if g.updateStore == nil && g.lifecycle != nil {
+		return nil
 	}
 	for _, u := range users {
 		if user, ok := u.(*tg.User); ok && !user.Min {
-			_ = store.UpsertEntity(g.db, user.ID, store.EntityUser, user.AccessHash)
+			if err := store.UpsertEntity(g.db, user.ID, store.EntityUser, user.AccessHash); err != nil {
+				return err
+			}
 		}
 	}
 	for _, c := range chats {
 		switch v := c.(type) {
 		case *tg.Channel:
 			if !v.Min {
-				_ = store.UpsertEntity(g.db, v.ID, store.EntityChannel, v.AccessHash)
+				if err := store.UpsertEntity(g.db, v.ID, store.EntityChannel, v.AccessHash); err != nil {
+					return err
+				}
 			}
 		case *tg.Chat:
-			_ = store.UpsertEntity(g.db, v.ID, store.EntityChat, 0)
+			if err := store.UpsertEntity(g.db, v.ID, store.EntityChat, 0); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 func (g *GotdClient) SendMessage(ctx context.Context, req SendMessageReq) (SendMessageResp, error) {
@@ -422,10 +541,18 @@ func (g *GotdClient) SendMessage(ctx context.Context, req SendMessageReq) (SendM
 	r := &tg.MessagesSendMessageRequest{
 		Peer:     peer,
 		Message:  req.Text,
-		RandomID: randomID(),
+		RandomID: operationRandomID(ctx),
 	}
-	if req.ReplyTo != 0 {
-		r.ReplyTo = &tg.InputReplyToMessage{ReplyToMsgID: int(req.ReplyTo)}
+	if req.ReplyTo != 0 || req.TopicID != 0 {
+		replyTo := req.ReplyTo
+		if replyTo == 0 {
+			replyTo = req.TopicID
+		}
+		reply := &tg.InputReplyToMessage{ReplyToMsgID: int(replyTo)}
+		if req.TopicID != 0 {
+			reply.SetTopMsgID(int(req.TopicID))
+		}
+		r.ReplyTo = reply
 	}
 	if req.NoWebpage {
 		r.NoWebpage = true
@@ -437,8 +564,8 @@ func (g *GotdClient) SendMessage(ctx context.Context, req SendMessageReq) (SendM
 	if err != nil {
 		return SendMessageResp{}, mapRPCErr(err)
 	}
-	id := extractNewMessageID(updates)
-	return SendMessageResp{MessageID: id}, nil
+	id, err := sentMessageID(updates, r.RandomID)
+	return SendMessageResp{MessageID: id}, err
 }
 
 // peerFromChatID looks up an entity in tg_entities and builds the right
@@ -455,13 +582,16 @@ func (g *GotdClient) peerFromChatID(_ context.Context, chatID int64) (tg.InputPe
 			chatID,
 		)
 	}
+	if peerid.Kind(chatID) != string(kind) {
+		return nil, safety.NewBadArgs("cached peer kind conflicts with marked chat ID; refresh the cache")
+	}
 	switch kind {
 	case store.EntityUser:
 		return &tg.InputPeerUser{UserID: chatID, AccessHash: accessHash}, nil
 	case store.EntityChannel:
-		return &tg.InputPeerChannel{ChannelID: chatID, AccessHash: accessHash}, nil
+		return &tg.InputPeerChannel{ChannelID: peerid.Raw(chatID), AccessHash: accessHash}, nil
 	case store.EntityChat:
-		return &tg.InputPeerChat{ChatID: chatID}, nil
+		return &tg.InputPeerChat{ChatID: peerid.Raw(chatID)}, nil
 	}
 	return nil, safety.NewBadArgs("unknown entity kind %q for chat_id %d", string(kind), chatID)
 }
@@ -477,7 +607,7 @@ func (g *GotdClient) SendMessageBySelector(ctx context.Context, selector, text s
 		return SendMessageResp{}, err
 	}
 	r := &tg.MessagesSendMessageRequest{
-		Peer: peer, Message: text, RandomID: randomID(),
+		Peer: peer, Message: text, RandomID: operationRandomID(ctx),
 		Silent: silent, NoWebpage: noWeb,
 	}
 	if replyTo != 0 {
@@ -487,7 +617,8 @@ func (g *GotdClient) SendMessageBySelector(ctx context.Context, selector, text s
 	if err != nil {
 		return SendMessageResp{}, mapRPCErr(err)
 	}
-	return SendMessageResp{MessageID: extractNewMessageID(updates)}, nil
+	id, err := sentMessageID(updates, r.RandomID)
+	return SendMessageResp{MessageID: id}, err
 }
 
 func (g *GotdClient) UploadFile(ctx context.Context, req UploadFileReq) (UploadFileResp, error) {
@@ -498,7 +629,7 @@ func (g *GotdClient) UploadFile(ctx context.Context, req UploadFileReq) (UploadF
 	if err != nil {
 		return UploadFileResp{}, err
 	}
-	file, err := uploader.NewUploader(g.api).FromPath(ctx, req.Path)
+	file, err := uploadSnapshot(ctx, g.api, req.Path)
 	if err != nil {
 		return UploadFileResp{}, err
 	}
@@ -527,7 +658,7 @@ func (g *GotdClient) UploadFile(ctx context.Context, req UploadFileReq) (UploadF
 		Peer:     peer,
 		Media:    media,
 		Message:  req.Caption,
-		RandomID: randomID(),
+		RandomID: operationRandomID(ctx),
 		Silent:   req.Silent,
 	}
 	if req.ReplyTo != 0 {
@@ -537,7 +668,8 @@ func (g *GotdClient) UploadFile(ctx context.Context, req UploadFileReq) (UploadF
 	if err != nil {
 		return UploadFileResp{}, mapRPCErr(err)
 	}
-	return UploadFileResp{MessageID: extractNewMessageID(updates)}, nil
+	id, err := sentMessageID(updates, r.RandomID)
+	return UploadFileResp{MessageID: id}, err
 }
 
 func mimeForUpload(kind, path string) string {
@@ -571,29 +703,16 @@ func mimeForUpload(kind, path string) string {
 }
 
 func extractNewMessageID(u tg.UpdatesClass) int64 {
-	switch v := u.(type) {
-	case *tg.Updates:
-		for _, up := range v.Updates {
-			switch n := up.(type) {
-			case *tg.UpdateNewMessage:
-				if msg, ok := n.Message.(*tg.Message); ok {
-					return int64(msg.ID)
-				}
-			case *tg.UpdateNewChannelMessage:
-				if msg, ok := n.Message.(*tg.Message); ok {
-					return int64(msg.ID)
-				}
-			case *tg.UpdateMessageID:
-				return int64(n.ID)
-			}
-		}
-	case *tg.UpdateShortSentMessage:
-		return int64(v.ID)
-	case *tg.UpdateShort:
-		if u, ok := v.Update.(*tg.UpdateNewMessage); ok {
-			if m, ok := u.Message.(*tg.Message); ok {
-				return int64(m.ID)
-			}
+	d, err := collectAlbumUpdates(u)
+	if err != nil {
+		return 0
+	}
+	if len(d.messageOrder) == 1 {
+		return d.messageOrder[0]
+	}
+	if len(d.mapping) == 1 {
+		for _, id := range d.mapping {
+			return id
 		}
 	}
 	return 0
@@ -634,7 +753,7 @@ func (g *GotdClient) Forward(ctx context.Context, req ForwardReq) (ForwardResp, 
 	randomIDs := make([]int64, len(req.MessageIDs))
 	for i, id := range req.MessageIDs {
 		ids[i] = int(id)
-		randomIDs[i] = randomID()
+		randomIDs[i] = operationRandomID(ctx)
 	}
 	r := &tg.MessagesForwardMessagesRequest{
 		FromPeer: from, ToPeer: to, ID: ids, RandomID: randomIDs,
@@ -646,7 +765,18 @@ func (g *GotdClient) Forward(ctx context.Context, req ForwardReq) (ForwardResp, 
 	if err != nil {
 		return ForwardResp{}, mapRPCErr(err)
 	}
-	return ForwardResp{MessageIDs: extractAllNewMessageIDs(updates)}, nil
+	d, decodeErr := collectAlbumUpdates(updates)
+	if decodeErr != nil {
+		return ForwardResp{}, safety.NewCommittedWriteWithExtras("forward accepted but response mapping is invalid", decodeErr, nil)
+	}
+	result := make([]int64, len(randomIDs))
+	for i, random := range randomIDs {
+		result[i] = d.mapping[random]
+		if result[i] == 0 {
+			return ForwardResp{}, safety.NewCommittedWriteWithExtras("forward accepted but response mapping is incomplete; do not retry blindly", nil, nil)
+		}
+	}
+	return ForwardResp{MessageIDs: result}, nil
 }
 
 func (g *GotdClient) Pin(ctx context.Context, req PinReq) error {
@@ -690,17 +820,32 @@ func (g *GotdClient) MarkRead(ctx context.Context, req MarkReadReq) error {
 	if err != nil {
 		return err
 	}
+
+	maxID := req.UpToID
+	if maxID == 0 {
+		details, readErr := g.GetChatsInfo(ctx, []int64{req.ChatID})
+		if readErr != nil {
+			return readErr
+		}
+		if len(details) != 1 {
+			return safety.NewBadArgs("cannot determine the chat read boundary")
+		}
+		maxID = int64(details[0].TopMessageID)
+	}
 	if ch, ok := peer.(*tg.InputPeerChannel); ok {
-		_, err := g.api.ChannelsReadHistory(ctx, &tg.ChannelsReadHistoryRequest{
-			Channel: &tg.InputChannel{ChannelID: ch.ChannelID, AccessHash: ch.AccessHash},
-			MaxID:   int(req.UpToID),
-		})
+		_, err = g.api.ChannelsReadHistory(ctx, &tg.ChannelsReadHistoryRequest{Channel: &tg.InputChannel{ChannelID: ch.ChannelID, AccessHash: ch.AccessHash}, MaxID: int(maxID)})
+	} else {
+		_, err = g.api.MessagesReadHistory(ctx, &tg.MessagesReadHistoryRequest{Peer: peer, MaxID: int(maxID)})
+	}
+	if err != nil {
 		return mapRPCErr(err)
 	}
-	_, err = g.api.MessagesReadHistory(ctx, &tg.MessagesReadHistoryRequest{
-		Peer: peer, MaxID: int(req.UpToID),
-	})
-	return mapRPCErr(err)
+	if g.db != nil {
+		if _, err := g.db.Exec("INSERT INTO tg_read_state(chat_id,max_id) VALUES(?,?) ON CONFLICT(chat_id) DO UPDATE SET max_id=MAX(max_id,excluded.max_id),updated_at=CURRENT_TIMESTAMP", req.ChatID, maxID); err != nil {
+			return safety.NewCommittedWriteWithExtras("read acknowledgment accepted but local marker could not be saved", err, nil)
+		}
+	}
+	return nil
 }
 
 func (g *GotdClient) DeleteMessages(ctx context.Context, req DeleteMessagesReq) (DeleteMessagesResp, error) {
@@ -715,6 +860,42 @@ func (g *GotdClient) DeleteMessages(ctx context.Context, req DeleteMessagesReq) 
 	for i, id := range req.MessageIDs {
 		ids[i] = int(id)
 	}
+	inputs := make([]tg.InputMessageClass, len(ids))
+	for i, id := range ids {
+		inputs[i] = &tg.InputMessageID{ID: id}
+	}
+	var existing tg.MessagesMessagesClass
+	if ch, ok := peer.(*tg.InputPeerChannel); ok {
+		if !req.ForEveryone {
+			return DeleteMessagesResp{}, safety.NewBadArgs("channel deletions affect everyone; pass --for-everyone explicitly")
+		}
+		existing, err = g.api.ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{Channel: &tg.InputChannel{ChannelID: ch.ChannelID, AccessHash: ch.AccessHash}, ID: inputs})
+	} else {
+		existing, err = g.api.MessagesGetMessages(ctx, inputs)
+	}
+	if err != nil {
+		return DeleteMessagesResp{}, mapRPCErr(err)
+	}
+	verified := map[int]bool{}
+	for _, msg := range messagesFromHistoryResp(existing) {
+		switch m := msg.(type) {
+		case *tg.Message:
+			if peerID(m.PeerID) != req.ChatID {
+				return DeleteMessagesResp{}, safety.NewBadArgs("message does not belong to the confirmed chat")
+			}
+			verified[m.ID] = true
+		case *tg.MessageService:
+			if peerID(m.PeerID) != req.ChatID {
+				return DeleteMessagesResp{}, safety.NewBadArgs("message does not belong to the confirmed chat")
+			}
+			verified[m.ID] = true
+		}
+	}
+	for _, id := range ids {
+		if !verified[id] {
+			return DeleteMessagesResp{}, safety.NewBadArgs("cannot verify every requested message in the confirmed chat")
+		}
+	}
 	if ch, ok := peer.(*tg.InputPeerChannel); ok {
 		resp, err := g.api.ChannelsDeleteMessages(ctx, &tg.ChannelsDeleteMessagesRequest{
 			Channel: &tg.InputChannel{ChannelID: ch.ChannelID, AccessHash: ch.AccessHash},
@@ -723,7 +904,7 @@ func (g *GotdClient) DeleteMessages(ctx context.Context, req DeleteMessagesReq) 
 		if err != nil {
 			return DeleteMessagesResp{}, mapRPCErr(err)
 		}
-		return DeleteMessagesResp{Deleted: resp.PtsCount}, nil
+		return DeleteMessagesResp{Deleted: len(verified), PtsCount: resp.PtsCount}, nil
 	}
 	resp, err := g.api.MessagesDeleteMessages(ctx, &tg.MessagesDeleteMessagesRequest{
 		ID: ids, Revoke: req.ForEveryone,
@@ -731,7 +912,7 @@ func (g *GotdClient) DeleteMessages(ctx context.Context, req DeleteMessagesReq) 
 	if err != nil {
 		return DeleteMessagesResp{}, mapRPCErr(err)
 	}
-	return DeleteMessagesResp{Deleted: resp.PtsCount}, nil
+	return DeleteMessagesResp{Deleted: len(verified), PtsCount: resp.PtsCount}, nil
 }
 
 func (g *GotdClient) LeaveChat(ctx context.Context, req LeaveChatReq) error {
@@ -795,48 +976,7 @@ func (g *GotdClient) TerminateSession(ctx context.Context, req TerminateSessionR
 }
 
 func (g *GotdClient) DiscoverDialogs(ctx context.Context, limit int) ([]ChatInfo, error) {
-	var err error
-	limit, err = defaultedTelegramInt32Limit(limit, 200, "limit")
-	if err != nil {
-		return nil, err
-	}
-	dialogs, err := g.api.MessagesGetDialogs(ctx, &tg.MessagesGetDialogsRequest{
-		OffsetPeer: &tg.InputPeerEmpty{},
-		Limit:      limit,
-	})
-	if err != nil {
-		return nil, mapRPCErr(err)
-	}
-	var users []tg.UserClass
-	var chats []tg.ChatClass
-	switch d := dialogs.(type) {
-	case *tg.MessagesDialogs:
-		users, chats = d.Users, d.Chats
-	case *tg.MessagesDialogsSlice:
-		users, chats = d.Users, d.Chats
-	}
-	var out []ChatInfo
-	for _, u := range users {
-		if user, ok := u.(*tg.User); ok && !user.Min {
-			g.persistEntitiesFromResolved([]tg.UserClass{u}, nil)
-			out = append(out, ChatInfo{ID: user.ID, Type: "user", Title: DisplayName(user.FirstName, user.LastName, user.Username, user.ID), Username: user.Username})
-		}
-	}
-	for _, c := range chats {
-		switch v := c.(type) {
-		case *tg.Channel:
-			g.persistEntitiesFromResolved(nil, []tg.ChatClass{c})
-			kind := "channel"
-			if v.Megagroup {
-				kind = "supergroup"
-			}
-			out = append(out, ChatInfo{ID: v.ID, Type: kind, Title: v.Title, Username: v.Username})
-		case *tg.Chat:
-			g.persistEntitiesFromResolved(nil, []tg.ChatClass{c})
-			out = append(out, ChatInfo{ID: v.ID, Type: "group", Title: v.Title})
-		}
-	}
-	return out, nil
+	return g.discoverDialogs(ctx, limit)
 }
 
 func (g *GotdClient) SyncContacts(ctx context.Context) ([]ContactInfo, error) {
@@ -848,7 +988,9 @@ func (g *GotdClient) SyncContacts(ctx context.Context) ([]ContactInfo, error) {
 	if !ok {
 		return nil, nil
 	}
-	g.persistEntitiesFromResolved(cc.Users, nil)
+	if err := g.persistEntitiesFromResolved(cc.Users, nil); err != nil {
+		return nil, err
+	}
 	out := make([]ContactInfo, 0, len(cc.Users))
 	for _, u := range cc.Users {
 		if user, ok := u.(*tg.User); ok {
@@ -948,6 +1090,7 @@ func (g *GotdClient) BackfillMessages(ctx context.Context, req BackfillReq) (Bac
 				Peer:     peer,
 				Limit:    pageLimit,
 				OffsetID: offsetID,
+				MinID:    int(req.AfterMessageID),
 			})
 			if err != nil {
 				return historyPage{}, mapRPCErr(err)
@@ -1034,17 +1177,28 @@ func (g *GotdClient) paginateBackfillHistory(
 				// Skip but still update minID so we don't re-fetch.
 				continue
 			}
+			if expiringMessage(m) {
+				result.Warnings = append(result.Warnings, "expiring message omitted from persistent cache")
+				continue
+			}
 			row := BackfillMessage{
 				ChatID: req.ChatID, MessageID: int64(m.ID), Date: timeFromUnix(m.Date),
 				Text: m.Message, IsOutgoing: m.Out, HasMedia: m.Media != nil, GroupedID: m.GroupedID, MediaDisposition: BackfillMediaNone,
 			}
 			row.SenderID = peerID(m.FromID)
+			row.EditDate = m.EditDate
+			row.ReplyToMsgID = replyMessageID(m.ReplyTo)
+			raw, rawErr := json.Marshal(m)
+			if rawErr != nil {
+				return result, rawErr
+			}
+			row.RawJSON = string(raw)
 			if req.DownloadMedia {
 				if err := g.backfillMessageMedia(ctx, req, m, &row, &result); err != nil {
 					return result, err
 				}
 			} else if m.Media != nil {
-				row.MediaType = fmt.Sprintf("%T", m.Media)
+				row.MediaType = messageMediaType(m.Media)
 			}
 			if m.GroupedID != 0 {
 				if _, seen := seenAlbums[m.GroupedID]; !seen {
@@ -1063,12 +1217,16 @@ func (g *GotdClient) paginateBackfillHistory(
 			break
 		}
 		offsetID = minID
+		result.NextOffsetID = int64(minID)
 		more := len(msgs) == want
 		if page.TotalKnown && serverItemsSeen >= page.Total {
 			more = false
 		}
 		if !more {
 			break
+		}
+		if len(result.Messages) >= limit {
+			result.Truncated = true
 		}
 		if len(result.Messages) < limit && req.Throttle > 0 {
 			if err := wait(ctx, req.Throttle); err != nil {
@@ -1272,7 +1430,7 @@ func (g *GotdClient) CreateTopic(ctx context.Context, req CreateTopicReq) (Creat
 	r := &tg.MessagesCreateForumTopicRequest{
 		Peer:     ch,
 		Title:    req.Title,
-		RandomID: randomID(),
+		RandomID: operationRandomID(ctx),
 	}
 	if req.IconColor != 0 {
 		r.IconColor = req.IconColor
@@ -1284,7 +1442,11 @@ func (g *GotdClient) CreateTopic(ctx context.Context, req CreateTopicReq) (Creat
 	if err != nil {
 		return CreateTopicResp{}, mapRPCErr(err)
 	}
-	return CreateTopicResp{TopicID: firstTopicID(updates), Title: req.Title}, nil
+	id := firstTopicID(updates)
+	if id == 0 {
+		return CreateTopicResp{}, safety.NewCommittedWriteWithExtras("topic accepted but response topic ID is missing; do not retry blindly", nil, nil)
+	}
+	return CreateTopicResp{TopicID: id, Title: req.Title}, nil
 }
 
 func (g *GotdClient) EditTopic(ctx context.Context, req EditTopicReq) error {
@@ -1345,6 +1507,8 @@ func (g *GotdClient) ListFolders(ctx context.Context) ([]FolderInfo, error) {
 		}
 		if df, ok := f.(*tg.DialogFilter); ok {
 			out = append(out, folderInfoFromDialogFilter(df))
+		} else if shared, ok := f.(*tg.DialogFilterChatlist); ok {
+			out = append(out, FolderInfo{ID: int64(shared.ID), Title: shared.Title.Text, Emoji: shared.Emoticon, IncludeChatIDs: inputPeerIDs(shared.IncludePeers), Shared: true})
 		}
 	}
 	return out, nil
@@ -1354,10 +1518,29 @@ func (g *GotdClient) UpdateFolder(ctx context.Context, req FolderUpdateReq) erro
 	if err := validatePositiveTelegramInt32(req.ID, "folder_id"); err != nil {
 		return err
 	}
-	if existing, ok, err := g.folderInfoByID(ctx, req.ID); err != nil {
-		return err
-	} else if ok {
-		req = mergeFolderUpdate(existing, req)
+	filters, err := g.api.MessagesGetDialogFilters(ctx)
+	if err != nil {
+		return mapRPCErr(err)
+	}
+	filter := &tg.DialogFilter{ID: int(req.ID), Title: tg.TextWithEntities{Text: req.Title}, Emoticon: req.Emoji}
+	for _, existing := range filters.Filters {
+		switch f := existing.(type) {
+		case *tg.DialogFilter:
+			if f.ID == int(req.ID) {
+				copy := *f
+				filter = &copy
+			}
+		case *tg.DialogFilterChatlist:
+			if f.ID == int(req.ID) {
+				return safety.NewBadArgs("shared chat-list folders require a dedicated workflow")
+			}
+		}
+	}
+	if req.Title != "" {
+		filter.Title = tg.TextWithEntities{Text: req.Title}
+	}
+	if req.Emoji != "" {
+		filter.SetEmoticon(req.Emoji)
 	}
 	includePeers, err := g.inputPeersFromChatIDs(ctx, req.IncludeChatIDs)
 	if err != nil {
@@ -1367,7 +1550,8 @@ func (g *GotdClient) UpdateFolder(ctx context.Context, req FolderUpdateReq) erro
 	if err != nil {
 		return err
 	}
-	filter := folderFilterFromReq(req, includePeers, excludePeers)
+	filter = patchFolderPeers(filter, includePeers, excludePeers)
+
 	_, err = g.api.MessagesUpdateDialogFilter(ctx, &tg.MessagesUpdateDialogFilterRequest{ID: int(req.ID), Filter: filter})
 	return mapRPCErr(err)
 }
@@ -1420,9 +1604,9 @@ func inputPeerIDs(peers []tg.InputPeerClass) []int64 {
 		case *tg.InputPeerUser:
 			ids = append(ids, p.UserID)
 		case *tg.InputPeerChannel:
-			ids = append(ids, p.ChannelID)
+			ids = append(ids, peerid.Channel(p.ChannelID))
 		case *tg.InputPeerChat:
-			ids = append(ids, p.ChatID)
+			ids = append(ids, peerid.Chat(p.ChatID))
 		}
 	}
 	return ids
@@ -1502,30 +1686,6 @@ func (g *GotdClient) ReorderFolders(ctx context.Context, ids []int64) error {
 	return mapRPCErr(err)
 }
 
-func (g *GotdClient) ListPinnedDialogs(ctx context.Context, chatID int64) ([]ChatInfo, error) {
-	resp, err := g.api.MessagesGetPinnedDialogs(ctx, 0)
-	if err != nil {
-		return nil, mapRPCErr(err)
-	}
-	out := make([]ChatInfo, 0, len(resp.Chats)+len(resp.Users))
-	for _, c := range resp.Chats {
-		switch v := c.(type) {
-		case *tg.Channel:
-			out = append(out, ChatInfo{ID: v.ID, Type: "channel", Title: v.Title, Username: v.Username})
-		case *tg.Chat:
-			out = append(out, ChatInfo{ID: v.ID, Type: "group", Title: v.Title})
-		}
-	}
-	for _, u := range resp.Users {
-		if user, ok := u.(*tg.User); ok {
-			out = append(out, ChatInfo{
-				ID: user.ID, Type: "user", Title: DisplayName(user.FirstName, user.LastName, user.Username, user.ID), Username: user.Username,
-			})
-		}
-	}
-	return out, nil
-}
-
 func (g *GotdClient) AdminAction(ctx context.Context, req AdminActionReq) (InviteLinkResp, error) {
 	peer, err := g.peerFromChatID(ctx, req.ChatID)
 	if err != nil {
@@ -1546,7 +1706,7 @@ func (g *GotdClient) AdminAction(ctx context.Context, req AdminActionReq) (Invit
 		_, err = g.api.MessagesEditChatAbout(ctx, &tg.MessagesEditChatAboutRequest{Peer: peer, About: req.Value})
 		return InviteLinkResp{}, mapRPCErr(err)
 	case "chat-photo":
-		file, err := uploader.NewUploader(g.api).FromPath(ctx, req.Path)
+		file, err := uploadSnapshot(ctx, g.api, req.Path)
 		if err != nil {
 			return InviteLinkResp{}, err
 		}
@@ -1564,10 +1724,15 @@ func (g *GotdClient) AdminAction(ctx context.Context, req AdminActionReq) (Invit
 		}
 		return InviteLinkResp{}, mapRPCErr(err)
 	case "set-permissions":
-		_, err = g.api.MessagesEditChatDefaultBannedRights(ctx, &tg.MessagesEditChatDefaultBannedRightsRequest{
-			Peer:         peer,
-			BannedRights: parseBannedRights(req.Value),
-		})
+		rights, err := g.defaultBannedRights(ctx, peer)
+		if err != nil {
+			return InviteLinkResp{}, err
+		}
+		rights, err = patchBannedRights(rights, req.Value)
+		if err != nil {
+			return InviteLinkResp{}, err
+		}
+		_, err = g.api.MessagesEditChatDefaultBannedRights(ctx, &tg.MessagesEditChatDefaultBannedRightsRequest{Peer: peer, BannedRights: rights})
 		return InviteLinkResp{}, mapRPCErr(err)
 	case "chat-invite-link":
 		invite, err := g.api.MessagesExportChatInvite(ctx, &tg.MessagesExportChatInviteRequest{Peer: peer})
@@ -1586,10 +1751,7 @@ func (g *GotdClient) AdminAction(ctx context.Context, req AdminActionReq) (Invit
 		}
 		rights := tg.ChatAdminRights{}
 		if req.Action == "promote" {
-			rights = tg.ChatAdminRights{
-				ChangeInfo: true, DeleteMessages: true, BanUsers: true,
-				InviteUsers: true, PinMessages: true, Other: true, ManageTopics: true,
-			}
+			rights = adminRightsFromFlags(req.Flags)
 		}
 		_, err = g.api.ChannelsEditAdmin(ctx, &tg.ChannelsEditAdminRequest{
 			Channel:     &tg.InputChannel{ChannelID: ch.ChannelID, AccessHash: ch.AccessHash},
@@ -1606,6 +1768,15 @@ func (g *GotdClient) AdminAction(ctx context.Context, req AdminActionReq) (Invit
 		if err != nil {
 			return InviteLinkResp{}, err
 		}
+		if req.Action == "kick" {
+			current, readErr := g.api.ChannelsGetParticipant(ctx, &tg.ChannelsGetParticipantRequest{Channel: &tg.InputChannel{ChannelID: ch.ChannelID, AccessHash: ch.AccessHash}, Participant: participant})
+			if readErr != nil {
+				return InviteLinkResp{}, mapRPCErr(readErr)
+			}
+			if _, restricted := current.Participant.(*tg.ChannelParticipantBanned); restricted {
+				return InviteLinkResp{}, safety.NewBadArgs("kick would erase existing restrictions; use an explicit ban or unban operation")
+			}
+		}
 		rights := tg.ChatBannedRights{}
 		switch req.Action {
 		case "ban-from-chat", "kick":
@@ -1619,22 +1790,15 @@ func (g *GotdClient) AdminAction(ctx context.Context, req AdminActionReq) (Invit
 			Participant:  participant,
 			BannedRights: rights,
 		})
+		if err == nil && req.Action == "kick" {
+			_, err = g.api.ChannelsEditBanned(ctx, &tg.ChannelsEditBannedRequest{Channel: &tg.InputChannel{ChannelID: ch.ChannelID, AccessHash: ch.AccessHash}, Participant: participant, BannedRights: tg.ChatBannedRights{}})
+			if err != nil {
+				return InviteLinkResp{}, safety.NewCommittedWriteWithExtras("member removed but unban failed; member remains banned", mapRPCErr(err), map[string]any{"removed": true, "unban_failed": true})
+			}
+		}
 		return InviteLinkResp{}, mapRPCErr(err)
 	}
 	return InviteLinkResp{}, safety.NewBadArgs("%s is unsupported for this peer type", req.Action)
-}
-
-func parseBannedRights(value string) tg.ChatBannedRights {
-	rights := tg.ChatBannedRights{}
-	if strings.Contains(strings.ToLower(value), "restrict") || strings.Contains(strings.ToLower(value), "read-only") {
-		rights.SendMessages = true
-		rights.SendMedia = true
-		rights.SendPhotos = true
-		rights.SendVideos = true
-		rights.SendDocs = true
-		rights.SendPlain = true
-	}
-	return rights
 }
 
 func (g *GotdClient) inputUserFromID(userID int64) (tg.InputUserClass, error) {
@@ -1690,18 +1854,49 @@ func (g *GotdClient) ListChatMembers(ctx context.Context, chatID int64, limit in
 }
 
 func (g *GotdClient) GetChatsInfo(ctx context.Context, ids []int64) ([]ChatInfo, error) {
-	out := make([]ChatInfo, 0, len(ids))
-	for _, id := range ids {
-		var title, kind, username sql.NullString
-		if g.db != nil {
-			_ = g.db.QueryRow("SELECT title, type, username FROM tg_chats WHERE chat_id=?", id).Scan(&title, &kind, &username)
-		}
-		out = append(out, ChatInfo{ID: id, Type: kind.String, Title: title.String, Username: username.String})
+	if len(ids) > 100 {
+		return nil, safety.NewBadArgs("at most 100 peers may be inspected at once")
 	}
-	return out, nil
+	peers := make([]tg.InputDialogPeerClass, 0, len(ids))
+	for _, id := range ids {
+		p, err := g.peerFromChatID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		peers = append(peers, &tg.InputDialogPeer{Peer: p})
+	}
+	resp, err := g.api.MessagesGetPeerDialogs(ctx, peers)
+	if err != nil {
+		return nil, mapRPCErr(err)
+	}
+	info := dialogEntityInfo(resp.Users, resp.Chats)
+	for _, d := range resp.Dialogs {
+		if v, ok := d.(*tg.Dialog); ok {
+			id := peerID(v.Peer)
+			row := info[id]
+			row.ReadInboxMaxID = v.ReadInboxMaxID
+			row.UnreadCount = v.UnreadCount
+			row.FolderID = v.FolderID
+			row.TopMessageID = v.TopMessage
+			row.ReadStateKnown = true
+			info[id] = row
+		}
+	}
+	result := make([]ChatInfo, 0, len(ids))
+	for _, id := range ids {
+		row, ok := info[id]
+		if !ok {
+			return nil, safety.NewBadArgs("requested peer metadata was not returned by Telegram")
+		}
+		result = append(result, row)
+	}
+	return result, nil
 }
 
 func (g *GotdClient) ListenOnce(ctx context.Context) (ListenEvent, error) {
+	if g.updateStore != nil {
+		return g.listenDurable(ctx)
+	}
 	if err := ctx.Err(); err != nil {
 		return ListenEvent{}, err
 	}
@@ -1727,56 +1922,41 @@ func (g *GotdClient) ListenOnce(ctx context.Context) (ListenEvent, error) {
 	}
 }
 
+func updateList(updates tg.UpdatesClass) []tg.UpdateClass {
+	switch u := updates.(type) {
+	case *tg.Updates:
+		return u.Updates
+	case *tg.UpdatesCombined:
+		return u.Updates
+	case *tg.UpdateShort:
+		return []tg.UpdateClass{u.Update}
+	}
+	return nil
+}
 func listenEventsFromUpdates(updates tg.UpdatesClass) []ListenEvent {
 	var out []ListenEvent
 	add := func(kind string, msg tg.MessageClass) {
 		m, ok := msg.(*tg.Message)
-		if !ok {
+		if !ok || m == nil {
 			return
 		}
-		out = append(out, ListenEvent{
-			UpdateKind: kind,
-			ChatID:     peerID(m.PeerID),
-			MessageID:  int64(m.ID),
-			SenderID:   peerID(m.FromID),
-			Date:       timeFromUnix(m.Date),
-			Text:       m.Message,
-			MediaType:  messageMediaType(m.Media),
-			GroupedID:  m.GroupedID,
-		})
+		if expiringMessage(m) {
+			out = append(out, ListenEvent{UpdateKind: "unsupported_expiring_message", ChatID: peerID(m.PeerID), MessageID: int64(m.ID)})
+			return
+		}
+		event := ListenEvent{UpdateKind: kind, ChatID: peerID(m.PeerID), MessageID: int64(m.ID), SenderID: peerID(m.FromID), Date: timeFromUnix(m.Date), Text: m.Message, MediaType: messageMediaType(m.Media), MediaIdentity: messageMediaIdentity(m.Media), GroupedID: m.GroupedID, IsOutgoing: m.Out, EditDate: m.EditDate}
+		if reply, ok := m.ReplyTo.(*tg.MessageReplyHeader); ok {
+			event.ReplyToMsgID = int64(reply.ReplyToMsgID)
+		}
+		out = append(out, event)
 	}
-	addDeleted := func(kind string, chatID int64, ids []int) {
+	deleted := func(kind string, chat int64, ids []int) {
 		for _, id := range ids {
-			out = append(out, ListenEvent{UpdateKind: kind, ChatID: chatID, MessageID: int64(id), Deleted: true})
+			out = append(out, ListenEvent{UpdateKind: kind, ChatID: chat, MessageID: int64(id), Deleted: true})
 		}
 	}
-	switch u := updates.(type) {
-	case *tg.Updates:
-		for _, update := range u.Updates {
-			switch v := update.(type) {
-			case *tg.UpdateNewMessage:
-				add("message", v.Message)
-			case *tg.UpdateNewChannelMessage:
-				add("channel_message", v.Message)
-			case *tg.UpdateEditMessage:
-				add("edit_message", v.Message)
-			case *tg.UpdateEditChannelMessage:
-				add("edit_channel_message", v.Message)
-			case *tg.UpdateDeleteMessages:
-				// Telegram's basic delete update omits the chat id. Emit the
-				// event for observers, but durable caching waits for a scoped
-				// channel update or a subsequent backfill to identify the chat.
-				addDeleted("delete_message", 0, v.Messages)
-			case *tg.UpdateDeleteChannelMessages:
-				addDeleted("delete_channel_message", v.ChannelID, v.Messages)
-			}
-		}
-	case *tg.UpdateShortMessage:
-		out = append(out, ListenEvent{UpdateKind: "message", ChatID: u.UserID, MessageID: int64(u.ID), Text: u.Message})
-	case *tg.UpdateShortChatMessage:
-		out = append(out, ListenEvent{UpdateKind: "chat_message", ChatID: u.ChatID, MessageID: int64(u.ID), SenderID: u.FromID, Text: u.Message})
-	case *tg.UpdateShort:
-		switch v := u.Update.(type) {
+	for _, up := range updateList(updates) {
+		switch v := up.(type) {
 		case *tg.UpdateNewMessage:
 			add("message", v.Message)
 		case *tg.UpdateNewChannelMessage:
@@ -1785,9 +1965,48 @@ func listenEventsFromUpdates(updates tg.UpdatesClass) []ListenEvent {
 			add("edit_message", v.Message)
 		case *tg.UpdateEditChannelMessage:
 			add("edit_channel_message", v.Message)
+		case *tg.UpdateDeleteMessages:
+			deleted("delete_message", 0, v.Messages)
+		case *tg.UpdateDeleteChannelMessages:
+			deleted("delete_channel_message", peerid.Channel(v.ChannelID), v.Messages)
+		case *tg.UpdateReadHistoryInbox:
+			out = append(out, ListenEvent{UpdateKind: "read_inbox", ChatID: peerID(v.Peer), ReadMaxID: v.MaxID})
+		case *tg.UpdateReadChannelInbox:
+			out = append(out, ListenEvent{UpdateKind: "read_inbox", ChatID: peerid.Channel(v.ChannelID), ReadMaxID: v.MaxID})
 		}
 	}
+	switch u := updates.(type) {
+	case *tg.UpdateShortMessage:
+		if u.TTLPeriod != 0 {
+			return []ListenEvent{{UpdateKind: "unsupported_expiring_message", ChatID: u.UserID, MessageID: int64(u.ID)}}
+		}
+		e := ListenEvent{UpdateKind: "message", ChatID: u.UserID, MessageID: int64(u.ID), Text: u.Message, Date: timeFromUnix(u.Date), IsOutgoing: u.Out, ReplyToMsgID: replyMessageID(u.ReplyTo)}
+		if !u.Out {
+			e.SenderID = u.UserID
+		}
+		out = append(out, e)
+	case *tg.UpdateShortChatMessage:
+		if u.TTLPeriod != 0 {
+			return []ListenEvent{{UpdateKind: "unsupported_expiring_message", ChatID: peerid.Chat(u.ChatID), MessageID: int64(u.ID)}}
+		}
+		out = append(out, ListenEvent{UpdateKind: "chat_message", ChatID: peerid.Chat(u.ChatID), MessageID: int64(u.ID), SenderID: u.FromID, Text: u.Message, Date: timeFromUnix(u.Date), IsOutgoing: u.Out, ReplyToMsgID: replyMessageID(u.ReplyTo)})
+	}
 	return out
+}
+func expiringMessage(m *tg.Message) bool {
+	if m == nil {
+		return false
+	}
+	if m.TTLPeriod > 0 {
+		return true
+	}
+	switch v := m.Media.(type) {
+	case *tg.MessageMediaPhoto:
+		return v != nil && v.TTLSeconds > 0
+	case *tg.MessageMediaDocument:
+		return v != nil && v.TTLSeconds > 0
+	}
+	return false
 }
 
 func messageMediaType(media tg.MessageMediaClass) string {
@@ -1811,8 +2030,8 @@ func inviteLink(inv tg.ExportedChatInviteClass) string {
 }
 
 func firstTopicID(updates tg.UpdatesClass) int64 {
-	if v, ok := updates.(*tg.Updates); ok {
-		for _, up := range v.Updates {
+	if list := updateList(updates); len(list) > 0 {
+		for _, up := range list {
 			switch t := up.(type) {
 			case *tg.UpdateNewChannelMessage:
 				if svc, ok := t.Message.(*tg.MessageService); ok {
@@ -1837,9 +2056,9 @@ func peerID(p tg.PeerClass) int64 {
 	case *tg.PeerUser:
 		return v.UserID
 	case *tg.PeerChat:
-		return v.ChatID
+		return peerid.Chat(v.ChatID)
 	case *tg.PeerChannel:
-		return v.ChannelID
+		return peerid.Channel(v.ChannelID)
 	}
 	return 0
 }
@@ -1854,24 +2073,19 @@ func timeFromUnix(ts int) string {
 // extractAllNewMessageIDs returns the message ids of every new-message update
 // inside an Updates response.
 func extractAllNewMessageIDs(u tg.UpdatesClass) []int64 {
-	var out []int64
-	if v, ok := u.(*tg.Updates); ok {
-		for _, up := range v.Updates {
-			switch n := up.(type) {
-			case *tg.UpdateNewMessage:
-				if msg, ok := n.Message.(*tg.Message); ok {
-					out = append(out, int64(msg.ID))
-				}
-			case *tg.UpdateNewChannelMessage:
-				if msg, ok := n.Message.(*tg.Message); ok {
-					out = append(out, int64(msg.ID))
-				}
-			case *tg.UpdateMessageID:
-				out = append(out, int64(n.ID))
-			}
-		}
+	d, err := collectAlbumUpdates(u)
+	if err != nil {
+		return nil
 	}
-	return out
+	if len(d.messageOrder) > 0 {
+		return d.messageOrder
+	}
+	var ids []int64
+	for _, id := range d.mapping {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
 }
 
 // mapRPCErr classifies a gotd RPC error into the dispatch error taxonomy.
@@ -1881,6 +2095,10 @@ func extractAllNewMessageIDs(u tg.UpdatesClass) []int64 {
 // "FLOOD_WAIT_5" underscore form previous string-matching assumed. Use
 // gotd's typed accessors so we don't have to track that format.
 func mapRPCErr(err error) error {
+	var rejected *safety.DefinitiveRejection
+	if errors.As(err, &rejected) {
+		return &safety.DefinitiveRejection{Err: mapRPCErr(rejected.Err)}
+	}
 	if err == nil {
 		return nil
 	}
@@ -1893,6 +2111,10 @@ func mapRPCErr(err error) error {
 	}
 	if rpcErr, ok := tgerr.As(err); ok {
 		switch rpcErr.Type {
+		case "SLOWMODE_WAIT":
+			return &safety.FloodWait{Seconds: rpcErr.Argument}
+		case "AUTH_KEY_UNREGISTERED", "AUTH_KEY_INVALID", "SESSION_REVOKED", "SESSION_EXPIRED", "USER_DEACTIVATED", "USER_DEACTIVATED_BAN":
+			return safety.NewMissingCredentials("Telegram authorization is no longer valid; authenticate this account again")
 		case "PREMIUM_ACCOUNT_REQUIRED":
 			return &safety.PremiumRequired{}
 		case "CHAT_WRITE_FORBIDDEN", "CHAT_ADMIN_REQUIRED", "USER_BANNED_IN_CHANNEL", "CHAT_FORBIDDEN", "CHANNEL_PRIVATE", "USER_NOT_PARTICIPANT", "RIGHT_FORBIDDEN":
@@ -1913,4 +2135,42 @@ func mapAuthErr(err error) error {
 		}
 	}
 	return err
+}
+
+func replyMessageID(reply tg.MessageReplyHeaderClass) int64 {
+	if r, ok := reply.(*tg.MessageReplyHeader); ok {
+		return int64(r.ReplyToMsgID)
+	}
+	return 0
+}
+
+func sentMessageID(u tg.UpdatesClass, random int64) (int64, error) {
+	if short, ok := u.(*tg.UpdateShortSentMessage); ok && short != nil && short.ID > 0 {
+		return int64(short.ID), nil
+	}
+	data, err := collectAlbumUpdates(u)
+	if err == nil {
+		if id := data.mapping[random]; id > 0 {
+			return id, nil
+		}
+	}
+	return 0, safety.NewCommittedWriteWithExtras("message accepted but its ID could not be correlated; do not retry blindly", err, nil)
+}
+
+func messageMediaIdentity(media tg.MessageMediaClass) string {
+	switch v := media.(type) {
+	case *tg.MessageMediaPhoto:
+		if v != nil {
+			if p, ok := v.Photo.(*tg.Photo); ok && p != nil {
+				return fmt.Sprintf("photo:%d", p.ID)
+			}
+		}
+	case *tg.MessageMediaDocument:
+		if v != nil {
+			if d, ok := v.Document.(*tg.Document); ok && d != nil {
+				return fmt.Sprintf("document:%d", d.ID)
+			}
+		}
+	}
+	return ""
 }

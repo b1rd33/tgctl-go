@@ -89,10 +89,8 @@ func deleteMsgCommand(cfg CommandsConfig) *cobra.Command {
 						if err != nil {
 							return nil, err
 						}
-						if effective {
-							for _, id := range ids {
-								_ = store.MarkDeleted(db, chatID, id)
-							}
+						if err := store.MarkLiveMessagesDeleted(db, chatID, ids); err != nil {
+							return nil, safety.NewCommittedWriteWithExtras("deletion accepted but cache update failed", err, nil)
 						}
 						results := make([]map[string]any, len(ids))
 						for i, id := range ids {
@@ -187,7 +185,9 @@ func leaveChatCommand(cfg CommandsConfig) *cobra.Command {
 						if err := c.LeaveChat(ctx, client.LeaveChatReq{ChatID: chatID}); err != nil {
 							return nil, err
 						}
-						_, _ = db.Exec("UPDATE tg_chats SET left = 1 WHERE chat_id = ?", chatID)
+						if _, err := db.Exec("UPDATE tg_chats SET left = 1 WHERE chat_id = ?", chatID); err != nil {
+							return nil, safety.NewCommittedWriteWithExtras("left chat but cache update failed", err, nil)
+						}
 						return map[string]any{"left": true}, nil
 					},
 				})

@@ -31,14 +31,18 @@ go install github.com/b1rd33/tgctl-go/cmd/tg@latest
 # https://github.com/b1rd33/tgctl-go/releases/latest
 ```
 
+## Reliability and existing installations
+
+See [migration and reliability](docs/reliability.md) before upgrading an existing account store. Set `TGCTL_HOME` to the absolute existing root to retain it. New installations use the OS configuration directory. [The prioritized roadmap](docs/reliability-roadmap.md) separates reliability repairs from optional new features.
+
 ## Setup (one time)
 
 1. Register an app at https://my.telegram.org/apps to get an `api_id` and `api_hash`.
-2. Drop them in `.env`:
+2. Export them in your shell, or put `.env` inside `TGCTL_HOME`:
 
    ```bash
-   cp .env.example .env
-   # edit TG_API_ID and TG_API_HASH
+   export TG_API_ID="your-api-id"
+   export TG_API_HASH="your-api-hash"
    ```
 
 3. Authorize the account:

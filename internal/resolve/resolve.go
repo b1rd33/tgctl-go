@@ -35,19 +35,30 @@ func ResolveChatDB(db *sql.DB, raw string) (int64, string, error) {
 		if username == "" {
 			return 0, "", NewNotFound("empty username")
 		}
-		var chatID int64
-		var title sql.NullString
-		err := db.QueryRow(
-			"SELECT chat_id, title FROM tg_chats WHERE LOWER(username) = LOWER(?)",
-			username,
-		).Scan(&chatID, &title)
-		if err == sql.ErrNoRows {
-			return 0, "", NewNotFound("username %s not in DB", value)
-		}
+		rows, err := db.Query("SELECT chat_id,title FROM tg_chats WHERE LOWER(username)=LOWER(?) ORDER BY chat_id LIMIT 2", username)
 		if err != nil {
 			return 0, "", err
 		}
-		return chatID, titleOrID(chatID, title), nil
+		defer rows.Close()
+		var matches [][2]any
+		for rows.Next() {
+			var id int64
+			var title sql.NullString
+			if err := rows.Scan(&id, &title); err != nil {
+				return 0, "", err
+			}
+			matches = append(matches, [2]any{id, titleOrID(id, title)})
+		}
+		if err := rows.Err(); err != nil {
+			return 0, "", err
+		}
+		if len(matches) == 0 {
+			return 0, "", NewNotFound("username %s not in DB", value)
+		}
+		if len(matches) > 1 {
+			return 0, "", &Ambiguous{Raw: value, Candidates: matches}
+		}
+		return matches[0][0].(int64), matches[0][1].(string), nil
 	}
 
 	needle := text.StripAccents(value)
@@ -70,6 +81,9 @@ func ResolveChatDB(db *sql.DB, raw string) (int64, string, error) {
 		}
 	}
 
+	if err := rows.Err(); err != nil {
+		return 0, "", err
+	}
 	if len(matches) == 1 {
 		id := matches[0][0].(int64)
 		title := matches[0][1].(string)

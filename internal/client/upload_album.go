@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gotd/td/telegram/uploader"
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 
@@ -416,7 +415,7 @@ func (g *GotdClient) UploadAlbum(ctx context.Context, req UploadAlbumReq) (Uploa
 		if err := ctx.Err(); err != nil {
 			return UploadAlbumResp{}, albumFailure("cancel", i, err)
 		}
-		file, err := uploader.NewUploader(api).FromPath(ctx, item.path)
+		file, err := uploadSnapshot(ctx, api, item.path)
 		if err != nil {
 			stage := "upload"
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -452,12 +451,12 @@ func (g *GotdClient) UploadAlbum(ctx context.Context, req UploadAlbumReq) (Uploa
 		if reusableKind != item.kind {
 			return UploadAlbumResp{}, albumFailure("conversion", i, fmt.Errorf("uploadMedia returned %s for requested %s", reusableKind, item.kind))
 		}
-		id := randomID()
+		id := operationRandomID(ctx)
 		for id == 0 {
-			id = randomID()
+			id = operationRandomID(ctx)
 		}
 		for _, exists := usedRandom[id]; exists; _, exists = usedRandom[id] {
-			id = randomID()
+			id = operationRandomID(ctx)
 			if id == 0 {
 				continue
 			}

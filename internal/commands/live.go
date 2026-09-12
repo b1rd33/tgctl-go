@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -39,15 +38,20 @@ func registerLiveCommands(root *cobra.Command, cfg CommandsConfig) {
 					return nil, err
 				}
 				defer c.Close()
+				db, err := store.Connect(dbPath)
+				if err != nil {
+					return nil, err
+				}
+				defer db.Close()
 				emit := func(event client.ListenEvent) error {
-					if err := cacheListenEvent(dbPath, event); err != nil {
+					if err := applyLiveEvent(db, event); err != nil {
 						return fmt.Errorf("persist live update: %w", err)
 					}
 					env := output.Success("listen.event", event, output.NewRequestID(), nil)
 					if output.Emit(env, output.EmitOptions{JSON: true, Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr()}) != output.OK {
 						return fmt.Errorf("live update persisted but output delivery failed")
 					}
-					return nil
+					return client.AcknowledgeListenEvent(ctx, c, event)
 				}
 				if once {
 					for {
@@ -56,6 +60,9 @@ func registerLiveCommands(root *cobra.Command, cfg CommandsConfig) {
 							return nil, err
 						}
 						if !shouldEmitListenEvent(event, onlyDMs, onlyGroups) {
+							if err := client.AcknowledgeListenEvent(ctx, c, event); err != nil {
+								return nil, err
+							}
 							continue
 						}
 						if err := emit(event); err != nil {
@@ -70,12 +77,14 @@ func registerLiveCommands(root *cobra.Command, cfg CommandsConfig) {
 						return nil, err
 					}
 					if !shouldEmitListenEvent(event, onlyDMs, onlyGroups) {
+						if err := client.AcknowledgeListenEvent(ctx, c, event); err != nil {
+							return nil, err
+						}
 						continue
 					}
 					if err := emit(event); err != nil {
 						return nil, err
 					}
-					time.Sleep(100 * time.Millisecond)
 				}
 			})
 			storeExitCode(cmd, code)
@@ -112,7 +121,7 @@ func shouldEmitListenEvent(event client.ListenEvent, onlyDMs, onlyGroups bool) b
 	if event.ChatID == 0 {
 		return true
 	}
-	isDM := event.UpdateKind == "new_message" && event.ChatID > 0
+	isDM := event.ChatID > 0 && event.UpdateKind != "channel_message" && event.UpdateKind != "edit_channel_message" && event.UpdateKind != "chat_message"
 	if onlyDMs {
 		return isDM
 	}
@@ -132,22 +141,7 @@ func cacheListenEvent(dbPath string, event client.ListenEvent) error {
 }
 
 func applyLiveEvent(db *sql.DB, event client.ListenEvent) error {
-	if event.ChatID == 0 || event.MessageID == 0 {
-		return nil
-	}
-	if event.Deleted {
-		return store.MarkLiveMessagesDeleted(db, event.ChatID, []int64{event.MessageID})
-	}
-	text := event.Text
-	date := event.Date
-	if date == "" {
-		date = time.Now().UTC().Format(time.RFC3339)
-	}
-	return store.UpsertLiveMessage(db, store.LiveMessage{
-		ChatID: event.ChatID, MessageID: event.MessageID, SenderID: optEventSender(event.SenderID),
-		Date: date, Text: &text, GroupedID: event.GroupedID, HasMedia: event.MediaType != "",
-		MediaType: optEventString(event.MediaType), Deleted: event.Deleted,
-	})
+	return client.ApplyListenEvent(db, event)
 }
 
 func optEventSender(id int64) *int64 {

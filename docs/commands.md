@@ -1,6 +1,6 @@
 # Commands
 
-`tg --help` shows 74 commands. This page is generated from Cobra help output.
+`tg --help` shows 77 commands. This page is generated from Cobra help output.
 
 Every command supports the global flags shown by `tg --help`: `--account`, `--full`, `--json`, `--human`, `--lock-wait`, `--read-only`, and `--version` where applicable.
 
@@ -22,11 +22,13 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg chat-invite-link`](#tg-chat-invite-link) | Export an invite link |
 | [`tg chat-members`](#tg-chat-members) | List chat members |
 | [`tg chat-photo`](#tg-chat-photo) | Edit chat photo |
-| [`tg chat-pinned-list`](#tg-chat-pinned-list) | List pinned dialogs for a chat |
+| [`tg chat-pinned-list`](#tg-chat-pinned-list) | List up to 100 pinned messages in a chat |
 | [`tg chat-title`](#tg-chat-title) | Edit chat title |
 | [`tg chats-info`](#tg-chats-info) | Show chat info for comma-separated chat ids |
 | [`tg completion`](#tg-completion) | Generate the autocompletion script for tg for the specified shell. |
 | [`tg contacts`](#tg-contacts) | List cached contacts |
+| [`tg db-backup`](#tg-db-backup) | Create a consistent private cache snapshot (session and media excluded) |
+| [`tg db-restore`](#tg-db-restore) | Restore a cache snapshot into an account with no existing database |
 | [`tg delete-msg`](#tg-delete-msg) | Delete one or more messages (revoke for everyone by default) |
 | [`tg demote`](#tg-demote) | demote user in chat |
 | [`tg discover`](#tg-discover) | Discover dialogs and cache chat metadata |
@@ -54,6 +56,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg login`](#tg-login) | Interactively authorize this account against Telegram |
 | [`tg mark-read`](#tg-mark-read) | Mark history read up to and including --up-to |
 | [`tg me`](#tg-me) | Print authenticated user info |
+| [`tg operations-list`](#tg-operations-list) | Inspect durable write outcomes without exposing request payloads |
 | [`tg pin-msg`](#tg-pin-msg) | Pin a message in a chat |
 | [`tg promote`](#tg-promote) | promote user in chat |
 | [`tg react`](#tg-react) | Send a reaction to a message |
@@ -75,7 +78,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg unban-from-chat`](#tg-unban-from-chat) | unban-from-chat user in chat |
 | [`tg unblock-user`](#tg-unblock-user) | Unblock a previously blocked user |
 | [`tg unpin-msg`](#tg-unpin-msg) | Unpin a previously pinned message |
-| [`tg unread`](#tg-unread) | List recently cached incoming messages |
+| [`tg unread`](#tg-unread) | List cached incoming messages beyond known Telegram read markers |
 | [`tg upload-album`](#tg-upload-album) | Upload a 2–10 item media album |
 | [`tg upload-document`](#tg-upload-document) | Upload a document |
 | [`tg upload-photo`](#tg-upload-photo) | Upload a photo |
@@ -457,7 +460,7 @@ tg chat-photo <group-chat-id> ./photo.png --allow-write --json
 
 ## `tg chat-pinned-list`
 
-List pinned dialogs for a chat
+List up to 100 pinned messages in a chat
 
 **Use**
 
@@ -579,6 +582,58 @@ tg contacts --json
 | `--human` | Force human-readable output (default on a TTY) |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 | `--limit int` | Maximum contacts (default 100) |
+
+## `tg db-backup`
+
+Create a consistent private cache snapshot (session and media excluded)
+
+**Use**
+
+```text
+tg db-backup <snapshot> [flags]
+```
+
+**Example**
+
+```bash
+tg db-backup <snapshot> [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--allow-write` | Required for local DB writes |
+| `--dry-run` | Preview paths without creating a snapshot or contacting Telegram |
+| `-h, --help` | help for db-backup |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+
+## `tg db-restore`
+
+Restore a cache snapshot into an account with no existing database
+
+**Use**
+
+```text
+tg db-restore <snapshot> [flags]
+```
+
+**Example**
+
+```bash
+tg db-restore <snapshot> [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--allow-write` | Required for local DB writes |
+| `--dry-run` | Preview paths without creating a snapshot or contacting Telegram |
+| `-h, --help` | help for db-restore |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 
 ## `tg delete-msg`
 
@@ -805,6 +860,7 @@ tg export <chat> [flags] --json
 | `--human` | Force human-readable output (default on a TTY) |
 | `--include-media` | Include media paths relative to the account media root |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--legacy-cache` | Export the preserved pre-migration cache; IDs may be ambiguous and must not be used for writes |
 | `--limit int` | Maximum rows (0 means all cached rows) |
 | `--manifest string` | Write an archive manifest JSON file |
 | `--manifest-hash` | Include SHA-256 hashes in --manifest |
@@ -1222,6 +1278,7 @@ tg list-msgs 123456789 --limit 10 --json
 
 | Flag | Description |
 |---|---|
+| `--cursor string` | Continue from next_cursor using the same filters and order |
 | `-h, --help` | help for list-msgs |
 | `--human` | Force human-readable output (default on a TTY) |
 | `--include-deleted` | Include tombstoned messages |
@@ -1340,6 +1397,31 @@ tg me --json
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 | `--offline` | Read cached self user info without connecting to Telegram |
 
+## `tg operations-list`
+
+Inspect durable write outcomes without exposing request payloads
+
+**Use**
+
+```text
+tg operations-list [flags]
+```
+
+**Example**
+
+```bash
+tg operations-list [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `-h, --help` | help for operations-list |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--limit int` | Maximum operations (1–1000) (default 100) |
+
 ## `tg pin-msg`
 
 Pin a message in a chat
@@ -1398,6 +1480,7 @@ tg promote 987654321 123456789 --allow-write --confirm 987654321 --json
 | `--human` | Force human-readable output (default on a TTY) |
 | `--idempotency-key string` | Per-account replay-safe key |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--rights string` | Comma-separated explicit admin rights: other,change_info,delete_messages,ban_users,invite_users,pin_messages,manage_topics,post_messages,edit_messages,manage_call,add_admins (default "other") |
 
 ## `tg react`
 
@@ -1450,6 +1533,7 @@ tg search 123456789 "shipping" --limit 20 --json
 | Flag | Description |
 |---|---|
 | `--case-sensitive` | Case-sensitive matching |
+| `--cursor string` | Continue from next_cursor using the same filters and order |
 | `-h, --help` | help for search |
 | `--human` | Force human-readable output (default on a TTY) |
 | `--include-deleted` | Include tombstoned messages |
@@ -1510,9 +1594,12 @@ tg send-by-username @username "hello" --allow-write --json
 | Flag | Description |
 |---|---|
 | `--allow-write` | Required for any Telegram-side write |
+| `--confirm string` | Typed confirm against the resolved id |
 | `--dry-run` | Print payload preview without contacting Telegram |
+| `--fuzzy` | Allow title-based selectors for write commands |
 | `-h, --help` | help for send-by-username |
 | `--human` | Force human-readable output (default on a TTY) |
+| `--idempotency-key string` | Per-account replay-safe key |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 | `--no-webpage` | Disable link preview |
 | `--reply-to int` | Reply-to message id |
@@ -1595,6 +1682,7 @@ tg show 123456789 --limit 5 --json
 
 | Flag | Description |
 |---|---|
+| `--cursor string` | Continue from next_cursor using the same filters and order |
 | `-h, --help` | help for show |
 | `--human` | Force human-readable output (default on a TTY) |
 | `--include-deleted` | Include tombstoned messages |
@@ -1948,7 +2036,7 @@ tg unpin-msg 123456789 1 --allow-write --json
 
 ## `tg unread`
 
-List recently cached incoming messages
+List cached incoming messages beyond known Telegram read markers
 
 **Use**
 

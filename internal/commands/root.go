@@ -37,6 +37,15 @@ func NewRootCommand() *cobra.Command {
 		Version:       semverVersion(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		PersistentPreRunE: func(c *cobra.Command, _ []string) error {
+			c.SetContext(safety.WithLockWait(c.Context(), cfg.LockWaitSeconds))
+			if flag := c.Flags().Lookup("limit"); flag != nil {
+				if limit, err := c.Flags().GetInt("limit"); err == nil && limit > 10000 {
+					return safety.NewBadArgs("--limit exceeds maximum 10000")
+				}
+			}
+			return nil
+		},
 		Run: func(c *cobra.Command, _ []string) {
 			fmt.Fprintln(c.ErrOrStderr(), c.Long)
 		},
@@ -414,7 +423,8 @@ func RegisterAll(root *cobra.Command, mgr *accounts.Manager, cfg CommandsConfig)
 	registerSetup(root)
 	registerLogin(root, mgr)
 	registerImportTelethon(root, mgr)
-	registerSendByUsername(root, mgr)
+	registerSendByUsername(root, mgr, cfg)
+	registerRecoveryCommands(root, cfg)
 	registerBackfillEntities(root, mgr)
 	installLegacyMigrationPreflight(root, mgr)
 }

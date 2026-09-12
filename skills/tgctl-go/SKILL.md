@@ -26,7 +26,7 @@ audit logs, and raw live transcripts out of source control.
 
 ## Complete command coverage
 
-The CLI has 74 commands. Do not infer that the album workflow is the whole
+Use the generated reference for the current command count. Do not infer that the album workflow is the whole
 product. Use the bundled [complete command reference](references/commands.md)
 for the exact usage, flags, examples, and output fields; it is generated from
 the same Cobra help used to build `docs/commands.md`.
@@ -42,7 +42,7 @@ the same Cobra help used to build `docs/commands.md`.
   `react`, `send`, `send-by-username`, `unpin-msg`.
 - **Media:** `download-album`, `download-media`, `upload-album`,
   `upload-document`, `upload-photo`, `upload-video`, `upload-voice`.
-- **Synchronization and archives:** `export`, `listen`, `sync`.
+- **Synchronization and archives:** `export`, `listen`, `sync`, `operations-list`, `db-backup`, `db-restore`.
 - **Dialog folders:** `folder-add-chat`, `folder-create`, `folder-delete`,
   `folder-edit`, `folder-remove-chat`, `folder-show`, `folders-list`,
   `folders-reorder`.
@@ -256,3 +256,7 @@ Important exit codes are `FLOOD_WAIT` (5), `PERMISSION_DENIED` (10),
 Thumbnails, disk-space preflight, transfer concurrency, all-or-nothing album
 orchestration, and safe resumable transfers remain future hardening—not hidden
 requirements of the current CLI.
+
+## Reliability contract
+
+Use an absolute `TGCTL_HOME` for existing installations. Peer IDs are marked: users positive, basic groups negative, channels `-1000000000000-raw_id`. Legacy ambiguous caches are preserved separately and cannot resolve writes. Inspect `doctor` and `operations-list` before reconciling unknown outcomes; never force a resend or discard a pending reservation based on age. Live `event_id` delivery is at least once. Cached reads use `next_cursor`/`--cursor` and do not imply complete server history. Cache snapshots exclude sessions and media. See the repository reliability document for migration, recovery and backup details.

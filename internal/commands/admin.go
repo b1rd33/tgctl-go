@@ -44,8 +44,11 @@ func setPermissionsCommand(cfg CommandsConfig) *cobra.Command {
 			if value == "" {
 				return emitDispatchedFailure(cmd, "set-permissions", safety.NewBadArgs("permissions cannot be empty"))
 			}
+			if err := client.ValidatePermissions(value); err != nil {
+				return emitDispatchedFailure(cmd, "set-permissions", err)
+			}
 			payload := map[string]any{"permissions": value, "send_messages": sendMessages}
-			return runWrite(cmd, "set-permissions", "messages.EditChatDefaultBannedRights", args[0], cfg, payload,
+			return runWriteWithResolvedConfirm(cmd, "set-permissions", "messages.EditChatDefaultBannedRights", args[0], cfg, payload, "chat_id", func(id int64) any { return id },
 				func(ctx context.Context, c client.Client, chatID int64, _ string) (map[string]any, error) {
 					if _, err := c.AdminAction(ctx, client.AdminActionReq{Action: "set-permissions", ChatID: chatID, Value: value}); err != nil {
 						return nil, err
@@ -121,12 +124,20 @@ func adminUserCommand(cfg CommandsConfig, name, method, confirmSlot string) *cob
 			if err != nil {
 				return emitDispatchedFailure(cmd, name, err)
 			}
-			payload := map[string]any{"user_id": userID}
+			var rights map[string]bool
+			if name == "promote" {
+				value, _ := cmd.Flags().GetString("rights")
+				rights, err = client.ParseAdminRights(value)
+				if err != nil {
+					return emitDispatchedFailure(cmd, name, err)
+				}
+			}
+			payload := map[string]any{"user_id": userID, "rights": rights}
 			action := func(ctx context.Context, c client.Client, chatID int64, _ string) (map[string]any, error) {
-				if _, err := c.AdminAction(ctx, client.AdminActionReq{Action: name, ChatID: chatID, UserID: userID}); err != nil {
+				if _, err := c.AdminAction(ctx, client.AdminActionReq{Action: name, ChatID: chatID, UserID: userID, Flags: rights}); err != nil {
 					return nil, err
 				}
-				return map[string]any{"user_id": userID, "action": name}, nil
+				return map[string]any{"user_id": userID, "action": name, "rights": rights}, nil
 			}
 			if confirmSlot != "" {
 				expected := func(int64) any { return userID }
@@ -137,6 +148,9 @@ func adminUserCommand(cfg CommandsConfig, name, method, confirmSlot string) *cob
 			}
 			return runWrite(cmd, name, method, args[0], cfg, payload, action)
 		},
+	}
+	if name == "promote" {
+		cmd.Flags().String("rights", "other", "Comma-separated explicit admin rights: other,change_info,delete_messages,ban_users,invite_users,pin_messages,manage_topics,post_messages,edit_messages,manage_call,add_admins")
 	}
 	addWriteFlags(cmd)
 	return cmd

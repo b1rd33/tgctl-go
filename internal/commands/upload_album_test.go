@@ -195,7 +195,7 @@ func TestUploadAlbumConcurrentSameKeySendsOnce(t *testing.T) {
 	}()
 	select {
 	case second := <-secondDone:
-		if second.code != 2 || !strings.Contains(second.out, "already in progress") {
+		if second.code != 2 || !strings.Contains(second.out, "unresolved operation") {
 			t.Fatalf("second result=%#v", second)
 		}
 	case <-time.After(3 * time.Second):
@@ -328,7 +328,7 @@ func TestUploadAlbumIdenticalReplaySkipsTelegramAndConflictRejects(t *testing.T)
 	}
 	changed := writeAlbumFixture(t, "changed.jpg", []byte("\xff\xd8\xffdifferent"))
 	out, code := runRoot(t, cfg, "upload-album", "1", first, changed, "--caption", "caption", "--idempotency-key", "album-key", "--allow-write", "--json")
-	if code != 2 || !strings.Contains(out, "already used") {
+	if code != 2 || !strings.Contains(out, "different request") {
 		t.Fatalf("conflict code=%d out=%s", code, out)
 	}
 	if len(fake.Albums) != 1 {
@@ -336,7 +336,7 @@ func TestUploadAlbumIdenticalReplaySkipsTelegramAndConflictRejects(t *testing.T)
 	}
 }
 
-func TestUploadAlbumFailureIsNotCached(t *testing.T) {
+func TestUploadAlbumUnknownFailureRetainsReservation(t *testing.T) {
 	cfg, fake, dir := albumFakeConfig(t)
 	first := writeAlbumFixture(t, "first.jpg", []byte("\xff\xd8\xffphoto"))
 	second := writeAlbumFixture(t, "second.jpg", []byte("\xff\xd8\xffphoto2"))
@@ -354,7 +354,7 @@ func TestUploadAlbumFailureIsNotCached(t *testing.T) {
 	if err := db.QueryRow("SELECT COUNT(*) FROM tg_idempotency WHERE key='failed-album'").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 0 {
+	if count != 1 {
 		t.Fatalf("failed album cached=%d", count)
 	}
 }

@@ -3,71 +3,39 @@
 package safety
 
 import (
-	"fmt"
-	"os"
-	"sync"
-	"time"
-
+	"errors"
 	"golang.org/x/sys/windows"
+	"os"
 )
 
-type SessionLock struct {
-	mu     sync.Mutex
-	handle *os.File
-}
-
-var defaultLock = &SessionLock{}
-
-func AcquireSessionLock(sessionPath string, waitSeconds float64) error {
-	return defaultLock.Acquire(sessionPath, waitSeconds)
-}
-
-func (s *SessionLock) Acquire(sessionPath string, waitSeconds float64) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.handle != nil {
-		return nil
-	}
-	lockPath := sessionPath + ".lock"
-	if waitSeconds < 0 {
-		waitSeconds = 0
-	}
-	deadline := time.Now().Add(time.Duration(waitSeconds * float64(time.Second)))
-	for {
-		f, err := os.OpenFile(lockPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-		if err != nil {
-			return err
-		}
-		var ol windows.Overlapped
-		if err := windows.LockFileEx(
-			windows.Handle(f.Fd()),
-			windows.LOCKFILE_EXCLUSIVE_LOCK|windows.LOCKFILE_FAIL_IMMEDIATELY,
-			0, 1, 0, &ol,
-		); err != nil {
-			f.Close()
-			if !time.Now().Before(deadline) {
-				return NewSessionLocked(fmt.Sprintf(
-					"Another tg process holds the Telegram session at %s.", lockPath,
-				))
-			}
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		_, _ = fmt.Fprintf(f, "%d", os.Getpid())
-		_ = f.Sync()
-		s.handle = f
-		return nil
-	}
-}
-
-func (s *SessionLock) Release() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.handle == nil {
-		return
-	}
+func trySessionLock(f *os.File) error {
 	var ol windows.Overlapped
-	_ = windows.UnlockFileEx(windows.Handle(s.handle.Fd()), 0, 1, 0, &ol)
-	_ = s.handle.Close()
-	s.handle = nil
+	return windows.LockFileEx(windows.Handle(f.Fd()), windows.LOCKFILE_EXCLUSIVE_LOCK|windows.LOCKFILE_FAIL_IMMEDIATELY, 0, 1, 0, &ol)
+}
+func sessionLockBusy(err error) bool { return errors.Is(err, windows.ERROR_LOCK_VIOLATION) }
+func unlockSession(f *os.File) {
+	var ol windows.Overlapped
+	_ = windows.UnlockFileEx(windows.Handle(f.Fd()), 0, 1, 0, &ol)
+}
+
+func sessionHasMultipleLinks(info os.FileInfo) bool { return false }
+
+// Share delete so account removal can delete the ownership sidecar last, after
+// credentials are gone, without releasing ownership prematurely.
+func openSessionLockFile(path string, readOnly bool) (*os.File, error) {
+	name, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return nil, err
+	}
+	access := uint32(windows.GENERIC_READ | windows.GENERIC_WRITE)
+	creation := uint32(windows.OPEN_ALWAYS)
+	if readOnly {
+		access = windows.GENERIC_READ
+		creation = windows.OPEN_EXISTING
+	}
+	handle, err := windows.CreateFile(name, access, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, creation, windows.FILE_ATTRIBUTE_NORMAL|windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
+	if err != nil {
+		return nil, err
+	}
+	return os.NewFile(uintptr(handle), path), nil
 }

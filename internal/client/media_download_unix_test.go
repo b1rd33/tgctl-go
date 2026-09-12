@@ -24,7 +24,7 @@ func TestGotdDownloadMediaExistingFIFOIsNotSkipped(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: 321, MessageID: 29, OutputDir: outputDir})
+	got, err := g.DownloadMedia(context.Background(), DownloadMediaReq{ChatID: -1000000000000 - 321, MessageID: 29, OutputDir: outputDir})
 	if !errors.Is(err, media.ErrUnsafeDestination) || got.Skipped {
 		t.Fatalf("response=%#v error=%v, want unsafe destination", got, err)
 	}

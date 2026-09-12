@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -18,7 +19,11 @@ func main() {
 }
 
 func run() int {
-	root := projectRoot()
+	root, err := projectRoot()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
 	_ = env.LoadFile(filepath.Join(root, ".env"))
 	mgr := accounts.New(root)
 
@@ -36,12 +41,21 @@ func run() int {
 	return commands.ExecuteRoot(cmd)
 }
 
-func projectRoot() string {
-	wd, err := os.Getwd()
-	if err != nil {
-		return "."
+func projectRoot() (string, error) {
+	if path := os.Getenv("TGCTL_HOME"); path != "" {
+		if !filepath.IsAbs(path) {
+			return "", fmt.Errorf("TGCTL_HOME must be an absolute path")
+		}
+		if real, err := filepath.EvalSymlinks(path); err == nil {
+			return real, nil
+		}
+		return filepath.Clean(path), nil
 	}
-	return filepath.Clean(wd)
+	path, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(path, "tgctl"), nil
 }
 
 // gotdClientFactory returns the real gotd/td-backed Client. It expects a

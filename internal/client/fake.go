@@ -64,6 +64,7 @@ type FakeClient struct {
 	FolderDeletes  []int64
 	FolderReorders [][]int64
 	PinnedLists    []int64
+	PinnedMessages []PinnedMessage
 	AdminActions   []AdminActionReq
 	Members        []MemberInfo
 	ChatInfos      []ChatInfo
@@ -397,14 +398,14 @@ func (f *FakeClient) ReorderFolders(_ context.Context, ids []int64) error {
 	return nil
 }
 
-func (f *FakeClient) ListPinnedDialogs(_ context.Context, chatID int64) ([]ChatInfo, error) {
+func (f *FakeClient) ListPinnedMessages(_ context.Context, chatID int64) ([]PinnedMessage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if err := f.record("ListPinnedDialogs"); err != nil {
+	if err := f.record("ListPinnedMessages"); err != nil {
 		return nil, err
 	}
 	f.PinnedLists = append(f.PinnedLists, chatID)
-	return f.Dialogs, nil
+	return f.PinnedMessages, nil
 }
 
 func (f *FakeClient) AdminAction(_ context.Context, req AdminActionReq) (InviteLinkResp, error) {

@@ -55,7 +55,7 @@ func contactsCommand(paths AccountPathProvider) *cobra.Command {
 					return nil, err
 				}
 				defer rows.Close()
-				var out []map[string]any
+				out := []map[string]any{}
 				for rows.Next() {
 					var id, mutual sql.NullInt64
 					var phone, first, last, username sql.NullString
@@ -79,7 +79,7 @@ func contactsCommand(paths AccountPathProvider) *cobra.Command {
 func unreadCommand(paths AccountPathProvider) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "unread",
-		Short:        "List recently cached incoming messages",
+		Short:        "List cached incoming messages beyond known Telegram read markers",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			limit, _ := cmd.Flags().GetInt("limit")
@@ -89,12 +89,12 @@ func unreadCommand(paths AccountPathProvider) *cobra.Command {
 					return nil, err
 				}
 				defer db.Close()
-				rows, err := db.Query(`SELECT chat_id, message_id, date, text FROM tg_messages WHERE COALESCE(is_outgoing,0)=0 AND COALESCE(deleted,0)=0 ORDER BY date DESC LIMIT ?`, positiveLimit(limit, 50))
+				rows, err := db.Query(`SELECT m.chat_id, m.message_id, m.date, m.text FROM tg_messages m JOIN tg_read_state r ON r.chat_id=m.chat_id WHERE m.message_id>r.max_id AND COALESCE(m.is_outgoing,0)=0 AND COALESCE(m.deleted,0)=0 ORDER BY m.date DESC LIMIT ?`, positiveLimit(limit, 50))
 				if err != nil {
 					return nil, err
 				}
 				defer rows.Close()
-				var out []map[string]any
+				out := []map[string]any{}
 				for rows.Next() {
 					var chatID, msgID int64
 					var date string
@@ -104,7 +104,7 @@ func unreadCommand(paths AccountPathProvider) *cobra.Command {
 					}
 					out = append(out, map[string]any{"chat_id": chatID, "message_id": msgID, "date": date, "text": text.String})
 				}
-				return map[string]any{"messages": out}, rows.Err()
+				return map[string]any{"messages": out, "source": "cache", "coverage": "only cached messages in chats with known read markers; run discover/sync to refresh"}, rows.Err()
 			})
 		},
 	}

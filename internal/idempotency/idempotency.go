@@ -10,10 +10,6 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/safety"
 )
 
-// reservationLease bounds crash-stale pending markers while allowing a slow
-// ten-item upload of very large media to finish without a duplicate send.
-const reservationLease = 24 * time.Hour
-
 // Reserve atomically claims an idempotency key for an album operation. The
 // pending marker is stored in the existing result_json column so this remains
 // compatible with databases created before album support. A false reserved
@@ -41,52 +37,25 @@ func Reserve(db *sql.DB, key, command, requestID, fingerprint string) (existing 
 	if err == nil {
 		return nil, true, nil
 	}
-	for attempt := 0; attempt < 2; attempt++ {
-		existing, lookupErr := Lookup(db, key, command)
-		if lookupErr != nil {
-			return nil, false, lookupErr
-		}
-		if existing == nil {
-			return nil, false, err
-		}
-		if IsPending(existing) {
-			storedFingerprint := strings.TrimSpace(fmt.Sprintf("%v", existing["idempotency_fingerprint"]))
-			if storedFingerprint != "" && storedFingerprint != fingerprint {
-				return nil, false, safety.NewBadArgs("Idempotency key %q was already used for a different album request", key)
-			}
-		}
-		if !IsPending(existing) || !staleReservation(existing) {
-			return existing, false, nil
-		}
-		oldRequest := strings.TrimSpace(fmt.Sprintf("%v", existing["request_id"]))
-		if oldRequest == "" {
-			return existing, false, nil
-		}
-		if releaseErr := Release(db, key, command, oldRequest); releaseErr != nil {
-			return nil, false, releaseErr
-		}
-		_, err = db.Exec(
-			`INSERT INTO tg_idempotency(key, command, request_id, result_json, created_at)
-			 VALUES (?, ?, ?, ?, ?)`,
-			key, command, requestID, string(encoded), time.Now().UTC().Format("2006-01-02T15:04:05Z07:00"),
-		)
-		if err == nil {
-			return nil, true, nil
-		}
+	existing, lookupErr := Lookup(db, key, command)
+	if lookupErr != nil {
+		return nil, false, lookupErr
 	}
-	return nil, false, err
+	if existing == nil {
+		return nil, false, err
+	}
+	if actual, _ := existing["idempotency_fingerprint"].(string); actual != "" && actual != fingerprint {
+		return nil, false, safety.NewBadArgs("idempotency key belongs to a different request")
+	}
+	// Time cannot establish whether Telegram accepted a request. Never reclaim
+	// an unresolved reservation automatically, even after a process crash.
+	return existing, false, nil
 }
 
 // IsPending reports whether an idempotency result is an in-flight reservation.
 func IsPending(result map[string]any) bool {
 	pending, _ := result["pending"].(bool)
 	return pending
-}
-
-func staleReservation(result map[string]any) bool {
-	reservedAt := strings.TrimSpace(fmt.Sprintf("%v", result["reserved_at"]))
-	when, err := time.Parse(time.RFC3339Nano, reservedAt)
-	return err == nil && time.Since(when) > reservationLease
 }
 
 // Finalize replaces an album's pending marker with its successful envelope.
@@ -164,7 +133,9 @@ func Lookup(db *sql.DB, key, command string) (map[string]any, error) {
 		)
 	}
 	var out map[string]any
-	if err := json.Unmarshal([]byte(resultJSON), &out); err != nil {
+	decoder := json.NewDecoder(strings.NewReader(resultJSON))
+	decoder.UseNumber()
+	if err := decoder.Decode(&out); err != nil {
 		return nil, err
 	}
 	return out, nil

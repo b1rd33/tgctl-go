@@ -128,12 +128,12 @@ func TestSuccessEnvelopeJSONIncludesEmptyWarnings(t *testing.T) {
 func TestNewRequestIDFormatAndUniqueness(t *testing.T) {
 	first := NewRequestID()
 	second := NewRequestID()
-	matched, err := regexp.MatchString(`^req-[0-9a-f]{8}$`, first)
+	matched, err := regexp.MatchString(`^req-[0-9a-f]{32}$`, first)
 	if err != nil {
 		t.Fatalf("regexp: %v", err)
 	}
 	if !matched {
-		t.Fatalf("request id = %q, want req-<8 hex>", first)
+		t.Fatalf("request id = %q, want req-<32 hex>", first)
 	}
 	if first == second {
 		t.Fatalf("request ids repeated: %q", first)

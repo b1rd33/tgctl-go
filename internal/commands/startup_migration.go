@@ -40,7 +40,15 @@ func installLegacyMigrationPreflight(root *cobra.Command, mgr *accounts.Manager)
 				return nil
 			}
 		}
+		if flag := cmd.Flags().Lookup("dry-run"); flag != nil {
+			if dry, _ := cmd.Flags().GetBool("dry-run"); dry {
+				return nil
+			}
+		}
 		if _, err := mgr.MaybeMigrateDefaultFromRoot(); err != nil {
+			if cmd.Flags().Lookup("allow-write") != nil {
+				return fmt.Errorf("account migration failed: %w", err)
+			}
 			fmt.Fprintln(cmd.ErrOrStderr(), "WARN: account migration failed:", err)
 		}
 		return nil

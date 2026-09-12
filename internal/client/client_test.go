@@ -126,7 +126,7 @@ func TestListenEventsNormalizeEditsAndScopedDeletes(t *testing.T) {
 	if events[0].UpdateKind != "edit_message" || events[0].Deleted || events[0].Text != "edited" {
 		t.Fatalf("edit event=%+v", events[0])
 	}
-	if events[1].ChatID != 9 || !events[1].Deleted || events[2].MessageID != 6 || events[3].ChatID != 0 || !events[3].Deleted {
+	if events[1].ChatID != -1000000000009 || !events[1].Deleted || events[2].MessageID != 6 || events[3].ChatID != 0 || !events[3].Deleted {
 		t.Fatalf("delete events=%+v", events[1:])
 	}
 }
@@ -347,7 +347,7 @@ func TestFolderInfoFromDialogFilterIncludesPeerIDs(t *testing.T) {
 	if info.ID != 6 || info.Title != "Ops" || info.Emoji != "box" {
 		t.Fatalf("info metadata = %#v", info)
 	}
-	wantInclude := []int64{123456789, 234567890, 345678901}
+	wantInclude := []int64{123456789, -1000234567890, -345678901}
 	if len(info.IncludeChatIDs) != len(wantInclude) {
 		t.Fatalf("IncludeChatIDs = %#v, want %#v", info.IncludeChatIDs, wantInclude)
 	}

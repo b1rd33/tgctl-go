@@ -168,7 +168,7 @@ func TestTelegramWritesReadOnlyFailBeforeCreatingAccountPaths(t *testing.T) {
 		{
 			name: "send-by-username",
 			register: func(root *cobra.Command, mgr *accounts.Manager, _ CommandsConfig) {
-				registerSendByUsername(root, mgr)
+				registerSendByUsername(root, mgr, CommandsConfig{})
 			},
 			args: []string{"send-by-username", "@ada", "hello", "--allow-write", "--json"},
 		},
@@ -244,7 +244,7 @@ func TestTelegramWritesWithoutAllowWriteFailBeforeCreatingAccountPaths(t *testin
 		{
 			name: "send-by-username",
 			register: func(root *cobra.Command, mgr *accounts.Manager, _ CommandsConfig) {
-				registerSendByUsername(root, mgr)
+				registerSendByUsername(root, mgr, CommandsConfig{})
 			},
 			args: []string{"send-by-username", "@ada", "hello", "--json"},
 		},

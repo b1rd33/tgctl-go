@@ -93,7 +93,7 @@ func readTextArg(value string, in io.Reader) (string, error) {
 // topicReplyTo mirrors Python _topic_reply_to: --reply-to wins; warn if both supplied.
 func topicReplyTo(replyTo, topic int64) (effective int64, warnings []string) {
 	if replyTo != 0 && topic != 0 {
-		return replyTo, []string{"--topic ignored because --reply-to was provided"}
+		return replyTo, nil
 	}
 	if replyTo != 0 {
 		return replyTo, nil
@@ -357,10 +357,11 @@ func sendCommand(cfg CommandsConfig) *cobra.Command {
 
 			effectiveReply, topicWarnings := topicReplyTo(replyTo, topic)
 			payload := map[string]any{
-				"text":     text,
-				"reply_to": effectiveReply,
-				"topic_id": topic,
-				"silent":   silent,
+				"text":       text,
+				"reply_to":   effectiveReply,
+				"topic_id":   topic,
+				"silent":     silent,
+				"no_webpage": noWeb,
 			}
 
 			return runWrite(cmd, "send", "messages.SendMessage", selector, cfg, payload,

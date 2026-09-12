@@ -198,9 +198,9 @@ func TestDownloadMediaNumericSelectorDefaultDirectoryAndEnvelope(t *testing.T) {
 		t.Fatalf("cached message=%#v", msg)
 	}
 	assertAuditContains(t, filepath.Join(dir, "audit.log"),
-		`"chat":"1"`, `"message_id":9`, `"max_size_mb":100`, `"overwrite":false`, `"output_policy":"default"`,
-		`"artifact_path":"`+strings.ReplaceAll(wantPath, `\`, `\\`)+`"`, `"artifact_bytes":12`,
-		`"media_type":"document"`, `"mime_type":"application/octet-stream"`, `"filename":"asset.bin"`, `"skipped":false`)
+		`"max_size_mb":100`, `"overwrite":false`, `"output_policy":"default"`,
+		`"artifact_bytes":12`,
+		`"media_type":"document"`, `"mime_type":"application/octet-stream"`, `"skipped":false`)
 }
 
 func TestDownloadMediaFuzzySelectorRequiresFlagAndResolvesOnce(t *testing.T) {
@@ -441,8 +441,7 @@ func TestDownloadMediaCommittedClientErrorPublishesValidatedRecoveryMetadataWith
 		}
 	}
 	assertAuditContains(t, filepath.Join(dir, "audit.log"),
-		`"committed":true`, `"partial":true`, `"artifact_path":"`+strings.ReplaceAll(path, `\`, `\\`)+`"`,
-		`"artifact_bytes":12`, `"media_type":"document"`, `"filename":"asset.bin"`)
+		`"committed":true`, `"partial":true`, `"artifact_bytes":12`, `"media_type":"document"`)
 	if _, err := loadMessage(cfg.Paths.(stubPaths).db, 1, 9); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("cache persisted after committed client error: %v", err)
 	}
@@ -523,9 +522,8 @@ func TestDownloadMediaPersistenceFailureMarksCommittedOnlyForNewDownload(t *test
 				}
 				assertAuditContains(t, auditPath,
 					`"committed":true`, `"partial":true`, `"error_code":"GENERIC"`,
-					`"artifact_path":"`+strings.ReplaceAll(fake.DownloadResp.Path, `\`, `\\`)+`"`,
 					`"artifact_bytes":12`, `"media_type":"document"`, `"mime_type":"application/octet-stream"`,
-					`"filename":"asset.bin"`, `"skipped":false`)
+					`"skipped":false`)
 			} else {
 				assertAuditContains(t, auditPath, `"artifact_bytes":12`, `"skipped":true`)
 			}

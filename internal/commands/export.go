@@ -96,7 +96,12 @@ func exportCommand(cfg CommandsConfig) *cobra.Command {
 				if ctx.Err() != nil {
 					return nil, ctx.Err()
 				}
-				db, err := store.ConnectReadonly(paths.dbPath)
+				openDB := store.ConnectReadonly
+				legacy, _ := cmd.Flags().GetBool("legacy-cache")
+				if legacy {
+					openDB = store.ConnectLegacyReadonly
+				}
+				db, err := openDB(paths.dbPath)
 				if err != nil {
 					return nil, err
 				}
@@ -151,6 +156,7 @@ func exportCommand(cfg CommandsConfig) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().Bool("legacy-cache", false, "Export the preserved pre-migration cache; IDs may be ambiguous and must not be used for writes")
 	cmd.Flags().String("format", "jsonl", "Export format: jsonl, csv, or html")
 	cmd.Flags().String("output", "-", "Output file, or - for stdout")
 	cmd.Flags().String("since", "", "Inclusive lower date/time bound")

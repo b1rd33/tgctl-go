@@ -77,9 +77,27 @@ func (m *Manager) AccountDir(name string, create bool) (string, error) {
 		return "", err
 	}
 	d := filepath.Join(m.accountsRoot(), name)
+	for _, path := range []string{m.accountsRoot(), d, filepath.Join(d, "media"), filepath.Join(d, "tg.session"), filepath.Join(d, "telegram.sqlite"), filepath.Join(d, "audit.log")} {
+		info, err := os.Lstat(path)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return "", safety.NewBadArgs("account state must not use symbolic links")
+		}
+	}
+
 	if create {
 		if err := os.MkdirAll(filepath.Join(d, "media"), 0o700); err != nil {
 			return "", err
+		}
+		for _, dir := range []string{m.accountsRoot(), d, filepath.Join(d, "media")} {
+			if err := os.Chmod(dir, 0700); err != nil {
+				return "", err
+			}
 		}
 	}
 	return d, nil
@@ -120,7 +138,10 @@ func (m *Manager) Current() string {
 	if !nameRE.MatchString(name) {
 		return DefaultAccount
 	}
-	d, _ := m.AccountDir(name, false)
+	d, pathErr := m.AccountDir(name, false)
+	if pathErr != nil {
+		return DefaultAccount
+	}
 	if _, err := os.Stat(d); err != nil {
 		return DefaultAccount
 	}
@@ -132,7 +153,10 @@ func (m *Manager) Use(name string) error {
 	if err := ValidateName(name); err != nil {
 		return err
 	}
-	d, _ := m.AccountDir(name, false)
+	d, err := m.AccountDir(name, false)
+	if err != nil {
+		return err
+	}
 	if _, err := os.Stat(d); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return &AccountNotFound{Name: name}
@@ -194,19 +218,43 @@ func (m *Manager) Remove(name string) error {
 	if err := ValidateName(name); err != nil {
 		return err
 	}
-	d, _ := m.AccountDir(name, false)
+	d, err := m.AccountDir(name, false)
+	if err != nil {
+		return err
+	}
 	if _, err := os.Stat(d); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return &AccountNotFound{Name: name}
 		}
 		return err
 	}
+	lock := &safety.SessionLock{}
+	if err := lock.Acquire(filepath.Join(d, "tg.session"), 0); err != nil {
+		return err
+	}
+	defer lock.Release()
 	if name == m.Current() {
 		if err := m.writeCurrent(DefaultAccount); err != nil {
 			return err
 		}
 	}
-	return os.RemoveAll(d)
+	// Remove the ownership sidecar only after all credentials and cache files.
+	entries, err := os.ReadDir(d)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.Name() == "tg.session.lock" {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(d, entry.Name())); err != nil {
+			return err
+		}
+	}
+	if err := os.Remove(filepath.Join(d, "tg.session.lock")); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return os.Remove(d)
 }
 
 // Paths bundles the per-account paths every command resolves.
@@ -264,51 +312,83 @@ func (m *Manager) AccountPathsReadonly(name string) (string, string, string, err
 // MaybeMigrateDefaultFromRoot performs the one-time migration of root-level
 // telegram.sqlite/tg.session/audit.log/media into accounts/default/.
 // Returns true when files were moved.
-func (m *Manager) MaybeMigrateDefaultFromRoot() (bool, error) {
+func (m *Manager) MaybeMigrateDefaultFromRoot() (moved bool, resultErr error) {
 	defaultDir := filepath.Join(m.accountsRoot(), DefaultAccount)
-	if _, err := os.Stat(defaultDir); err == nil {
+	if _, err := os.Lstat(defaultDir); err == nil {
 		return false, nil
-	}
-	srcs := []string{
-		filepath.Join(m.Root, "telegram.sqlite"),
-		filepath.Join(m.Root, "tg.session"),
-		filepath.Join(m.Root, "audit.log"),
-	}
-	anyExists := false
-	for _, s := range srcs {
-		if _, err := os.Stat(s); err == nil {
-			anyExists = true
-			break
-		}
-	}
-	srcMedia := filepath.Join(m.Root, "media")
-	if !anyExists {
-		if info, err := os.Stat(srcMedia); err != nil || !info.IsDir() {
-			return false, nil
-		}
-	}
-	if err := os.MkdirAll(filepath.Join(defaultDir, "media"), 0o700); err != nil {
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return false, err
 	}
-	moved := false
-	for _, src := range srcs {
-		if _, err := os.Stat(src); err == nil {
-			dst := filepath.Join(defaultDir, filepath.Base(src))
-			if err := os.Rename(src, dst); err == nil {
-				moved = true
+	names := []string{"telegram.sqlite", "tg.session", "audit.log", "media"}
+	var present []string
+	for _, name := range names {
+		info, err := os.Lstat(filepath.Join(m.Root, name))
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return false, fmt.Errorf("legacy migration refuses symlink %s", name)
+		}
+		present = append(present, name)
+	}
+	if len(present) == 0 {
+		return false, nil
+	}
+	lock := &safety.SessionLock{}
+	if err := lock.Acquire(filepath.Join(m.Root, "tg.session"), 0); err != nil {
+		return false, err
+	}
+	defer lock.Release()
+	// A WAL database may still be open in another local reader/writer. Do not
+	// rename its files independently; leave it intact for an explicit snapshot.
+	if info, err := os.Stat(filepath.Join(m.Root, "telegram.sqlite-wal")); err == nil && info.Size() > 0 {
+		return false, fmt.Errorf("legacy cache has a WAL; close all users and checkpoint it before migration")
+	}
+	if err := os.MkdirAll(m.accountsRoot(), 0700); err != nil {
+		return false, err
+	}
+	if _, err := os.Lstat(defaultDir); err == nil {
+		return false, nil
+	}
+	stage, err := os.MkdirTemp(m.accountsRoot(), ".migration-")
+	if err != nil {
+		return false, err
+	}
+	var transferred []string
+	defer func() {
+		if !moved {
+			for i := len(transferred) - 1; i >= 0; i-- {
+				name := transferred[i]
+				resultErr = errors.Join(resultErr, os.Rename(filepath.Join(stage, name), filepath.Join(m.Root, name)))
 			}
 		}
-	}
-	srcLock := filepath.Join(m.Root, "tg.session.lock")
-	if _, err := os.Stat(srcLock); err == nil {
-		_ = os.Rename(srcLock, filepath.Join(defaultDir, "tg.session.lock"))
-	}
-	if entries, err := os.ReadDir(srcMedia); err == nil {
-		for _, e := range entries {
-			_ = os.Rename(filepath.Join(srcMedia, e.Name()), filepath.Join(defaultDir, "media", e.Name()))
-			moved = true
+		if resultErr == nil || moved {
+			_ = os.RemoveAll(stage)
 		}
-		_ = os.Remove(srcMedia)
+	}()
+	// Keep the original ownership inode in place until the migration completes.
+	b, err := os.ReadFile(filepath.Join(m.Root, "tg.session.lock"))
+	if err != nil {
+		return false, err
 	}
-	return moved, nil
+	if err := os.WriteFile(filepath.Join(stage, "tg.session.lock"), b, 0600); err != nil {
+		return false, err
+	}
+	for _, name := range present {
+		if err := os.Rename(filepath.Join(m.Root, name), filepath.Join(stage, name)); err != nil {
+			return false, err
+		}
+		transferred = append(transferred, name)
+	}
+	if err := os.MkdirAll(filepath.Join(stage, "media"), 0700); err != nil {
+		return false, err
+	}
+	if err := os.Rename(stage, defaultDir); err != nil {
+		return false, err
+	}
+	moved = true
+	return true, syncCurrentDir(m.accountsRoot())
 }

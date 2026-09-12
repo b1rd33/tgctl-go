@@ -73,6 +73,8 @@ nav:
   - Commands: commands.md
   - Library use: sdk.md
   - Safety model: safety.md
+  - Reliability and migration: reliability.md
+  - Capability roadmap: reliability-roadmap.md
   - Multi-account: multi-account.md
   - Contributing: contributing.md
 

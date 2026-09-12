@@ -20,7 +20,7 @@ func TestChatTitleInvokesClient(t *testing.T) {
 
 func TestSetPermissionsAcceptsSendMessagesFlag(t *testing.T) {
 	cfg, fc, _ := setupWriteEnv(t)
-	out, code := runRoot(t, cfg, "set-permissions", "1", "--send-messages", "--allow-write", "--dry-run", "--json")
+	out, code := runRoot(t, cfg, "set-permissions", "1", "--confirm", "1", "--send-messages", "--allow-write", "--dry-run", "--json")
 	if code != 0 {
 		t.Fatalf("code=%d\nout:%s", code, out)
 	}
@@ -31,7 +31,7 @@ func TestSetPermissionsAcceptsSendMessagesFlag(t *testing.T) {
 		t.Fatalf("dry-run called client: %#v", fc.AdminActions)
 	}
 
-	out, code = runRoot(t, cfg, "set-permissions", "1", "--send-messages", "--allow-write", "--json")
+	out, code = runRoot(t, cfg, "set-permissions", "1", "--confirm", "1", "--send-messages", "--allow-write", "--json")
 	if code != 0 {
 		t.Fatalf("code=%d\nout:%s", code, out)
 	}

@@ -92,7 +92,7 @@ func runTGProcess(t *testing.T, binary, root string, env []string, args ...strin
 	t.Helper()
 	cmd := exec.Command(binary, args...)
 	cmd.Dir = root
-	cmd.Env = env
+	cmd.Env = append(withoutEnv(env, "TGCTL_HOME"), "TGCTL_HOME="+root)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("tg %v: %v\n%s", args, err, out)
 	}
@@ -102,7 +102,7 @@ func runTGProcessResult(t *testing.T, binary, root string, env []string, args ..
 	t.Helper()
 	cmd := exec.Command(binary, args...)
 	cmd.Dir = root
-	cmd.Env = env
+	cmd.Env = append(withoutEnv(env, "TGCTL_HOME"), "TGCTL_HOME="+root)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		return string(out), 0
@@ -118,7 +118,7 @@ func runTGProcessStreams(t *testing.T, binary, root string, env []string, args .
 	t.Helper()
 	cmd := exec.Command(binary, args...)
 	cmd.Dir = root
-	cmd.Env = env
+	cmd.Env = append(withoutEnv(env, "TGCTL_HOME"), "TGCTL_HOME="+root)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -338,7 +338,7 @@ func TestProcessCobraCompletionPathsRemainNative(t *testing.T) {
 	}
 }
 
-func TestProcessMaxInt32PassesParserToNextStageWithoutArtifacts(t *testing.T) {
+func TestProcessInt32IDsAndPracticalLimitsWithoutArtifacts(t *testing.T) {
 	binary := buildTGProcess(t)
 	env := withoutStartupSafetyEnv(os.Environ())
 	tests := []struct {
@@ -349,10 +349,10 @@ func TestProcessMaxInt32PassesParserToNextStageWithoutArtifacts(t *testing.T) {
 	}{
 		{name: "read message", args: []string{"--read-only", "get-msg", "1", "2147483647", "--json"}, wantCode: 4, wantErr: "NOT_FOUND"},
 		{name: "reply flag", args: []string{"send", "1", "text", "--reply-to=2147483647", "--json"}, wantCode: 6, wantErr: "WRITE_DISALLOWED"},
-		{name: "discover limit", args: []string{"discover", "--limit=2147483647", "--json"}, wantCode: 6, wantErr: "WRITE_DISALLOWED"},
-		{name: "backfill entities limit", args: []string{"backfill-entities", "--limit=2147483647", "--json"}, wantCode: 6, wantErr: "WRITE_DISALLOWED"},
-		{name: "chat members limit", args: []string{"--read-only", "chat-members", "1", "--limit=2147483647", "--json"}, wantCode: 4, wantErr: "NOT_FOUND"},
-		{name: "topics list limit", args: []string{"--read-only", "topics-list", "1", "--limit=2147483647", "--json"}, wantCode: 4, wantErr: "NOT_FOUND"},
+		{name: "discover limit", args: []string{"discover", "--limit=2147483647", "--json"}, wantCode: 2, wantErr: "BAD_ARGS"},
+		{name: "backfill entities limit", args: []string{"backfill-entities", "--limit=2147483647", "--json"}, wantCode: 2, wantErr: "BAD_ARGS"},
+		{name: "chat members limit", args: []string{"--read-only", "chat-members", "1", "--limit=2147483647", "--json"}, wantCode: 2, wantErr: "BAD_ARGS"},
+		{name: "topics list limit", args: []string{"--read-only", "topics-list", "1", "--limit=2147483647", "--json"}, wantCode: 2, wantErr: "BAD_ARGS"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -734,7 +734,7 @@ func TestProcessConcurrentAccountSelectionSnapshotsNeverFallBackDefault(t *testi
 			for i := 0; i < 12; i++ {
 				name := []string{"a", "b"}[(i+offset)%2]
 				cmd := exec.Command(binary, "accounts-use", name, "--json")
-				cmd.Dir, cmd.Env = root, env
+				cmd.Dir, cmd.Env = root, append(withoutEnv(env, "TGCTL_HOME"), "TGCTL_HOME="+root)
 				if out, err := cmd.CombinedOutput(); err != nil {
 					errCh <- fmt.Errorf("accounts-use %s: %w: %s", name, err, out)
 					return
@@ -749,7 +749,7 @@ func TestProcessConcurrentAccountSelectionSnapshotsNeverFallBackDefault(t *testi
 			<-start
 			for i := 0; i < 20; i++ {
 				cmd := exec.Command(binary, "accounts-show", "--json")
-				cmd.Dir, cmd.Env = root, env
+				cmd.Dir, cmd.Env = root, append(withoutEnv(env, "TGCTL_HOME"), "TGCTL_HOME="+root)
 				out, err := cmd.CombinedOutput()
 				if err != nil {
 					errCh <- fmt.Errorf("accounts-show: %w: %s", err, out)
@@ -909,9 +909,33 @@ func TestProcessStartupMalformedReadOnlyFailsSafeAndLetsCobraRejectIt(t *testing
 	state := seedLegacyState(t, root)
 	cmd := exec.Command(binary, "--read-only=malformed", "version", "--json")
 	cmd.Dir = root
-	cmd.Env = withoutEnv(os.Environ(), "TG_READONLY")
+	cmd.Env = append(withoutEnv(withoutEnv(os.Environ(), "TG_READONLY"), "TGCTL_HOME"), "TGCTL_HOME="+root)
 	if out, err := cmd.CombinedOutput(); err == nil {
 		t.Fatalf("malformed boolean unexpectedly succeeded: %s", out)
 	}
 	assertLegacyUnchanged(t, root, state)
+}
+
+func TestProjectRootStableAndExplicit(t *testing.T) {
+	t.Setenv("TGCTL_HOME", "")
+	first, err := projectRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(t.TempDir())
+	second, err := projectRoot()
+	if err != nil || first != second {
+		t.Fatalf("home changed with cwd: %q %q %v", first, second, err)
+	}
+	explicit := t.TempDir()
+	t.Setenv("TGCTL_HOME", explicit)
+	got, err := projectRoot()
+	explicit, _ = filepath.EvalSymlinks(explicit)
+	if err != nil || got != explicit {
+		t.Fatal("explicit home ignored")
+	}
+	t.Setenv("TGCTL_HOME", "relative")
+	if _, err := projectRoot(); err == nil {
+		t.Fatal("relative home accepted")
+	}
 }

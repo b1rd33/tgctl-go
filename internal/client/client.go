@@ -233,7 +233,8 @@ type DeleteMessagesReq struct {
 }
 
 type DeleteMessagesResp struct {
-	Deleted int
+	PtsCount int
+	Deleted  int
 }
 
 // LeaveChatReq mirrors channels.LeaveChannel / messages.DeleteChatUser.
@@ -255,10 +256,19 @@ type SessionRef struct {
 }
 
 type ChatInfo struct {
-	ID       int64  `json:"chat_id"`
-	Type     string `json:"type"`
-	Title    string `json:"title"`
-	Username string `json:"username"`
+	Source              string               `json:"source,omitempty"`
+	ReadInboxMaxID      int                  `json:"read_inbox_max_id"`
+	ReadStateKnown      bool                 `json:"read_state_known"`
+	UnreadCount         int                  `json:"unread_count"`
+	FolderID            int                  `json:"folder_id"`
+	TopMessageID        int                  `json:"top_message_id"`
+	Creator             bool                 `json:"creator,omitempty"`
+	DefaultBannedRights *tg.ChatBannedRights `json:"default_banned_rights,omitempty"`
+	AdminRights         *tg.ChatAdminRights  `json:"admin_rights,omitempty"`
+	ID                  int64                `json:"chat_id"`
+	Type                string               `json:"type"`
+	Title               string               `json:"title"`
+	Username            string               `json:"username"`
 }
 
 type ContactInfo struct {
@@ -271,6 +281,7 @@ type ContactInfo struct {
 }
 
 type BackfillReq struct {
+	AfterMessageID int64
 	ChatID         int64
 	Limit          int
 	Throttle       time.Duration
@@ -286,6 +297,7 @@ type BackfillReq struct {
 const MaxBackfillMessages = 10_000
 
 type BackfillMessage struct {
+	EditDate         int
 	ChatID           int64
 	MessageID        int64
 	SenderID         int64
@@ -326,6 +338,8 @@ type BackfillMediaOutcome struct {
 }
 
 type BackfillResult struct {
+	Truncated       bool
+	NextOffsetID    int64
 	Messages        []BackfillMessage
 	AlbumsSeen      int
 	MediaDownloaded int
@@ -371,6 +385,7 @@ type PinTopicReq struct {
 }
 
 type FolderInfo struct {
+	Shared         bool
 	ID             int64
 	Title          string
 	Emoji          string
@@ -408,15 +423,21 @@ type MemberInfo struct {
 }
 
 type ListenEvent struct {
-	UpdateKind string `json:"update_kind"`
-	ChatID     int64  `json:"chat_id"`
-	MessageID  int64  `json:"message_id"`
-	SenderID   int64  `json:"sender_id,omitempty"`
-	Date       string `json:"date,omitempty"`
-	Text       string `json:"text,omitempty"`
-	MediaType  string `json:"media_type,omitempty"`
-	GroupedID  int64  `json:"grouped_id,omitempty"`
-	Deleted    bool   `json:"deleted,omitempty"`
+	EventID       int64  `json:"event_id,omitempty"`
+	IsOutgoing    bool   `json:"is_outgoing"`
+	ReplyToMsgID  int64  `json:"reply_to_msg_id,omitempty"`
+	EditDate      int    `json:"edit_date,omitempty"`
+	ReadMaxID     int    `json:"read_max_id,omitempty"`
+	UpdateKind    string `json:"update_kind"`
+	ChatID        int64  `json:"chat_id"`
+	MessageID     int64  `json:"message_id"`
+	SenderID      int64  `json:"sender_id,omitempty"`
+	Date          string `json:"date,omitempty"`
+	Text          string `json:"text,omitempty"`
+	MediaType     string `json:"media_type,omitempty"`
+	MediaIdentity string `json:"media_identity,omitempty"`
+	GroupedID     int64  `json:"grouped_id,omitempty"`
+	Deleted       bool   `json:"deleted,omitempty"`
 }
 
 // TerminateSessionReq mirrors account.ResetAuthorization.
@@ -453,7 +474,7 @@ type Client interface {
 	UpdateFolder(ctx context.Context, req FolderUpdateReq) error
 	DeleteFolder(ctx context.Context, id int64) error
 	ReorderFolders(ctx context.Context, ids []int64) error
-	ListPinnedDialogs(ctx context.Context, chatID int64) ([]ChatInfo, error)
+	ListPinnedMessages(ctx context.Context, chatID int64) ([]PinnedMessage, error)
 	AdminAction(ctx context.Context, req AdminActionReq) (InviteLinkResp, error)
 	ListChatMembers(ctx context.Context, chatID int64, limit int) ([]MemberInfo, error)
 	GetChatsInfo(ctx context.Context, ids []int64) ([]ChatInfo, error)
@@ -510,4 +531,11 @@ func itoa(i int64) string {
 		buf[pos] = '-'
 	}
 	return string(buf[pos:])
+}
+
+type PinnedMessage struct {
+	MessageID int64  `json:"message_id"`
+	ChatID    int64  `json:"chat_id"`
+	Text      string `json:"text"`
+	Date      string `json:"date"`
 }

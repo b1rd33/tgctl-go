@@ -62,7 +62,7 @@ func TestRecordThenLookupRoundTrip(t *testing.T) {
 	if !ok {
 		t.Fatalf("data = %#v", got["data"])
 	}
-	if data["message_id"] != float64(42) {
+	if data["message_id"] != json.Number("42") {
 		t.Fatalf("message_id = %#v", data["message_id"])
 	}
 }
@@ -93,7 +93,7 @@ func TestRecordEmptyKeyIsNoop(t *testing.T) {
 	}
 }
 
-func TestReserveBlocksFreshPendingAndReclaimsStale(t *testing.T) {
+func TestReserveBlocksFreshAndStalePending(t *testing.T) {
 	db := newDB(t)
 	if _, reserved, err := Reserve(db, "fresh", "upload-album", "req-1", "fp"); err != nil || !reserved {
 		t.Fatalf("initial reserve=%v err=%v", reserved, err)
@@ -108,7 +108,7 @@ func TestReserveBlocksFreshPendingAndReclaimsStale(t *testing.T) {
 	if _, err := db.Exec(`INSERT INTO tg_idempotency(key, command, request_id, result_json, created_at) VALUES (?, ?, ?, ?, ?)`, "stale", "upload-album", "old", string(stale), time.Now().UTC().Format(time.RFC3339)); err != nil {
 		t.Fatal(err)
 	}
-	if _, reserved, err := Reserve(db, "stale", "upload-album", "req-3", "fp"); err != nil || !reserved {
+	if _, reserved, err := Reserve(db, "stale", "upload-album", "req-3", "fp"); err != nil || reserved {
 		t.Fatalf("stale reserve=%v err=%v", reserved, err)
 	}
 }
@@ -129,5 +129,20 @@ func TestReserveDoesNotReclaimStaleDifferentFingerprint(t *testing.T) {
 	var badArgs *safety.BadArgs
 	if !errors.As(err, &badArgs) {
 		t.Fatalf("err=%v is not BadArgs", err)
+	}
+}
+
+func TestLookupPreservesLargeIntegers(t *testing.T) {
+	db := newDB(t)
+	const id int64 = 9007199254740993
+	if err := Record(db, "large", "send", "r", map[string]any{"id": id}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Lookup(db, "large", "send")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["id"] != json.Number("9007199254740993") {
+		t.Fatalf("integer precision lost: %#v", got)
 	}
 }

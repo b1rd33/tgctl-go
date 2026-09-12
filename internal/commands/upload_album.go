@@ -100,6 +100,11 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 				func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error) {
 					recoveryExtras["chat_id"] = chatID
 					recoveryExtras["item_count"] = len(items)
+					digests := map[string]string{}
+					for _, file := range identities {
+						digests[file.Path] = file.SHA256
+					}
+					ctx = safety.WithFileDigests(ctx, digests)
 					resp, err := c.UploadAlbum(ctx, client.UploadAlbumReq{
 						ChatID: chatID, Items: items, Caption: caption, ReplyTo: replyTo,
 						Silent: silent, SupportsStreaming: supportsStreaming, MediaKind: mediaKind, MaxBytes: maxBytes,

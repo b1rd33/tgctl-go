@@ -284,6 +284,9 @@ func lookupExactMessage(ctx context.Context, api mediaDownloadAPI, peer tg.Input
 }
 
 func extractDownloadMedia(message *tg.Message) (extractedDownloadMedia, error) {
+	if message != nil && expiringMessage(message) {
+		return extractedDownloadMedia{}, safety.NewBadArgs("expiring media is not retained or downloaded")
+	}
 	if message == nil {
 		return extractedDownloadMedia{}, safety.NewBadArgs("message has no downloadable media")
 	}

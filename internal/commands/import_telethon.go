@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 
 	"github.com/gotd/td/session"
@@ -14,6 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/b1rd33/tgctl-go/internal/accounts"
+	"github.com/b1rd33/tgctl-go/internal/client"
 	"github.com/b1rd33/tgctl-go/internal/dispatch"
 	"github.com/b1rd33/tgctl-go/internal/safety"
 )
@@ -54,7 +56,12 @@ func registerImportTelethon(root *cobra.Command, mgr *accounts.Manager) {
 				Stderr:    cmd.ErrOrStderr(),
 				AuditPath: paths.AuditPath,
 				Args:      map[string]any{"source": src, "account": account},
-			}, func(_ context.Context) (any, error) {
+			}, func(ctx context.Context) (any, error) {
+				lock := &safety.SessionLock{}
+				if err := lock.AcquireContext(ctx, paths.SessionPath, safety.LockWait(ctx), false); err != nil {
+					return nil, err
+				}
+				defer lock.Release()
 				return convertTelethonSession(src, paths.SessionPath)
 			})
 			storeExitCode(cmd, code)
@@ -66,6 +73,11 @@ func registerImportTelethon(root *cobra.Command, mgr *accounts.Manager) {
 }
 
 func convertTelethonSession(srcPath, dstPath string) (any, error) {
+	if _, err := os.Lstat(dstPath); err == nil {
+		return nil, safety.NewBadArgs("destination session already exists; import into a new account instead")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
 	if _, err := os.Stat(srcPath); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, safety.NewBadArgs("telethon session not found at %s", srcPath)
@@ -73,7 +85,7 @@ func convertTelethonSession(srcPath, dstPath string) (any, error) {
 		return nil, err
 	}
 
-	uri := "file:" + srcPath + "?mode=ro"
+	uri := "file:" + url.PathEscape(srcPath) + "?mode=ro"
 	db, err := sql.Open("sqlite", uri)
 	if err != nil {
 		return nil, fmt.Errorf("open telethon session: %w", err)
@@ -116,7 +128,7 @@ func convertTelethonSession(srcPath, dstPath string) (any, error) {
 	if err := os.MkdirAll(parentDir(dstPath), 0o700); err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(dstPath, buf, 0o600); err != nil {
+	if err := (&client.AtomicSessionStorage{Path: dstPath}).StoreSession(context.Background(), buf); err != nil {
 		return nil, err
 	}
 

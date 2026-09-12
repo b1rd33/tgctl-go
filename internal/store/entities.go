@@ -2,6 +2,8 @@ package store
 
 import (
 	"database/sql"
+	"fmt"
+	"github.com/b1rd33/tgctl-go/internal/peerid"
 	"time"
 )
 
@@ -18,7 +20,19 @@ const (
 
 // UpsertEntity persists an (id, kind, access_hash) tuple. Use AccessHash=0 for
 // basic groups.
-func UpsertEntity(db *sql.DB, id int64, kind EntityKind, accessHash int64) error {
+func UpsertEntity(db schemaDB, id int64, kind EntityKind, accessHash int64) error {
+	if id <= 0 || id >= peerid.ChannelOffset {
+		return fmt.Errorf("invalid raw Telegram peer ID")
+	}
+	switch kind {
+	case EntityChannel:
+		id = peerid.Channel(id)
+	case EntityChat:
+		id = peerid.Chat(id)
+	case EntityUser:
+	default:
+		return fmt.Errorf("invalid peer kind")
+	}
 	_, err := db.Exec(`
 		INSERT INTO tg_entities(id, kind, access_hash, updated_at)
 		VALUES (?, ?, ?, ?)

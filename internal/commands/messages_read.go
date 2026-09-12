@@ -83,7 +83,11 @@ func toFullMessageDTO(m *store.Message) FullMessageDTO {
 }
 
 // ShowRunner is the runner for `tg show`. Errors map to dispatch error codes.
-func ShowRunner(_ context.Context, dbPath, selector string, limit int, reverse, includeDeleted bool) (any, error) {
+func ShowRunner(_ context.Context, dbPath, selector string, limit int, reverse, includeDeleted bool, cursors ...string) (any, error) {
+	cursor := ""
+	if len(cursors) > 0 {
+		cursor = cursors[0]
+	}
 	db, err := store.ConnectReadonly(dbPath)
 	if err != nil {
 		return nil, err
@@ -95,7 +99,7 @@ func ShowRunner(_ context.Context, dbPath, selector string, limit int, reverse, 
 		return nil, err
 	}
 	rows, err := store.Show(db, store.ShowOptions{
-		ChatID: chatID, Limit: limit, Reverse: reverse, IncludeDeleted: includeDeleted,
+		Cursor: cursor, ChatID: chatID, Limit: limit, Reverse: reverse, IncludeDeleted: includeDeleted,
 	})
 	if err != nil {
 		return nil, err
@@ -108,7 +112,7 @@ func ShowRunner(_ context.Context, dbPath, selector string, limit int, reverse, 
 	if reverse {
 		order = "oldest_first"
 	}
-	return map[string]any{
+	return map[string]any{"source": "cache", "coverage": "cached history only", "next_cursor": store.MessageCursor(chatID, reverse, rows, limit),
 		"chat":     ChatRef{ChatID: chatID, Title: title},
 		"order":    order,
 		"messages": out,
@@ -116,9 +120,13 @@ func ShowRunner(_ context.Context, dbPath, selector string, limit int, reverse, 
 }
 
 // SearchRunner mirrors Python `_search_runner`.
-func SearchRunner(_ context.Context, dbPath, selector, query string, caseSensitive bool, limit int, includeDeleted bool) (any, error) {
+func SearchRunner(_ context.Context, dbPath, selector, query string, caseSensitive bool, limit int, includeDeleted bool, cursors ...string) (any, error) {
 	if query == "" {
 		return nil, safety.NewBadArgs("Search query cannot be empty")
+	}
+	cursor := ""
+	if len(cursors) > 0 {
+		cursor = cursors[0]
 	}
 	db, err := store.ConnectReadonly(dbPath)
 	if err != nil {
@@ -132,7 +140,7 @@ func SearchRunner(_ context.Context, dbPath, selector, query string, caseSensiti
 	}
 	limit = positiveLimit(limit, 50)
 	rows, err := store.Search(db, store.SearchOptions{
-		ChatID: chatID, Query: query, CaseSensitive: caseSensitive, Limit: limit, IncludeDeleted: includeDeleted,
+		Cursor: cursor, ChatID: chatID, Query: query, CaseSensitive: caseSensitive, Limit: limit, IncludeDeleted: includeDeleted,
 	})
 	if err != nil {
 		return nil, err
@@ -141,7 +149,7 @@ func SearchRunner(_ context.Context, dbPath, selector, query string, caseSensiti
 	for i, r := range rows {
 		out[i] = toSummaryDTO(r)
 	}
-	return map[string]any{
+	return map[string]any{"source": "cache", "coverage": "cached history only", "next_cursor": store.MessageCursor(chatID, false, rows, limit),
 		"chat":           ChatRef{ChatID: chatID, Title: title},
 		"query":          query,
 		"case_sensitive": caseSensitive,
@@ -151,7 +159,7 @@ func SearchRunner(_ context.Context, dbPath, selector, query string, caseSensiti
 }
 
 // ListMsgsRunner mirrors Python `_list_runner`.
-func ListMsgsRunner(_ context.Context, dbPath, selector string, since, until string, limit int, reverse, includeDeleted bool) (any, error) {
+func ListMsgsRunner(_ context.Context, dbPath, selector string, since, until string, limit int, reverse, includeDeleted bool, cursors ...string) (any, error) {
 	sinceTS, err := dateStart(since)
 	if err != nil {
 		return nil, err
@@ -159,6 +167,10 @@ func ListMsgsRunner(_ context.Context, dbPath, selector string, since, until str
 	untilTS, err := dateEnd(until)
 	if err != nil {
 		return nil, err
+	}
+	cursor := ""
+	if len(cursors) > 0 {
+		cursor = cursors[0]
 	}
 	db, err := store.ConnectReadonly(dbPath)
 	if err != nil {
@@ -171,7 +183,7 @@ func ListMsgsRunner(_ context.Context, dbPath, selector string, since, until str
 	}
 	limit = positiveLimit(limit, 50)
 	rows, err := store.List(db, store.ListOptions{
-		ChatID: chatID, Since: sinceTS, Until: untilTS,
+		Cursor: cursor, ChatID: chatID, Since: sinceTS, Until: untilTS,
 		Limit: limit, Reverse: reverse, IncludeDeleted: includeDeleted,
 	})
 	if err != nil {
@@ -185,7 +197,7 @@ func ListMsgsRunner(_ context.Context, dbPath, selector string, since, until str
 	if reverse {
 		order = "oldest_first"
 	}
-	return map[string]any{
+	return map[string]any{"source": "cache", "coverage": "cached history only", "next_cursor": store.MessageCursor(chatID, reverse, rows, limit),
 		"chat":  ChatRef{ChatID: chatID, Title: title},
 		"order": order,
 		"filters": map[string]any{
@@ -333,6 +345,7 @@ func showCommand(paths AccountPathProvider) *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cursor, _ := cmd.Flags().GetString("cursor")
 			limit, _ := cmd.Flags().GetInt("limit")
 			reverse, _ := cmd.Flags().GetBool("reverse")
 			includeDeleted, _ := cmd.Flags().GetBool("include-deleted")
@@ -340,13 +353,14 @@ func showCommand(paths AccountPathProvider) *cobra.Command {
 			return runDispatchedRead(cmd, "show", map[string]any{
 				"chat": selector, "limit": limit, "reverse": reverse, "include_deleted": includeDeleted,
 			}, paths, func(ctx context.Context, p readPaths) (any, error) {
-				return ShowRunner(ctx, p.db, selector, positiveLimit(limit, 20), reverse, includeDeleted)
+				return ShowRunner(ctx, p.db, selector, positiveLimit(limit, 20), reverse, includeDeleted, cursor)
 			})
 		},
 	}
 	cmd.Flags().Int("limit", 20, "Max messages to return")
 	cmd.Flags().Bool("reverse", false, "Show oldest first")
 	cmd.Flags().Bool("include-deleted", false, "Include tombstoned messages")
+	cmd.Flags().String("cursor", "", "Continue from next_cursor using the same filters and order")
 	AddOutputFlags(cmd)
 	return cmd
 }
@@ -358,6 +372,7 @@ func searchCommand(paths AccountPathProvider) *cobra.Command {
 		Args:         cobra.ExactArgs(2),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cursor, _ := cmd.Flags().GetString("cursor")
 			limit, _ := cmd.Flags().GetInt("limit")
 			cs, _ := cmd.Flags().GetBool("case-sensitive")
 			includeDeleted, _ := cmd.Flags().GetBool("include-deleted")
@@ -365,13 +380,14 @@ func searchCommand(paths AccountPathProvider) *cobra.Command {
 				"chat": args[0], "query": args[1], "limit": limit,
 				"case_sensitive": cs, "include_deleted": includeDeleted,
 			}, paths, func(ctx context.Context, p readPaths) (any, error) {
-				return SearchRunner(ctx, p.db, args[0], args[1], cs, limit, includeDeleted)
+				return SearchRunner(ctx, p.db, args[0], args[1], cs, limit, includeDeleted, cursor)
 			})
 		},
 	}
 	cmd.Flags().Int("limit", 50, "Max messages to return")
 	cmd.Flags().Bool("case-sensitive", false, "Case-sensitive matching")
 	cmd.Flags().Bool("include-deleted", false, "Include tombstoned messages")
+	cmd.Flags().String("cursor", "", "Continue from next_cursor using the same filters and order")
 	AddOutputFlags(cmd)
 	return cmd
 }
@@ -383,6 +399,7 @@ func listMsgsCommand(paths AccountPathProvider) *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cursor, _ := cmd.Flags().GetString("cursor")
 			limit, _ := cmd.Flags().GetInt("limit")
 			reverse, _ := cmd.Flags().GetBool("reverse")
 			since, _ := cmd.Flags().GetString("since")
@@ -392,7 +409,7 @@ func listMsgsCommand(paths AccountPathProvider) *cobra.Command {
 				"chat": args[0], "since": since, "until": until,
 				"limit": limit, "reverse": reverse, "include_deleted": includeDeleted,
 			}, paths, func(ctx context.Context, p readPaths) (any, error) {
-				return ListMsgsRunner(ctx, p.db, args[0], since, until, limit, reverse, includeDeleted)
+				return ListMsgsRunner(ctx, p.db, args[0], since, until, limit, reverse, includeDeleted, cursor)
 			})
 		},
 	}
@@ -401,6 +418,7 @@ func listMsgsCommand(paths AccountPathProvider) *cobra.Command {
 	cmd.Flags().String("since", "", "YYYY-MM-DD inclusive lower bound")
 	cmd.Flags().String("until", "", "YYYY-MM-DD inclusive upper bound")
 	cmd.Flags().Bool("include-deleted", false, "Include tombstoned messages")
+	cmd.Flags().String("cursor", "", "Continue from next_cursor using the same filters and order")
 	AddOutputFlags(cmd)
 	return cmd
 }

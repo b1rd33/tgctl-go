@@ -135,3 +135,20 @@ func (e *CommittedWrite) ClassificationExtras() map[string]any {
 	}
 	return out
 }
+
+// DefinitiveRejection is emitted only when no mutation in this operation has
+// been accepted and Telegram explicitly rejected the RPC.
+type DefinitiveRejection struct{ Err error }
+
+func (e *DefinitiveRejection) Error() string { return e.Err.Error() }
+func (e *DefinitiveRejection) Unwrap() error { return e.Err }
+
+type UnknownWrite struct {
+	Err         error
+	OperationID string
+}
+
+func (e *UnknownWrite) Error() string {
+	return "write outcome is unknown; inspect the operation before retrying"
+}
+func (e *UnknownWrite) Unwrap() error { return e.Err }

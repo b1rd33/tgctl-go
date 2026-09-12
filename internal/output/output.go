@@ -103,7 +103,7 @@ func ExitCodeFromString(name string) ExitCode {
 }
 
 func NewRequestID() string {
-	var b [4]byte
+	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		panic(err)
 	}

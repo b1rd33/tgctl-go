@@ -53,7 +53,7 @@ func LoadSyncState(db *sql.DB, account string, chatID int64) (SyncState, error) 
 
 // SaveSyncState atomically upserts one checkpoint. Callers should only save a
 // cursor after its history page has been persisted successfully.
-func SaveSyncState(db *sql.DB, state SyncState) error {
+func SaveSyncState(db schemaDB, state SyncState) error {
 	state.Account = normalizeSyncAccount(state.Account)
 	if state.UpdatedAt == "" {
 		state.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)

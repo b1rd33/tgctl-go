@@ -152,8 +152,8 @@ Telegram writes using the shared write pipeline generate a pre-call entry and a
 final dispatch entry in `audit.log`:
 
 ```json
-{"ts":"<timestamp>","phase":"before","request_id":"req-example","cmd":"send","resolved_chat_id":"<your-chat-id>","payload_preview":{},"dry_run":false}
-{"ts":"<timestamp>","request_id":"req-example","cmd":"send","args":{"chat":"<your-chat-id>","dry_run":false},"result":"ok"}
+{"ts":"<timestamp>","phase":"before","request_id":"req-example","cmd":"send","dry_run":false}
+{"ts":"<timestamp>","request_id":"req-example","cmd":"send","args":{"dry_run":false},"result":"ok"}
 ```
 
 The pre-call entry is written *before* the Telegram call, so even if
@@ -267,3 +267,7 @@ original request actually landed before the FloodWait fired.
 - [Multi-account](multi-account.md) — audit log paths per account
 - [Library use](sdk.md) — agent subprocess pattern with idempotency
 - [Quickstart](quickstart.md) — first safe send
+
+## Durable recovery contract
+
+See [reliability and migration](reliability.md) for durable request records, non-expiring unknown outcomes, persistent account rate limits/server waits, marked peer IDs, event acknowledgments, private snapshots and read-only limitations. The local rate guard cannot guarantee Telegram account safety.
