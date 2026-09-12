@@ -288,7 +288,7 @@ func dispatchUnhandledFailure(root, command *cobra.Command, err error, json bool
 	if command == nil {
 		command = root
 	}
-	return dispatch.Run(command.Name(), dispatch.Options{
+	return dispatch.Run(command.Name(), dispatch.Options{Context: command.Context(),
 		JSON:   json,
 		Stdout: root.OutOrStdout(),
 		Stderr: root.ErrOrStderr(),

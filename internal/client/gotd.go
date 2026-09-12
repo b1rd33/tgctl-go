@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gotd/td/session"
@@ -36,8 +37,9 @@ type GotdClient struct {
 	fileDownloader    fileDownloader
 	destinationOpener destinationOpener
 	tgc               *telegram.Client
-	cancel            context.CancelFunc
-	done              chan error
+	lifecycle         *clientLifecycle
+	closeOnce         sync.Once
+	closeErr          error
 	db                *sql.DB // per-account entity cache; may be nil for ephemeral clients
 	events            chan ListenEvent
 }
@@ -262,12 +264,9 @@ func newClient(ctx context.Context, apiID int, apiHash, sessionPath, dbPath stri
 		}),
 	})
 
-	runCtx, cancel := context.WithCancel(ctx)
-	ready := make(chan error, 1)
-	done := make(chan error, 1)
 	var api *tg.Client
-	go func() {
-		done <- tgc.Run(runCtx, func(rctx context.Context) error {
+	life, err := startClientRun(ctx, func(runCtx context.Context, ready chan<- error) error {
+		return tgc.Run(runCtx, func(rctx context.Context) error {
 			status, err := tgc.Auth().Status(rctx)
 			if err != nil {
 				ready <- err
@@ -285,37 +284,38 @@ func newClient(ctx context.Context, apiID int, apiHash, sessionPath, dbPath stri
 			<-rctx.Done()
 			return rctx.Err()
 		})
-	}()
-	if err := <-ready; err != nil {
-		cancel()
-		<-done
+	})
+	if err != nil {
 		return nil, err
 	}
 	gc := &GotdClient{
 		api: api, mediaAPI: api,
 		fileDownloader:    gotdFileDownloader{client: tgc, api: api},
 		destinationOpener: atomicDestinationOpener{},
-		tgc:               tgc, cancel: cancel, done: done, events: events,
+		tgc:               tgc, lifecycle: life, events: events,
 	}
 	if dbPath != "" {
-		if db, err := store.Connect(dbPath); err == nil {
-			gc.db = db
+		db, err := store.Connect(dbPath)
+		if err != nil {
+			_ = gc.Close()
+			return nil, err
 		}
+		gc.db = db
 	}
 	return gc, nil
 }
 
 // Close cancels the underlying client.Run and waits for it to drain.
 func (g *GotdClient) Close() error {
-	g.cancel()
-	err := <-g.done
-	if g.db != nil {
-		_ = g.db.Close()
-	}
-	if err != nil && !errors.Is(err, context.Canceled) {
-		return err
-	}
-	return nil
+	g.closeOnce.Do(func() {
+		if g.lifecycle != nil {
+			g.closeErr = g.lifecycle.close()
+		}
+		if g.db != nil {
+			g.closeErr = errors.Join(g.closeErr, g.db.Close())
+		}
+	})
+	return g.closeErr
 }
 
 func (g *GotdClient) GetMe(ctx context.Context) (User, error) {
@@ -1702,9 +1702,26 @@ func (g *GotdClient) GetChatsInfo(ctx context.Context, ids []int64) ([]ChatInfo,
 }
 
 func (g *GotdClient) ListenOnce(ctx context.Context) (ListenEvent, error) {
+	if err := ctx.Err(); err != nil {
+		return ListenEvent{}, err
+	}
+	var done <-chan struct{}
+	if g.lifecycle != nil {
+		done = g.lifecycle.done
+	}
 	select {
-	case event := <-g.events:
+	case <-done:
+		return ListenEvent{}, g.lifecycle.terminalError()
+	default:
+	}
+	select {
+	case event, ok := <-g.events:
+		if !ok {
+			return ListenEvent{}, errors.New("Telegram update stream closed")
+		}
 		return event, nil
+	case <-done:
+		return ListenEvent{}, g.lifecycle.terminalError()
 	case <-ctx.Done():
 		return ListenEvent{}, ctx.Err()
 	}

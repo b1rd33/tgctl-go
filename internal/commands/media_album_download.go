@@ -103,7 +103,7 @@ func downloadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 				auditPath = ""
 			}
 			recoveryExtras := map[string]any{}
-			code := dispatch.Run(name, dispatch.Options{
+			code := dispatch.Run(name, dispatch.Options{Context: cmd.Context(),
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				AuditPath: auditPath, Args: auditArgs, DurableAudit: !wargs.DryRun, CommittedExtras: recoveryExtras,
 			}, func(ctx context.Context) (any, error) {

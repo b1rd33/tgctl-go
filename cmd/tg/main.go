@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	"github.com/b1rd33/tgctl-go/internal/accounts"
 	"github.com/b1rd33/tgctl-go/internal/client"
@@ -12,6 +14,10 @@ import (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	root := projectRoot()
 	_ = env.LoadFile(filepath.Join(root, ".env"))
 	mgr := accounts.New(root)
@@ -23,8 +29,11 @@ func main() {
 	}
 
 	cmd := commands.NewRootCommand()
+	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	cmd.SetContext(ctx)
 	commands.RegisterAll(cmd, mgr, cfg)
-	os.Exit(commands.ExecuteRoot(cmd))
+	return commands.ExecuteRoot(cmd)
 }
 
 func projectRoot() string {

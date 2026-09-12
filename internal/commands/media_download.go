@@ -86,7 +86,7 @@ func downloadMediaCommand(cfg CommandsConfig) *cobra.Command {
 				"overwrite":     overwrite,
 			}
 			recoveryExtras := map[string]any{}
-			code := dispatch.Run(name, dispatch.Options{
+			code := dispatch.Run(name, dispatch.Options{Context: cmd.Context(),
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				AuditPath: paths.auditPath, Args: auditArgs, DurableAudit: true,
 				CommittedExtras: recoveryExtras,

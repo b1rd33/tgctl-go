@@ -55,7 +55,7 @@ func registerLogin(root *cobra.Command, mgr *accounts.Manager) {
 			if qrURI && !useQR {
 				return emitDispatchedFailure(cmd, "login", errors.New("--qr-uri requires --qr"))
 			}
-			code := dispatch.Run("login", dispatch.Options{
+			code := dispatch.Run("login", dispatch.Options{Context: cmd.Context(),
 				JSON:      jsonMode(cmd),
 				Stdout:    cmd.OutOrStdout(),
 				Stderr:    cmd.ErrOrStderr(),

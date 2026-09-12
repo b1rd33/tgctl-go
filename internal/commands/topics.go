@@ -38,7 +38,7 @@ func topicsListCommand(cfg CommandsConfig) *cobra.Command {
 			if pathErr != nil {
 				return emitDispatchedFailure(cmd, "topics-list", pathErr)
 			}
-			code := dispatch.Run("topics-list", dispatch.Options{
+			code := dispatch.Run("topics-list", dispatch.Options{Context: cmd.Context(),
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				AuditPath: paths.audit, Args: map[string]any{"chat": args[0], "limit": limit, "query": query},
 			}, func(ctx context.Context) (any, error) {

@@ -48,7 +48,7 @@ func registerImportTelethon(root *cobra.Command, mgr *accounts.Manager) {
 				return emitDispatchedFailure(cmd, "import-telethon-session", err)
 			}
 
-			code := dispatch.Run("import-telethon-session", dispatch.Options{
+			code := dispatch.Run("import-telethon-session", dispatch.Options{Context: cmd.Context(),
 				JSON:      jsonMode(cmd),
 				Stdout:    cmd.OutOrStdout(),
 				Stderr:    cmd.ErrOrStderr(),

@@ -117,7 +117,7 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 				"media_dir_policy": "account-chat",
 			}
 			recoveryExtras := map[string]any{}
-			code := dispatch.Run("backfill", dispatch.Options{
+			code := dispatch.Run("backfill", dispatch.Options{Context: cmd.Context(),
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				AuditPath: paths.auditPath, Args: auditArgs, DurableAudit: true, CommittedExtras: recoveryExtras,
 			}, func(ctx context.Context) (any, error) {
@@ -683,7 +683,7 @@ func discoverCommand(cfg CommandsConfig) *cobra.Command {
 			if pathErr != nil {
 				return emitDispatchedFailure(cmd, "discover", pathErr)
 			}
-			code := dispatch.Run("discover", dispatch.Options{
+			code := dispatch.Run("discover", dispatch.Options{Context: cmd.Context(),
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				AuditPath: auditPath, Args: map[string]any{"limit": limit},
 			}, func(ctx context.Context) (any, error) {
@@ -728,7 +728,7 @@ func syncContactsCommand(cfg CommandsConfig) *cobra.Command {
 			if pathErr != nil {
 				return emitDispatchedFailure(cmd, "sync-contacts", pathErr)
 			}
-			code := dispatch.Run("sync-contacts", dispatch.Options{
+			code := dispatch.Run("sync-contacts", dispatch.Options{Context: cmd.Context(),
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				AuditPath: auditPath,
 			}, func(ctx context.Context) (any, error) {

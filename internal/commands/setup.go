@@ -46,7 +46,7 @@ func registerSetup(root *cobra.Command) {
 			if _, _, err := validateSetupCredentials(apiID, apiHash); err != nil {
 				return emitDispatchedFailure(cmd, "setup", err)
 			}
-			code := dispatch.Run("setup", dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr()}, func(context.Context) (any, error) {
+			code := dispatch.Run("setup", dispatch.Options{Context: cmd.Context(), JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr()}, func(context.Context) (any, error) {
 				if err := writeEnvCredentials(envPath, apiID, apiHash); err != nil {
 					return nil, err
 				}

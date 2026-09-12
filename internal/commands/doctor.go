@@ -31,7 +31,7 @@ func registerDoctor(root *cobra.Command, m *accounts.Manager) {
 			if err != nil {
 				return emitDispatchedFailure(cmd, "doctor", err)
 			}
-			code := dispatch.Run("doctor", dispatch.Options{
+			code := dispatch.Run("doctor", dispatch.Options{Context: cmd.Context(),
 				JSON:   jsonMode(cmd),
 				Stdout: cmd.OutOrStdout(),
 				Stderr: cmd.ErrOrStderr(),

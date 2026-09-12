@@ -12,6 +12,7 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/accounts"
 	"github.com/b1rd33/tgctl-go/internal/client"
 	"github.com/b1rd33/tgctl-go/internal/dispatch"
+	"github.com/b1rd33/tgctl-go/internal/output"
 	"github.com/b1rd33/tgctl-go/internal/resolve"
 	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
@@ -123,18 +124,17 @@ func nullString(s sql.NullString) any {
 	return s.String
 }
 
-func meHumanFormatter(stdout interface{ Write([]byte) (int, error) }) func(any) {
-	return func(data any) {
+func meHumanFormatter(stdout interface{ Write([]byte) (int, error) }) func(any) error {
+	return func(data any) error {
 		m, ok := data.(map[string]any)
 		if !ok {
-			return
+			return fmt.Errorf("invalid self output")
 		}
 		username := "(no username)"
 		if u, ok := m["username"].(string); ok && u != "" {
 			username = "@" + u
 		}
-		fmt.Fprintf(stdout, "%v (%s) id %v\n", m["display_name"], username, m["user_id"])
-		fmt.Fprintf(stdout, "Source: %v  Cached: %v\n", m["source"], m["cached_at"])
+		return output.WriteString(stdout, fmt.Sprintf("%v (%s) id %v\nSource: %v  Cached: %v\n", m["display_name"], username, m["user_id"], m["source"], m["cached_at"]))
 	}
 }
 
@@ -161,7 +161,7 @@ func registerAuthWithFetcher(root *cobra.Command, paths AccountPathProvider, fet
 			if readOnly {
 				auditPath = ""
 			}
-			code := dispatch.Run("me", dispatch.Options{
+			code := dispatch.Run("me", dispatch.Options{Context: cmd.Context(),
 				JSON:           jsonMode(cmd),
 				Stdout:         cmd.OutOrStdout(),
 				Stderr:         cmd.ErrOrStderr(),

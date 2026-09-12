@@ -251,7 +251,7 @@ func runWriteResolvedTargetOptions(cmd *cobra.Command, name, telethonMethod, sel
 		auditPath = ""
 	}
 
-	code := dispatch.Run(name, dispatch.Options{
+	code := dispatch.Run(name, dispatch.Options{Context: cmd.Context(),
 		JSON:            jsonMode(cmd),
 		Stdout:          cmd.OutOrStdout(),
 		Stderr:          cmd.ErrOrStderr(),
@@ -320,7 +320,7 @@ func storeExitCode(cmd *cobra.Command, code int) {
 // process emits the same envelope shape as a runner failure and the same exit
 // code mapping. Returns nil so cobra does not also print/exit on the error.
 func emitDispatchedFailure(cmd *cobra.Command, name string, err error) error {
-	code := dispatch.Run(name, dispatch.Options{
+	code := dispatch.Run(name, dispatch.Options{Context: cmd.Context(),
 		JSON:   jsonMode(cmd),
 		Stdout: cmd.OutOrStdout(),
 		Stderr: cmd.ErrOrStderr(),
@@ -472,7 +472,7 @@ func forwardCommand(cfg CommandsConfig) *cobra.Command {
 			}
 
 			wargs := writeArgsFrom(cmd)
-			code := dispatch.Run("forward", dispatch.Options{
+			code := dispatch.Run("forward", dispatch.Options{Context: cmd.Context(),
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				AuditPath: auditPath, Args: payload,
 			}, func(ctx context.Context) (any, error) {

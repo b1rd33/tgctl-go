@@ -21,7 +21,7 @@ func registerAccountCommands(root *cobra.Command, mgr *accounts.Manager) {
 }
 
 func runAccountCommand(cmd *cobra.Command, name string, fn func() (any, error)) error {
-	code := dispatch.Run(name, dispatch.Options{
+	code := dispatch.Run(name, dispatch.Options{Context: cmd.Context(),
 		JSON:   jsonMode(cmd),
 		Stdout: cmd.OutOrStdout(),
 		Stderr: cmd.ErrOrStderr(),

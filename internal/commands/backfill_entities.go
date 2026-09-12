@@ -49,7 +49,7 @@ func registerBackfillEntities(root *cobra.Command, mgr *accounts.Manager) {
 			if err != nil {
 				return emitDispatchedFailure(cmd, "backfill-entities", err)
 			}
-			code := dispatch.Run("backfill-entities", dispatch.Options{
+			code := dispatch.Run("backfill-entities", dispatch.Options{Context: cmd.Context(),
 				JSON:      jsonMode(cmd),
 				Stdout:    cmd.OutOrStdout(),
 				Stderr:    cmd.ErrOrStderr(),

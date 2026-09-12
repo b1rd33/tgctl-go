@@ -1,6 +1,25 @@
 # Changelog
 
-## Unreleased
+## v0.1.9 — 2026-09-12
+
+### Fixed
+
+- Preserve command cancellation and deadlines, including Ctrl-C and SIGTERM.
+- Return early client startup failures, expose terminal failures to listeners,
+  and make repeated client shutdown safe.
+- Report entity-cache open failures instead of silently creating a client
+  without its cache.
+- Retry failed sync client creation without a nil-client panic and honor the
+  configured reconnect delay cap.
+- Detect failed and short output writes, and stop live streaming when output
+  cannot be delivered. Output failure does not undo a completed operation;
+  do not retry writes blindly.
+
+Validated offline; no live Telegram account tests were performed. Durable
+update recovery, session ownership, typed peer identity, and write-ledger
+repairs remain future work.
+
+## v0.1.8 — 2026-08-03
 
 ### Added
 

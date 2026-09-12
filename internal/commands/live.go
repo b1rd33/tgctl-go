@@ -28,7 +28,7 @@ func registerLiveCommands(root *cobra.Command, cfg CommandsConfig) {
 			if pathErr != nil {
 				return emitDispatchedFailure(cmd, "listen", pathErr)
 			}
-			code := dispatch.Run("listen", dispatch.Options{
+			code := dispatch.Run("listen", dispatch.Options{Context: cmd.Context(),
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: auditPath,
 			}, func(ctx context.Context) (any, error) {
 				if err := safety.RequireWriteAllowed(localWriteArgs(cmd)); err != nil {
@@ -44,7 +44,9 @@ func registerLiveCommands(root *cobra.Command, cfg CommandsConfig) {
 						return fmt.Errorf("persist live update: %w", err)
 					}
 					env := output.Success("listen.event", event, output.NewRequestID(), nil)
-					output.Emit(env, output.EmitOptions{JSON: true, Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr()})
+					if output.Emit(env, output.EmitOptions{JSON: true, Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr()}) != output.OK {
+						return fmt.Errorf("live update persisted but output delivery failed")
+					}
 					return nil
 				}
 				if once {

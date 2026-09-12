@@ -83,13 +83,13 @@ func exportCommand(cfg CommandsConfig) *cobra.Command {
 				return emitDispatchedFailure(cmd, "export", err)
 			}
 			jsonOutput := jsonMode(cmd)
-			var humanFormatter func(any)
+			var humanFormatter func(any) error
 			if outputPath == "-" {
 				// Raw stdout exports already own the human output stream; avoid
 				// appending dispatch's metadata object after the archive bytes.
-				humanFormatter = func(any) {}
+				humanFormatter = func(any) error { return nil }
 			}
-			code := dispatch.Run("export", dispatch.Options{
+			code := dispatch.Run("export", dispatch.Options{Context: cmd.Context(),
 				JSON: jsonOutput, Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				HumanFormatter: humanFormatter,
 			}, func(ctx context.Context) (any, error) {
@@ -177,7 +177,7 @@ func runExportVerify(cmd *cobra.Command, cfg CommandsConfig, manifestPath string
 	if err != nil {
 		return emitDispatchedFailure(cmd, "export", err)
 	}
-	code := dispatch.Run("export", dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr()}, func(context.Context) (any, error) {
+	code := dispatch.Run("export", dispatch.Options{Context: cmd.Context(), JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr()}, func(context.Context) (any, error) {
 		manifest, result, err := store.VerifyArchiveManifest(absManifest, paths.mediaDir)
 		if err != nil {
 			return nil, err

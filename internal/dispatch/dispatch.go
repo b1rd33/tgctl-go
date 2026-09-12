@@ -26,10 +26,11 @@ func RequestIDFrom(ctx context.Context) string {
 
 // Options configure how Run emits and audits a single command.
 type Options struct {
+	Context        context.Context
 	JSON           bool
 	Stdout         any // io.Writer; left as any to avoid an import in the type
 	Stderr         any
-	HumanFormatter func(any)
+	HumanFormatter func(any) error
 	AuditPath      string
 	Args           map[string]any
 	// DurableAudit makes the audit append part of command finalization. It is
@@ -139,9 +140,17 @@ func reservedClassificationExtra(key string) bool {
 // Returns the process exit code.
 func Run(name string, opts Options, runner Runner) int {
 	requestID := output.NewRequestID()
-	ctx := context.WithValue(context.Background(), requestIDKey{}, requestID)
+	parent := opts.Context
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx := context.WithValue(parent, requestIDKey{}, requestID)
 
-	data, err := runner(ctx)
+	var data any
+	err := ctx.Err()
+	if err == nil {
+		data, err = runner(ctx)
+	}
 
 	var envelope output.Envelope
 	var auditExtra map[string]any

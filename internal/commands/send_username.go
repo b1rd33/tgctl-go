@@ -54,7 +54,7 @@ func registerSendByUsername(root *cobra.Command, mgr *accounts.Manager) {
 				"reply_to": replyTo, "silent": silent,
 			}
 
-			code := dispatch.Run("send-by-username", dispatch.Options{
+			code := dispatch.Run("send-by-username", dispatch.Options{Context: cmd.Context(),
 				JSON:      jsonMode(cmd),
 				Stdout:    cmd.OutOrStdout(),
 				Stderr:    cmd.ErrOrStderr(),

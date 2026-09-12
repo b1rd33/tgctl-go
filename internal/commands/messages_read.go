@@ -313,7 +313,7 @@ func runDispatchedRead(cmd *cobra.Command, name string, args map[string]any, pat
 	if err != nil {
 		return emitDispatchedFailure(cmd, name, err)
 	}
-	code := dispatch.Run(name, dispatch.Options{
+	code := dispatch.Run(name, dispatch.Options{Context: cmd.Context(),
 		JSON:      jsonMode(cmd),
 		Stdout:    cmd.OutOrStdout(),
 		Stderr:    cmd.ErrOrStderr(),

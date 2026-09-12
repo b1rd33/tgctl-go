@@ -13,7 +13,7 @@ type EmitOptions struct {
 	JSON           bool
 	Stdout         io.Writer
 	Stderr         io.Writer
-	HumanFormatter func(any)
+	HumanFormatter func(any) error
 }
 
 func Emit(envelope Envelope, opts EmitOptions) ExitCode {
@@ -26,28 +26,47 @@ func Emit(envelope Envelope, opts EmitOptions) ExitCode {
 		stderr = os.Stderr
 	}
 
+	var writeErr error
 	if opts.JSON {
 		encoded, err := json.Marshal(envelope)
 		if err != nil {
 			_, _ = fmt.Fprintf(stderr, "ERROR [GENERIC]: %v\n", err)
 			return Generic
 		}
-		_, _ = fmt.Fprintln(stdout, string(encoded))
+		writeErr = WriteString(stdout, string(encoded)+"\n")
 	} else if envelope.OK {
 		if opts.HumanFormatter != nil {
-			opts.HumanFormatter(envelope.Data)
+			writeErr = opts.HumanFormatter(envelope.Data)
 		} else {
-			encoded, _ := json.MarshalIndent(envelope.Data, "", "  ")
-			_, _ = fmt.Fprintln(stdout, string(encoded))
+			encoded, err := json.MarshalIndent(envelope.Data, "", "  ")
+			if err != nil {
+				return Generic
+			}
+			writeErr = WriteString(stdout, string(encoded)+"\n")
 		}
 	} else {
-		_, _ = fmt.Fprintf(stderr, "ERROR [%s]: %s\n", envelope.Error.Code, envelope.Error.Message)
+		writeErr = WriteString(stderr, fmt.Sprintf("ERROR [%s]: %s\n", envelope.Error.Code, envelope.Error.Message))
+	}
+	if writeErr != nil {
+		// Do not include the output payload or writer-supplied error: either may
+		// contain private data. The operation may already have been accepted.
+		_, _ = fmt.Fprintln(stderr, "ERROR [GENERIC]: output delivery failed; operation outcome is unchanged; do not retry writes blindly")
+		return Generic
 	}
 
 	if envelope.OK {
 		return OK
 	}
 	return ExitCodeFromString(envelope.Error.Code)
+}
+
+// WriteString treats short writes as failures even when a writer omits an error.
+func WriteString(w io.Writer, value string) error {
+	n, err := io.WriteString(w, value)
+	if err == nil && n != len(value) {
+		return io.ErrShortWrite
+	}
+	return err
 }
 
 func ExitCodeFromString(name string) ExitCode {

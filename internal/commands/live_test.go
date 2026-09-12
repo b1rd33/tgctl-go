@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"bytes"
+	"io"
 	"strings"
 	"testing"
 
@@ -102,3 +104,24 @@ func TestListenOnlyDMsFlagSkipsChannelEventsAndStops(t *testing.T) {
 		t.Fatalf("ListenCalls=%d want 3", len(fc.ListenCalls))
 	}
 }
+
+func TestListenStopsWhenEventOutputFails(t *testing.T) {
+	cfg, fc, _ := setupWriteEnv(t)
+	fc.ListenEvents = []client.ListenEvent{{UpdateKind: "message", ChatID: 1, MessageID: 10}}
+	root := NewRootCommand()
+	registerLiveCommands(root, cfg)
+	root.SetOut(brokenEventWriter{})
+	var stderr bytes.Buffer
+	root.SetErr(&stderr)
+	root.SetArgs([]string{"listen", "--allow-write", "--json"})
+	if code := ExecuteRoot(root); code == 0 {
+		t.Fatal("broken stream reported success")
+	}
+	if len(fc.ListenCalls) != 1 {
+		t.Fatalf("continued after output failure: %d", len(fc.ListenCalls))
+	}
+}
+
+type brokenEventWriter struct{}
+
+func (brokenEventWriter) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }

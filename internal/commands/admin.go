@@ -184,7 +184,7 @@ func chatsInfoCommand(cfg CommandsConfig) *cobra.Command {
 			if pathErr != nil {
 				return emitDispatchedFailure(cmd, "chats-info", pathErr)
 			}
-			code := dispatch.Run("chats-info", dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: paths.audit}, func(ctx context.Context) (any, error) {
+			code := dispatch.Run("chats-info", dispatch.Options{Context: cmd.Context(), JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: paths.audit}, func(ctx context.Context) (any, error) {
 				c, err := openReadClient(ctx, cfg, paths)
 				if err != nil {
 					return nil, err
@@ -214,7 +214,7 @@ func accountSessionsCommand(cfg CommandsConfig) *cobra.Command {
 			if pathErr != nil {
 				return emitDispatchedFailure(cmd, "account-sessions", pathErr)
 			}
-			code := dispatch.Run("account-sessions", dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: paths.audit}, func(ctx context.Context) (any, error) {
+			code := dispatch.Run("account-sessions", dispatch.Options{Context: cmd.Context(), JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: paths.audit}, func(ctx context.Context) (any, error) {
 				c, err := openReadClient(ctx, cfg, paths)
 				if err != nil {
 					return nil, err
@@ -239,7 +239,7 @@ func runAdminRead(cmd *cobra.Command, cfg CommandsConfig, name, selector string,
 	if pathErr != nil {
 		return emitDispatchedFailure(cmd, name, pathErr)
 	}
-	code := dispatch.Run(name, dispatch.Options{JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: paths.audit}, func(ctx context.Context) (any, error) {
+	code := dispatch.Run(name, dispatch.Options{Context: cmd.Context(), JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: paths.audit}, func(ctx context.Context) (any, error) {
 		db, err := connectReadDB(paths)
 		if err != nil {
 			return nil, err

@@ -50,7 +50,7 @@ func deleteMsgCommand(cfg CommandsConfig) *cobra.Command {
 			dbPath, sessionPath, auditPath := operation.paths.dbPath, operation.paths.sessionPath, operation.paths.auditPath
 			wargs := writeArgsFrom(cmd)
 
-			code := dispatch.Run("delete-msg", dispatch.Options{
+			code := dispatch.Run("delete-msg", dispatch.Options{Context: cmd.Context(),
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				AuditPath: auditPath, Args: payload,
 			}, func(ctx context.Context) (any, error) {
@@ -159,7 +159,7 @@ func leaveChatCommand(cfg CommandsConfig) *cobra.Command {
 			dbPath, sessionPath, auditPath := operation.paths.dbPath, operation.paths.sessionPath, operation.paths.auditPath
 			wargs := writeArgsFrom(cmd)
 
-			code := dispatch.Run("leave-chat", dispatch.Options{
+			code := dispatch.Run("leave-chat", dispatch.Options{Context: cmd.Context(),
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				AuditPath: auditPath, Args: payload,
 			}, func(ctx context.Context) (any, error) {
@@ -233,7 +233,7 @@ func blockUserCommand(cfg CommandsConfig, unblock bool) *cobra.Command {
 			}
 			dbPath, sessionPath, auditPath := operation.paths.dbPath, operation.paths.sessionPath, operation.paths.auditPath
 			wargs := writeArgsFrom(cmd)
-			code := dispatch.Run(name, dispatch.Options{
+			code := dispatch.Run(name, dispatch.Options{Context: cmd.Context(),
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				AuditPath: auditPath, Args: payload,
 			}, func(ctx context.Context) (any, error) {
@@ -296,7 +296,7 @@ func terminateSessionCommand(cfg CommandsConfig) *cobra.Command {
 			if pathErr != nil {
 				return emitDispatchedFailure(cmd, "terminate-session", pathErr)
 			}
-			code := dispatch.Run("terminate-session", dispatch.Options{
+			code := dispatch.Run("terminate-session", dispatch.Options{Context: cmd.Context(),
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				AuditPath: auditPath, Args: payload,
 			}, func(ctx context.Context) (any, error) {

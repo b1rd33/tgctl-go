@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"math"
 	"path/filepath"
 	"strconv"
@@ -60,7 +61,7 @@ func syncCommand(cfg CommandsConfig) *cobra.Command {
 				return emitDispatchedFailure(cmd, "sync", err)
 			}
 			auditArgs := map[string]any{"chat": args[0], "account": account, "follow": follow, "once": once, "max_messages": maxMessages, "backoff_max_seconds": backoffMax}
-			code := dispatch.Run("sync", dispatch.Options{
+			code := dispatch.Run("sync", dispatch.Options{Context: cmd.Context(),
 				JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: paths.auditPath, Args: auditArgs, DurableAudit: true,
 			}, func(ctx context.Context) (any, error) {
 				db, err := store.Connect(paths.dbPath)
@@ -124,6 +125,7 @@ func syncCommand(cfg CommandsConfig) *cobra.Command {
 				if maxDelay <= 0 {
 					maxDelay = 5 * time.Second
 				}
+				backoff = min(backoff, maxDelay)
 				for {
 					event, listenErr := telegramClient.ListenOnce(ctx)
 					if listenErr != nil {
@@ -131,23 +133,24 @@ func syncCommand(cfg CommandsConfig) *cobra.Command {
 							return result, ctx.Err()
 						}
 						_ = closeClient()
-						if err := sleepContext(ctx, backoff); err != nil {
-							return result, err
-						}
-						telegramClient, err = factory(ctx, paths.sessionPath, paths.dbPath)
-						if err != nil {
-							if backoff < maxDelay {
-								backoff *= 2
-								if backoff > maxDelay {
-									backoff = maxDelay
-								}
+						for telegramClient == nil {
+							if err := sleepContext(ctx, backoff); err != nil {
+								return result, err
 							}
-							continue
+							telegramClient, err = factory(ctx, paths.sessionPath, paths.dbPath)
+							if err != nil {
+								telegramClient = nil
+								backoff = min(backoff*2, maxDelay)
+								continue
+							}
+							if telegramClient == nil {
+								return result, fmt.Errorf("client factory returned no client")
+							}
 						}
-						backoff = 100 * time.Millisecond
+						backoff = min(100*time.Millisecond, maxDelay)
 						continue
 					}
-					backoff = 100 * time.Millisecond
+					backoff = min(100*time.Millisecond, maxDelay)
 					if event.ChatID != chatID {
 						continue
 					}
