@@ -67,8 +67,8 @@ export TG_READONLY=1
 ```
 
 This rejects writes even with `--allow-write` flagged. It also prevents local
-state mutation or creation: account directories, SQLite databases and
-migrations, session state, audit logs, and startup migrations remain untouched.
+state mutation or creation: account directories, SQLite databases,
+session state, and audit logs remain untouched.
 Telegram reads use read-only session storage.
 
 `--allow-write` is permission for the requested operation. For example,
@@ -270,4 +270,4 @@ original request actually landed before the FloodWait fired.
 
 ## Durable recovery contract
 
-See [reliability and migration](reliability.md) for durable request records, non-expiring unknown outcomes, persistent account rate limits/server waits, marked peer IDs, event acknowledgments, private snapshots and read-only limitations. The local rate guard cannot guarantee Telegram account safety.
+See [reliability](reliability.md) for durable request records, non-expiring unknown outcomes, persistent account rate limits/server waits, marked peer IDs, event acknowledgments, private snapshots and read-only limitations. The local rate guard cannot guarantee Telegram account safety.

@@ -38,9 +38,9 @@ func ExportMessages(db *sql.DB, opts ExportOptions) ([]Message, error) {
 	q := fmt.Sprintf(`
 		SELECT chat_id, message_id, sender_id, date, text, is_outgoing,
 		       reply_to_msg_id, has_media, media_type, media_path, media_id,
-		       %s, raw_json
+		       grouped_id, raw_json
 		FROM tg_messages WHERE %s
-		ORDER BY message_id ASC%s`, groupedIDProjection(db), strings.Join(where, " AND "), limit)
+		ORDER BY message_id ASC%s`, strings.Join(where, " AND "), limit)
 	rows, err := db.Query(q, args...)
 	if err != nil {
 		return nil, err

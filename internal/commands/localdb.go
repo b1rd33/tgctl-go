@@ -78,7 +78,7 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 			maxMediaBytes := int64(maxMediaSizeMB) * 1024 * 1024
 
 			// The cap preflight is deliberately schema-agnostic and read-only. It
-			// runs before migrations, client construction, audit, or session I/O.
+			// runs before database initialization, client construction, audit, or session I/O.
 			dbSize, err := readBackfillDBSizePreflight(paths.dbPath)
 			if err != nil {
 				return emitDispatchedFailure(cmd, "backfill", err)
@@ -89,7 +89,7 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 			}
 
 			// A permitted backfill uses the normal writable connection here so
-			// supported legacy schemas are migrated before any column-dependent
+			// the current schema is validated before any column-dependent
 			// selector/count query. No Telegram request has happened yet.
 			chatID, title, current, dbSize, err := prepareBackfillDB(paths.dbPath, args[0])
 			if err != nil {
@@ -97,7 +97,7 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 			}
 			if dbCapBytes > 0 && dbSize >= dbCapBytes {
 				return emitDispatchedFailure(cmd, "backfill", safety.NewBadArgs(
-					"backfill database cap reached after migration: current size %d bytes >= --max-db-size-mb %d", dbSize, maxDBSizeMB))
+					"backfill database cap reached after initialization: current size %d bytes >= --max-db-size-mb %d", dbSize, maxDBSizeMB))
 			}
 			if current >= maxMessages {
 				return emitDispatchedFailure(cmd, "backfill", safety.NewBadArgs(

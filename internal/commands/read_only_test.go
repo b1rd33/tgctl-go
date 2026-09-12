@@ -97,20 +97,6 @@ func TestLoginReadOnlyWinsBeforeCredentialsAndPaths(t *testing.T) {
 	assertPathMissing(t, filepath.Join(rootDir, "accounts"))
 }
 
-func TestImportTelethonReadOnlyWinsBeforeSourceLookupAndPaths(t *testing.T) {
-	rootDir := t.TempDir()
-	mgr := accounts.New(rootDir)
-	root := NewRootCommand()
-	registerImportTelethon(root, mgr)
-	root.SetOut(&bytes.Buffer{})
-	root.SetErr(&bytes.Buffer{})
-	root.SetArgs([]string{"--read-only", "import-telethon-session", filepath.Join(rootDir, "missing.session"), "--json"})
-	if code := ExecuteRoot(root); code != 6 {
-		t.Fatalf("exit code = %d, want WRITE_DISALLOWED=6", code)
-	}
-	assertPathMissing(t, filepath.Join(rootDir, "accounts"))
-}
-
 func TestDoctorReadOnlyDoesNotCreateAccountPaths(t *testing.T) {
 	rootDir := t.TempDir()
 	mgr := accounts.New(rootDir)

@@ -68,7 +68,7 @@ func TestPreOmitsPrivatePayloadAndTarget(t *testing.T) {
 		RequestID:         "req-9",
 		ResolvedChatID:    -100123,
 		ResolvedChatTitle: "Bjørn",
-		TelethonMethod:    "messages.SendMessage",
+		RPCMethod:         "messages.SendMessage",
 		PayloadPreview:    map[string]any{"text": "hi"},
 		DryRun:            true,
 	})
@@ -80,7 +80,7 @@ func TestPreOmitsPrivatePayloadAndTarget(t *testing.T) {
 		t.Fatalf("want 1 entry")
 	}
 	e := entries[0]
-	if e["phase"] != "before" || e["cmd"] != "send" || e["telethon_method"] != "messages.SendMessage" {
+	if e["phase"] != "before" || e["cmd"] != "send" || e["rpc_method"] != "messages.SendMessage" {
 		t.Fatalf("entry = %#v", e)
 	}
 	if e["dry_run"] != true {

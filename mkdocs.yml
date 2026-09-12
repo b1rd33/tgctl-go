@@ -1,5 +1,5 @@
 site_name: tgctl-go
-site_description: Telegram CLI for Go — same contract as Python tgctl, single static binary
+site_description: Telegram CLI for Go — account operations in a single static binary
 site_url: https://b1rd33.github.io/tgctl-go/
 repo_url: https://github.com/b1rd33/tgctl-go
 repo_name: b1rd33/tgctl-go
@@ -73,7 +73,7 @@ nav:
   - Commands: commands.md
   - Library use: sdk.md
   - Safety model: safety.md
-  - Reliability and migration: reliability.md
+  - Reliability: reliability.md
   - Capability roadmap: reliability-roadmap.md
   - Multi-account: multi-account.md
   - Contributing: contributing.md

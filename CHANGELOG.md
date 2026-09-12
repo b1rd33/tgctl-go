@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.0 — 2026-09-12
+
+- Remove root-layout migration, old-cache schema upgrades and export fallbacks, and Telethon session import. Only current account state is supported. Unsupported caches fail without conversion.
+- Rename the audit method field to `rpc_method`, removing the Python-specific name.
+- Update bundled and installed Telegram skill guidance and generated command reference.
+
 ## v0.2.0 — 2026-09-12
 
 ### Compatibility changes

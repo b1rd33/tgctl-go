@@ -1299,26 +1299,14 @@ func legacyHasColumn(t *testing.T, path, column string) bool {
 	return false
 }
 
-func TestBackfillPreservesLegacyCacheWithoutGuessingPeerIdentity(t *testing.T) {
+func TestBackfillRejectsUnsupportedCache(t *testing.T) {
 	cfg, fc, paths := setupLegacyBackfillEnv(t)
 	out, code := runRoot(t, cfg, "backfill", "1", "--max-messages", "10", "--allow-write", "--json")
-	if code != 4 {
-		t.Fatalf("code=%d\nout:%s", code, out)
+	if code == 0 || !strings.Contains(out, "unsupported cache schema") {
+		t.Fatalf("code=%d out=%s", code, out)
 	}
-	if len(fc.Backfills) != 0 || !legacyHasColumn(t, paths.db, "deleted") || !legacyHasColumn(t, paths.db, "media_path") {
-		t.Fatalf("migration/backfill missing: calls=%#v deleted=%v media_path=%v", fc.Backfills, legacyHasColumn(t, paths.db, "deleted"), legacyHasColumn(t, paths.db, "media_path"))
-	}
-	db, err := store.ConnectReadonly(paths.db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	var count int
-	if err := db.QueryRow("SELECT COUNT(*) FROM tg_messages").Scan(&count); err != nil {
-		t.Fatal(err)
-	}
-	if count != 0 {
-		t.Fatalf("active rows=%d, want 0", count)
+	if len(fc.Backfills) != 0 || legacyHasColumn(t, paths.db, "deleted") {
+		t.Fatal("unsupported cache modified or Telegram called")
 	}
 }
 

@@ -374,7 +374,7 @@ func runFolderWrite(cmd *cobra.Command, cfg CommandsConfig, name, method string,
 			return out, nil
 		}
 		if auditPath != "" {
-			_ = audit.Pre(auditPath, audit.PreEntry{Cmd: name, RequestID: dispatch.RequestIDFrom(ctx), TelethonMethod: method, PayloadPreview: payload})
+			_ = audit.Pre(auditPath, audit.PreEntry{Cmd: name, RequestID: dispatch.RequestIDFrom(ctx), RPCMethod: method, PayloadPreview: payload})
 		}
 		c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)
 		if err != nil {

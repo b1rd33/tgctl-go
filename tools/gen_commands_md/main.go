@@ -323,8 +323,6 @@ func exampleFor(name, use string) string {
 		return "tg accounts-use work --json"
 	case "accounts-remove":
 		return "tg accounts-remove work --confirm work --json"
-	case "import-telethon-session":
-		return "tg import-telethon-session ~/path/to/tg.session --json"
 	case "completion":
 		return "tg completion zsh > ~/.zsh/completions/_tg"
 	case "help":

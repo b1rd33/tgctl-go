@@ -17,7 +17,7 @@ audit logs, and raw live transcripts out of source control.
 - Numeric chat IDs and explicit `@usernames` are safest. A title selector for
   a write requires `--fuzzy`; never infer a write target from a title.
 - Commands that expose `--allow-write` require it for Telegram-side or local
-  cache/media writes; `--read-only` overrides it. Auth/account setup/import
+  cache/media writes; `--read-only` overrides it. Auth/account setup
   commands use their own guards. Dry-runs still require the write gate but
   make no Telegram or network call.
 - Never place Telegram IDs, usernames, phone numbers, invite links, API
@@ -33,7 +33,7 @@ the same Cobra help used to build `docs/commands.md`.
 
 - **Identity and account state:** `account-sessions`, `accounts-add`,
   `accounts-list`, `accounts-remove`, `accounts-show`, `accounts-use`,
-  `import-telethon-session`, `login`, `me`, `setup`, `terminate-session`.
+  `login`, `me`, `setup`, `terminate-session`.
 - **Discovery, cache, and reads:** `backfill`, `backfill-entities`,
   `chats-info`, `chat-members`, `chat-pinned-list`, `contacts`, `discover`,
   `doctor`, `get-msg`, `list-msgs`, `search`, `show`, `stats`, `sync-contacts`,
@@ -80,14 +80,14 @@ stdout defaults to JSON; use `--human` only for a person at a terminal.
   identical request; a definitive rejection can be reported, but an unknown
   transport result must not be retried blindly.
 - JSON is a stable envelope with `ok`, `command`, and `request_id`; success
-  puts command data in the result/payload, and failure puts a structured
+  puts command data in `data`, and failure puts a structured
   `error.code` and `error.message` in the envelope. Preserve the envelope in
   automation instead of scraping human text.
 
 ### What each command family actually changes
 
-- **Account commands** create, select, inspect, import, authorize, or remove
-  isolated account state. `login`/`import-telethon-session` affect sessions;
+- **Account commands** create, select, inspect, authorize, or remove
+  isolated account state. `login` affect sessions;
   `accounts-remove` deletes an account directory only after confirmation.
 - **Discovery/cache commands** populate or query the local SQLite mirror.
   `backfill` fetches history and preserves album grouping; `discover` caches
@@ -119,14 +119,17 @@ setup command preserves unrelated `.env` entries, writes mode `0600` on Unix,
 and never prints the API hash:
 
 ```bash
-tg setup --env-file .env
+export TGCTL_HOME="${TGCTL_HOME:-$HOME/.config/tgctl}"
+tg setup --env-file "$TGCTL_HOME/.env"
 tg accounts-add work --json
 tg --account work login --qr --human
 tg --account work login --qr --qr-uri --human
+tg --account work me --json
+tg --account work discover --allow-write --json
 tg --account work me --read-only --json
 ```
 
-QR login is an authorization method, not an API-credential bypass.
+QR login requires API credentials. Read-only network commands require an existing session ownership sidecar and matching account-identity cache; initialize these with an authorized writable discovery first. Set `TG_CHAT_ID` below only after verifying a marked peer ID in the selected account.
 
 ## Upload albums
 
@@ -135,11 +138,11 @@ audio albums and document albums must each be same-type. `auto` is the default;
 force `photo`, `video`, `audio`, or `document` with `--media-kind`:
 
 ```bash
-tg --account work upload-album 123 ./01.jpg ./02.jpg ./03.mp4 \
+tg --account work upload-album "$TG_CHAT_ID" ./01.jpg ./02.jpg ./03.mp4 \
   --caption "release images" --allow-write --dry-run --json
-tg --account work upload-album 123 ./01.jpg ./02.jpg ./03.mp4 \
+tg --account work upload-album "$TG_CHAT_ID" ./01.jpg ./02.jpg ./03.mp4 \
   --caption "release images" --idempotency-key album-001 --allow-write --json
-tg --account work upload-album 123 ./01.mp3 ./02.mp3 \
+tg --account work upload-album "$TG_CHAT_ID" ./01.mp3 ./02.mp3 \
   --media-kind audio --allow-write --json
 ```
 
@@ -161,11 +164,11 @@ remain on Telegram if a later upload or the final send fails.
 ## Backfill, sync, and album downloads
 
 ```bash
-tg --account work backfill 123 --allow-write --download-media --json
-tg --account work sync 123 --follow --once --allow-write --json
-tg --account work download-album 123 --grouped-id 9001 \
+tg --account work backfill "$TG_CHAT_ID" --allow-write --download-media --json
+tg --account work sync "$TG_CHAT_ID" --follow --once --allow-write --json
+tg --account work download-album "$TG_CHAT_ID" --grouped-id 9001 \
   --output ./album-9001 --allow-write --json
-tg --account work download-media 123 456 --output ./media \
+tg --account work download-media "$TG_CHAT_ID" 456 --output ./media \
   --max-size-mb 100 --allow-write --json
 ```
 
@@ -186,7 +189,7 @@ primitive, so there is intentionally no `--resume` flag.
 ## Local archives and manifests
 
 ```bash
-tg --account work export 123 --format jsonl --output ./chat.jsonl \
+tg --account work export "$TG_CHAT_ID" --format jsonl --output ./chat.jsonl \
   --include-media --manifest ./chat.manifest.json --manifest-hash --json
 tg --account work export --verify ./chat.manifest.json --json
 ```
@@ -259,4 +262,4 @@ requirements of the current CLI.
 
 ## Reliability contract
 
-Use an absolute `TGCTL_HOME` for existing installations. Peer IDs are marked: users positive, basic groups negative, channels `-1000000000000-raw_id`. Legacy ambiguous caches are preserved separately and cannot resolve writes. Inspect `doctor` and `operations-list` before reconciling unknown outcomes; never force a resend or discard a pending reservation based on age. Live `event_id` delivery is at least once. Cached reads use `next_cursor`/`--cursor` and do not imply complete server history. Cache snapshots exclude sessions and media. See the repository reliability document for migration, recovery and backup details.
+Use an absolute `TGCTL_HOME`, or the stable OS configuration directory plus `tgctl`. State lives under `accounts/<name>/`, independent of the working directory. Only the current cache schema is supported: there are no root-file moves, old-schema upgrades, Telethon imports, or old-cache export flags. Never delete account data to resolve a schema error; use a separate new account cache. Peer IDs are marked: users positive, basic groups negative, channels `-1000000000000-raw_id`. Inspect `doctor` and `operations-list` before reconciling unknown outcomes; never force a resend or discard a pending reservation based on age. Live `event_id` delivery is at least once. Cached reads use `next_cursor`/`--cursor` and do not imply complete server history. Cache snapshots exclude sessions and media. Use `db-backup <absolute-path> --allow-write`; restore with `db-restore <snapshot> --allow-write` into a separate empty account. Reconcile any writes after the snapshot before sending again. See the repository reliability document for recovery and backup details.

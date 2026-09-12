@@ -107,17 +107,6 @@ if you want them.
 tg accounts-remove old-test-account --confirm old-test-account
 ```
 
-### `tg import-telethon-session <path>`
-
-Adopt a Python `tgctl` / Telethon session as the current Go account's
-session.
-
-```bash
-tg import-telethon-session "$TELETHON_SESSION_PATH"
-```
-
-Run `tg me` after import to verify the adopted account.
-
 ## Selecting an account at command time
 
 Account selection has one exact precedence order, highest first:

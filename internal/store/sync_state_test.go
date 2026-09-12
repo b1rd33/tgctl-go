@@ -59,19 +59,3 @@ func TestSyncStateMissingAndValidation(t *testing.T) {
 		}
 	}
 }
-
-func TestSyncStateMigrationOnLegacySchema(t *testing.T) {
-	db := testDB(t)
-	if _, err := db.Exec("DROP TABLE tg_sync_state"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec("DROP INDEX IF EXISTS idx_sync_state_updated"); err != nil {
-		t.Fatal(err)
-	}
-	if err := migrate(db); err != nil {
-		t.Fatal(err)
-	}
-	if err := SaveSyncState(db, SyncState{ChatID: 5, LastMessageID: 10, UpdatedAt: "now"}); err != nil {
-		t.Fatal(err)
-	}
-}

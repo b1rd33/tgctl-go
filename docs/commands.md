@@ -1,6 +1,6 @@
 # Commands
 
-`tg --help` shows 77 commands. This page is generated from Cobra help output.
+`tg --help` shows 76 commands. This page is generated from Cobra help output.
 
 Every command supports the global flags shown by `tg --help`: `--account`, `--full`, `--json`, `--human`, `--lock-wait`, `--read-only`, and `--version` where applicable.
 
@@ -48,7 +48,6 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg forward`](#tg-forward) | Forward one or more messages between chats |
 | [`tg get-msg`](#tg-get-msg) | Print one cached message in full |
 | [`tg help`](#tg-help) | Help provides help for any command in the application. |
-| [`tg import-telethon-session`](#tg-import-telethon-session) | Adopt a Python tgctl/Telethon session as the current Go account's session |
 | [`tg kick`](#tg-kick) | kick user in chat |
 | [`tg leave-chat`](#tg-leave-chat) | Leave a group or channel (typed confirm required) |
 | [`tg list-msgs`](#tg-list-msgs) | List cached messages in a chat with optional date filters |
@@ -860,7 +859,6 @@ tg export <chat> [flags] --json
 | `--human` | Force human-readable output (default on a TTY) |
 | `--include-media` | Include media paths relative to the account media root |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
-| `--legacy-cache` | Export the preserved pre-migration cache; IDs may be ambiguous and must not be used for writes |
 | `--limit int` | Maximum rows (0 means all cached rows) |
 | `--manifest string` | Write an archive manifest JSON file |
 | `--manifest-hash` | Include SHA-256 hashes in --manifest |
@@ -1175,30 +1173,6 @@ tg help send
 | Flag | Description |
 |---|---|
 | `-h, --help` | help for help |
-
-## `tg import-telethon-session`
-
-Adopt a Python tgctl/Telethon session as the current Go account's session
-
-**Use**
-
-```text
-tg import-telethon-session <path> [flags]
-```
-
-**Example**
-
-```bash
-tg import-telethon-session ~/path/to/tg.session --json
-```
-
-**Flags**
-
-| Flag | Description |
-|---|---|
-| `-h, --help` | help for import-telethon-session |
-| `--human` | Force human-readable output (default on a TTY) |
-| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 
 ## `tg kick`
 

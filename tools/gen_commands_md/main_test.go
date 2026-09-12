@@ -33,7 +33,7 @@ func TestGeneratorUsesSelectedBinaryAndRendersDynamicReference(t *testing.T) {
 		"tg discover --allow-write --json",
 		"tg backfill-entities --allow-write --json",
 		"tg download-media 123456789 42 --max-size-mb 100 --allow-write --json",
-		"| [`tg import-telethon-session`]",
+		"| [`tg accounts-show`]",
 	}
 	for _, want := range wants {
 		if !strings.Contains(first, want) {
@@ -332,15 +332,15 @@ func main() {
 	args := strings.Join(os.Args[1:], " ")
 	switch args {
 	case "--help":
-		fmt.Print("Available Commands:\n  download-media          Download media attached to a message\n  discover                Discover dialogs\n  import-telethon-session Adopt a session\n  backfill-entities       Populate entity cache\n\nFlags:\n  -h, --help  help\n")
+		fmt.Print("Available Commands:\n  download-media          Download media attached to a message\n  discover                Discover dialogs\n  accounts-show Show account paths\n  backfill-entities       Populate entity cache\n\nFlags:\n  -h, --help  help\n")
 	case "backfill-entities --help":
 		fmt.Print("Populate entity cache\n\nUsage:\n  tg backfill-entities [flags]\n\nFlags:\n  --allow-write  Required\n")
 	case "discover --help":
 		fmt.Print("Discover dialogs\n\nUsage:\n  tg discover [flags]\n\nFlags:\n  --allow-write  Required\n")
 	case "download-media --help":
 		fmt.Print("Download media attached to a message\n\nUsage:\n  tg download-media <chat> <message-id> [flags]\n\nFlags:\n  --allow-write       Required\n  --max-size-mb int   Maximum size\n  --output string     Output directory\n  --overwrite         Overwrite\n")
-	case "import-telethon-session --help":
-		fmt.Print("Adopt a session\n\nUsage:\n  tg import-telethon-session <path> [flags]\n\nFlags:\n  --json  JSON output\n")
+	case "accounts-show --help":
+		fmt.Print("Show account paths\n\nUsage:\n  tg accounts-show [flags]\n\nFlags:\n  --json  JSON output\n")
 	default:
 		fmt.Fprintln(os.Stderr, "unexpected arguments:", args)
 		os.Exit(2)

@@ -4,7 +4,7 @@
 
 A single static `tg` binary that drives your real Telegram account from the command line. Send messages, edit them, organize folders, run forum topics, manage admin actions, react, mark-read, backfill history into a local SQLite cache, listen for live updates — all scriptable, all auditable, all behind a JSON envelope.
 
-Go port of the Python [`tgctl`](https://github.com/b1rd33/tg-cli) with the same CLI contract, the same exit codes, the same safety gates. One binary, no runtime, no Python required.
+A Telegram account CLI built with Go and gotd. Structured output, explicit write gates, and one binary with no runtime dependencies.
 
 ## What it's for
 
@@ -13,7 +13,7 @@ Anything you'd otherwise click through Telegram Desktop to do, but at scale or o
 - **Notifications and ops** — send build failures, deploy completions, or on-call pings to a chat from CI
 - **Customer-support triage** — backfill a support chat, search, sort by intent, auto-reply with `--idempotency-key` so retries are safe
 - **Personal automation** — cron-driven reminders and account-scoped media archives
-- **Migrations and audits** — adopt your existing Telethon session via `tg import-telethon-session`, then export message history into the local SQLite cache for offline analysis
+- **Offline history** — cache and export message history for local analysis
 - **Building bots without Bot API** — full MTProto user-account access via `gotd/td`, not the limited Bot API
 
 It is *not* meant to spam, scrape contacts, or evade rate limits — there's a sliding-window rate limiter and an audit log specifically to keep you on the safe side of Telegram's terms.
@@ -31,9 +31,9 @@ go install github.com/b1rd33/tgctl-go/cmd/tg@latest
 # https://github.com/b1rd33/tgctl-go/releases/latest
 ```
 
-## Reliability and existing installations
+## Reliability and storage
 
-See [migration and reliability](docs/reliability.md) before upgrading an existing account store. Set `TGCTL_HOME` to the absolute existing root to retain it. New installations use the OS configuration directory. [The prioritized roadmap](docs/reliability-roadmap.md) separates reliability repairs from optional new features.
+See [reliability](docs/reliability.md) for storage and recovery. Set `TGCTL_HOME` to an absolute data root, or use the default OS configuration directory. Only the current account layout and cache schema are supported. [The prioritized roadmap](docs/reliability-roadmap.md) separates reliability repairs from optional new features.
 
 ## Setup (one time)
 
@@ -58,12 +58,6 @@ See [migration and reliability](docs/reliability.md) before upgrading an existin
    ```bash
    tg backfill-entities --allow-write
    ```
-
-Coming from the Python `tgctl`? Skip steps 3–4 and reuse your existing session:
-
-```bash
-tg import-telethon-session "$TELETHON_SESSION_PATH"
-```
 
 ## Agent quick setup
 

@@ -1,8 +1,6 @@
 package store
 
-// Schema mirrors tgcli/db.py SCHEMA plus the column migrations that Python
-// applies in _migrate (media_path, deleted, left). Go ports the migrated
-// final state in one statement.
+// Schema defines the only supported cache layout.
 const Schema = `
 CREATE TABLE IF NOT EXISTS tg_account_identity(slot INTEGER PRIMARY KEY CHECK(slot=1),user_id INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS tg_cache_identity(version INTEGER PRIMARY KEY);
@@ -41,6 +39,7 @@ CREATE TABLE IF NOT EXISTS tg_messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_chat_date ON tg_messages(chat_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_chat_grouped ON tg_messages(chat_id, grouped_id, message_id);
 CREATE INDEX IF NOT EXISTS idx_messages_date ON tg_messages(date DESC);
 
 CREATE TABLE IF NOT EXISTS tg_update_state(user_id INTEGER PRIMARY KEY,pts INTEGER NOT NULL,qts INTEGER NOT NULL,date INTEGER NOT NULL,seq INTEGER NOT NULL);

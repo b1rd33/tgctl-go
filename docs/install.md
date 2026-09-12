@@ -81,7 +81,7 @@ export TG_API_ID=12345678
 export TG_API_HASH=abcdef0123456789abcdef0123456789
 ```
 
-`tg` reads `.env` from its stable data root. Set `TGCTL_HOME` to an absolute existing installation root, or use the OS user-configuration directory plus `tgctl`. See [migration and reliability](reliability.md). You can also export credentials in your shell profile.
+`tg` reads `.env` from its stable data root. Set `TGCTL_HOME` to an absolute existing installation root, or use the OS user-configuration directory plus `tgctl`. See [reliability](reliability.md). You can also export credentials in your shell profile.
 
 ## First login
 

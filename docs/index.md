@@ -10,7 +10,7 @@ designed for autonomous agent use.
 ```bash
 go install github.com/b1rd33/tgctl-go/cmd/tg@latest
 tg login
-tg --help    # 74 commands
+tg --help    # 76 commands
 ```
 
 ## What is `tgctl-go`?

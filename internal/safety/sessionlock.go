@@ -18,15 +18,12 @@ type SessionLock struct {
 	path   string
 }
 
-var defaultLock SessionLock
-
 type lockWaitKey struct{}
 
 func WithLockWait(ctx context.Context, seconds float64) context.Context {
 	return context.WithValue(ctx, lockWaitKey{}, seconds)
 }
-func LockWait(ctx context.Context) float64               { v, _ := ctx.Value(lockWaitKey{}).(float64); return v }
-func AcquireSessionLock(path string, wait float64) error { return defaultLock.Acquire(path, wait) }
+func LockWait(ctx context.Context) float64 { v, _ := ctx.Value(lockWaitKey{}).(float64); return v }
 func (s *SessionLock) Acquire(path string, wait float64) error {
 	return s.AcquireContext(context.Background(), path, wait, false)
 }

@@ -79,7 +79,7 @@ func registerSendByUsername(root *cobra.Command, mgr *accounts.Manager, cfg Comm
 					defer db.Close()
 				}
 				return writes.Run(ctx, db, writes.PipelineInput{
-					Cmd: "send-by-username", RawSelector: selector, LiveSelector: true, Args: writeArgsFrom(cmd), DBPath: paths.DBPath, AuditPath: paths.AuditPath, TelethonMethod: "messages.SendMessage", PayloadPreview: payload,
+					Cmd: "send-by-username", RawSelector: selector, LiveSelector: true, Args: writeArgsFrom(cmd), DBPath: paths.DBPath, AuditPath: paths.AuditPath, RPCMethod: "messages.SendMessage", PayloadPreview: payload,
 					Run: func(ctx context.Context, _ int64, _ string) (map[string]any, error) {
 						c, err := cfg.ClientFactory(ctx, paths.SessionPath, paths.DBPath)
 						if err != nil {

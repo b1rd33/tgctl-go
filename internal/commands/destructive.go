@@ -63,7 +63,7 @@ func deleteMsgCommand(cfg CommandsConfig) *cobra.Command {
 				return writes.Run(ctx, db, writes.PipelineInput{
 					Cmd: "delete-msg", RawSelector: selector, Args: wargs,
 					DBPath: dbPath, AuditPath: auditPath,
-					TelethonMethod:  "messages.DeleteMessages",
+					RPCMethod:       "messages.DeleteMessages",
 					PayloadPreview:  payload,
 					ConfirmedTarget: &operation.target,
 					Run: func(ctx context.Context, chatID int64, _ string) (map[string]any, error) {
@@ -169,7 +169,7 @@ func leaveChatCommand(cfg CommandsConfig) *cobra.Command {
 				return writes.Run(ctx, db, writes.PipelineInput{
 					Cmd: "leave-chat", RawSelector: selector, Args: wargs,
 					DBPath: dbPath, AuditPath: auditPath,
-					TelethonMethod:  "channels.LeaveChannel",
+					RPCMethod:       "channels.LeaveChannel",
 					PayloadPreview:  payload,
 					ConfirmedTarget: &operation.target,
 					Run: func(ctx context.Context, chatID int64, _ string) (map[string]any, error) {
@@ -244,7 +244,7 @@ func blockUserCommand(cfg CommandsConfig, unblock bool) *cobra.Command {
 				defer db.Close()
 				return writes.Run(ctx, db, writes.PipelineInput{
 					Cmd: name, RawSelector: selector, Args: wargs,
-					DBPath: dbPath, AuditPath: auditPath, TelethonMethod: method,
+					DBPath: dbPath, AuditPath: auditPath, RPCMethod: method,
 					PayloadPreview:  payload,
 					ConfirmedTarget: &operation.target,
 					Run: func(ctx context.Context, userID int64, _ string) (map[string]any, error) {

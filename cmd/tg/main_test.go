@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-type legacyState struct {
+type unmanagedState struct {
 	files map[string][]byte
 	infos map[string]os.FileInfo
 }
@@ -57,14 +57,14 @@ func tgProcessName() string {
 	return "tg"
 }
 
-func seedLegacyState(t *testing.T, root string) legacyState {
+func seedUnmanagedState(t *testing.T, root string) unmanagedState {
 	t.Helper()
 	files := map[string][]byte{
-		"telegram.sqlite": []byte("legacy-db"),
-		"tg.session":      []byte("legacy-session"),
-		"audit.log":       []byte("legacy-audit"),
-		"tg.session.lock": []byte("legacy-lock"),
-		"media/photo.jpg": []byte("legacy-media"),
+		"telegram.sqlite": []byte("unmanaged-db"),
+		"tg.session":      []byte("unmanaged-session"),
+		"audit.log":       []byte("unmanaged-audit"),
+		"tg.session.lock": []byte("unmanaged-lock"),
+		"media/photo.jpg": []byte("unmanaged-media"),
 	}
 	infos := map[string]os.FileInfo{}
 	wantTime := time.Unix(1_700_000_000, 0)
@@ -85,7 +85,7 @@ func seedLegacyState(t *testing.T, root string) legacyState {
 		}
 		infos[name] = info
 	}
-	return legacyState{files: files, infos: infos}
+	return unmanagedState{files: files, infos: infos}
 }
 
 func runTGProcess(t *testing.T, binary, root string, env []string, args ...string) {
@@ -580,7 +580,7 @@ func withoutStartupSafetyEnv(environ []string) []string {
 	return withoutEnv(withoutEnv(environ, "TG_READONLY"), "TG_ALLOW_WRITE")
 }
 
-func assertLegacyUnchanged(t *testing.T, root string, state legacyState) {
+func assertUnmanagedFilesUnchanged(t *testing.T, root string, state unmanagedState) {
 	t.Helper()
 	for name, want := range state.files {
 		path := filepath.Join(root, name)
@@ -594,9 +594,14 @@ func assertLegacyUnchanged(t *testing.T, root string, state legacyState) {
 		}
 		before := state.infos[name]
 		if !bytes.Equal(got, want) || !os.SameFile(before, info) || before.Mode() != info.Mode() || before.Size() != info.Size() || !before.ModTime().Equal(info.ModTime()) {
-			t.Fatalf("legacy path changed: %s", name)
+			t.Fatalf("unmanaged path changed: %s", name)
 		}
 	}
+}
+
+func assertUnmanagedUnchanged(t *testing.T, root string, state unmanagedState) {
+	t.Helper()
+	assertUnmanagedFilesUnchanged(t, root, state)
 	if _, err := os.Stat(filepath.Join(root, "accounts")); !os.IsNotExist(err) {
 		t.Fatalf("accounts directory created: %v", err)
 	}
@@ -620,7 +625,7 @@ func assertWriteDisallowedEnvelope(t *testing.T, output string) {
 	}
 }
 
-func TestProcessDownloadMediaMissingAllowSkipsLegacyMigration(t *testing.T) {
+func TestProcessDownloadMediaMissingAllowLeavesRootFilesUntouched(t *testing.T) {
 	binary := buildTGProcess(t)
 	for _, args := range [][]string{
 		{"download-media", "1", "9", "--json"},
@@ -629,18 +634,18 @@ func TestProcessDownloadMediaMissingAllowSkipsLegacyMigration(t *testing.T) {
 	} {
 		t.Run(strings.Join(args, "_"), func(t *testing.T) {
 			root := t.TempDir()
-			state := seedLegacyState(t, root)
+			state := seedUnmanagedState(t, root)
 			out, code := runTGProcessResult(t, binary, root, withoutStartupSafetyEnv(os.Environ()), args...)
 			if code != 6 {
 				t.Fatalf("code=%d want 6\n%s", code, out)
 			}
 			assertWriteDisallowedEnvelope(t, out)
-			assertLegacyUnchanged(t, root, state)
+			assertUnmanagedUnchanged(t, root, state)
 		})
 	}
 }
 
-func TestProcessDownloadMediaReadOnlyAllowSkipsLegacyMigration(t *testing.T) {
+func TestProcessDownloadMediaReadOnlyAllowLeavesRootFilesUntouched(t *testing.T) {
 	binary := buildTGProcess(t)
 	baseEnv := withoutStartupSafetyEnv(os.Environ())
 	tests := []struct {
@@ -657,7 +662,7 @@ func TestProcessDownloadMediaReadOnlyAllowSkipsLegacyMigration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := t.TempDir()
-			state := seedLegacyState(t, root)
+			state := seedUnmanagedState(t, root)
 			if tt.dotEnv != "" {
 				if err := os.WriteFile(filepath.Join(root, ".env"), []byte(tt.dotEnv), 0o600); err != nil {
 					t.Fatal(err)
@@ -668,12 +673,12 @@ func TestProcessDownloadMediaReadOnlyAllowSkipsLegacyMigration(t *testing.T) {
 				t.Fatalf("code=%d want 6\n%s", code, out)
 			}
 			assertWriteDisallowedEnvelope(t, out)
-			assertLegacyUnchanged(t, root, state)
+			assertUnmanagedUnchanged(t, root, state)
 		})
 	}
 }
 
-func TestProcessAuthorizedDownloadMediaMigratesBeforeLeafExecution(t *testing.T) {
+func TestProcessAuthorizedDownloadMediaDoesNotAdoptRootFiles(t *testing.T) {
 	binary := buildTGProcess(t)
 	for _, args := range [][]string{
 		{"download-media", "1", "9", "--allow-write", "--json"},
@@ -681,31 +686,13 @@ func TestProcessAuthorizedDownloadMediaMigratesBeforeLeafExecution(t *testing.T)
 	} {
 		t.Run(strings.Join(args, "_"), func(t *testing.T) {
 			root := t.TempDir()
-			state := seedLegacyState(t, root)
+			state := seedUnmanagedState(t, root)
 			out, code := runTGProcessResult(t, binary, root, withoutStartupSafetyEnv(os.Environ()), args...)
 			if code == 0 || code == 6 {
 				t.Fatalf("code=%d want later command failure after authorization\n%s", code, out)
 			}
-			assertLegacyMigrated(t, root, state)
+			assertUnmanagedFilesUnchanged(t, root, state)
 		})
-	}
-}
-
-func TestProcessMigrationErrorWarnsAndContinues(t *testing.T) {
-	binary := buildTGProcess(t)
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "telegram.sqlite"), []byte("legacy-db"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "accounts"), []byte("blocks directory creation"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	out, code := runTGProcessResult(t, binary, root, withoutStartupSafetyEnv(os.Environ()), "version", "--json")
-	if code != 0 {
-		t.Fatalf("version code=%d\n%s", code, out)
-	}
-	if !strings.Contains(out, "WARN: account migration failed:") || !strings.Contains(out, `"command":"version"`) {
-		t.Fatalf("warning or successful command output missing:\n%s", out)
 	}
 }
 
@@ -796,41 +783,21 @@ func TestProcessConcurrentAccountSelectionSnapshotsNeverFallBackDefault(t *testi
 	}
 }
 
-func TestProcessInformationalHelpAndBuiltinVersionDoNotMigrate(t *testing.T) {
+func TestProcessInformationalHelpAndBuiltinVersionLeaveRootFilesUntouched(t *testing.T) {
 	binary := buildTGProcess(t)
 	for _, args := range [][]string{{"--help"}, {"--version"}, {"download-media", "--help"}} {
 		t.Run(strings.Join(args, "_"), func(t *testing.T) {
 			root := t.TempDir()
-			state := seedLegacyState(t, root)
+			state := seedUnmanagedState(t, root)
 			if out, code := runTGProcessResult(t, binary, root, withoutStartupSafetyEnv(os.Environ()), args...); code != 0 {
 				t.Fatalf("code=%d out=%s", code, out)
 			}
-			assertLegacyUnchanged(t, root, state)
+			assertUnmanagedUnchanged(t, root, state)
 		})
 	}
 }
 
-func assertLegacyMigrated(t *testing.T, root string, state legacyState) {
-	t.Helper()
-	for name, want := range state.files {
-		destination := filepath.Join(root, "accounts", "default", name)
-		got, err := os.ReadFile(destination)
-		if err != nil {
-			t.Fatalf("read migrated %s: %v", name, err)
-		}
-		if name == "audit.log" {
-			if !bytes.HasPrefix(got, want) {
-				t.Fatalf("migrated audit lost legacy prefix: %q", got)
-			}
-			continue
-		}
-		if !bytes.Equal(got, want) {
-			t.Fatalf("migrated %s = %q, want %q", name, got, want)
-		}
-	}
-}
-
-func TestProcessStartupReadOnlySkipsLegacyMigration(t *testing.T) {
+func TestProcessStartupReadOnlyLeavesRootFilesUntouched(t *testing.T) {
 	binary := buildTGProcess(t)
 	baseEnv := withoutEnv(os.Environ(), "TG_READONLY")
 	tests := []struct {
@@ -848,57 +815,14 @@ func TestProcessStartupReadOnlySkipsLegacyMigration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := t.TempDir()
-			state := seedLegacyState(t, root)
+			state := seedUnmanagedState(t, root)
 			if tt.dotEnv != "" {
 				if err := os.WriteFile(filepath.Join(root, ".env"), []byte(tt.dotEnv), 0o600); err != nil {
 					t.Fatal(err)
 				}
 			}
 			runTGProcess(t, binary, root, tt.env, tt.args...)
-			assertLegacyUnchanged(t, root, state)
-		})
-	}
-}
-
-func TestProcessStartupNormalModeStillMigratesLegacyState(t *testing.T) {
-	binary := buildTGProcess(t)
-	root := t.TempDir()
-	state := seedLegacyState(t, root)
-	runTGProcess(t, binary, root, withoutEnv(os.Environ(), "TG_READONLY"), "version", "--json")
-	for name, want := range state.files {
-		destination := filepath.Join(root, "accounts", "default", name)
-		if name == "tg.session.lock" {
-			destination = filepath.Join(root, "accounts", "default", "tg.session.lock")
-		} else if strings.HasPrefix(name, "media/") {
-			destination = filepath.Join(root, "accounts", "default", name)
-		}
-		got, err := os.ReadFile(destination)
-		if err != nil {
-			t.Fatalf("read migrated %s: %v", name, err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Fatalf("migrated %s = %q, want %q", name, got, want)
-		}
-	}
-}
-
-func TestProcessStartupFalseBooleanSpellingsStillMigrateLegacyState(t *testing.T) {
-	binary := buildTGProcess(t)
-	for _, spelling := range []string{"f", "F", "false", "0"} {
-		t.Run(spelling, func(t *testing.T) {
-			root := t.TempDir()
-			state := seedLegacyState(t, root)
-			runTGProcess(t, binary, root, withoutEnv(os.Environ(), "TG_READONLY"), "--read-only="+spelling, "version", "--json")
-			for name, want := range state.files {
-				destination := filepath.Join(root, "accounts", "default", name)
-				got, err := os.ReadFile(destination)
-				if err != nil {
-					t.Fatalf("read migrated %s: %v", name, err)
-				}
-				if !bytes.Equal(got, want) {
-					t.Fatalf("migrated %s = %q, want %q", name, got, want)
-				}
-			}
+			assertUnmanagedUnchanged(t, root, state)
 		})
 	}
 }
@@ -906,14 +830,14 @@ func TestProcessStartupFalseBooleanSpellingsStillMigrateLegacyState(t *testing.T
 func TestProcessStartupMalformedReadOnlyFailsSafeAndLetsCobraRejectIt(t *testing.T) {
 	binary := buildTGProcess(t)
 	root := t.TempDir()
-	state := seedLegacyState(t, root)
+	state := seedUnmanagedState(t, root)
 	cmd := exec.Command(binary, "--read-only=malformed", "version", "--json")
 	cmd.Dir = root
 	cmd.Env = append(withoutEnv(withoutEnv(os.Environ(), "TG_READONLY"), "TGCTL_HOME"), "TGCTL_HOME="+root)
 	if out, err := cmd.CombinedOutput(); err == nil {
 		t.Fatalf("malformed boolean unexpectedly succeeded: %s", out)
 	}
-	assertLegacyUnchanged(t, root, state)
+	assertUnmanagedUnchanged(t, root, state)
 }
 
 func TestProjectRootStableAndExplicit(t *testing.T) {

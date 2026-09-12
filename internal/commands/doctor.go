@@ -58,7 +58,6 @@ func doctorReport(m *accounts.Manager, currentName string) (map[string]any, erro
 
 	dbExists := false
 	dbSchemaOK := false
-	legacyPreserved := false
 	var pending int
 	if _, err := os.Stat(paths.DBPath); err == nil {
 		dbExists = true
@@ -67,8 +66,6 @@ func doctorReport(m *accounts.Manager, currentName string) (map[string]any, erro
 			if err := db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='tg_chats'").Scan(&name); err == nil {
 				dbSchemaOK = name == "tg_chats"
 			}
-			var legacy string
-			legacyPreserved = db.QueryRow("SELECT name FROM sqlite_master WHERE name='tg_messages_legacy_v1'").Scan(&legacy) == nil
 			_ = db.QueryRow("SELECT COUNT(*) FROM tg_write_calls WHERE state IN ('prepared','unknown')").Scan(&pending)
 			db.Close()
 		}
@@ -98,11 +95,11 @@ func doctorReport(m *accounts.Manager, currentName string) (map[string]any, erro
 			"audit_path":   paths.AuditPath,
 			"media_dir":    paths.MediaDir,
 		},
-		"legacy_cache_preserved": legacyPreserved, "unresolved_write_calls": pending,
-		"db_exists":            dbExists,
-		"db_schema_ok":         dbSchemaOK,
-		"session_exists":       sessionExists,
-		"session_lock_present": sessionLockHeld,
-		"client_kind":          "gotd",
+		"unresolved_write_calls": pending,
+		"db_exists":              dbExists,
+		"db_schema_ok":           dbSchemaOK,
+		"session_exists":         sessionExists,
+		"session_lock_present":   sessionLockHeld,
+		"client_kind":            "gotd",
 	}, nil
 }

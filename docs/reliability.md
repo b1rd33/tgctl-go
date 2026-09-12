@@ -1,20 +1,20 @@
-# Reliability and migration
+# Reliability
 
-These repairs follow v0.1.9. They change several incorrect or unsafe behaviors. They do not promise complete historical coverage, exactly-once delivery, or immunity from Telegram restrictions.
+The CLI does not promise complete historical coverage, exactly-once delivery, or immunity from Telegram restrictions.
 
 ## Account location and ownership
 
-`TGCTL_HOME` selects an absolute data directory. With no override, the directory is `tgctl` under Go's OS user-configuration directory (macOS: `~/Library/Application Support/tgctl`; Linux normally `~/.config/tgctl`; Windows normally `%AppData%/tgctl`). `.env` is loaded from that directory. For an existing checkout-based installation, set `TGCTL_HOME` to its existing absolute root before running the new binary. Changing the working directory no longer changes the selected account store.
+`TGCTL_HOME` selects an absolute data directory. With no override, the directory is `tgctl` under Go's OS user-configuration directory (macOS: `~/Library/Application Support/tgctl`; Linux normally `~/.config/tgctl`; Windows normally `%AppData%/tgctl`). `.env` is loaded from that directory. Changing the working directory no longer changes the selected account store.
 
-Every network client, login and session import acquires exclusive session ownership. `--lock-wait` is cancellable and bounded to 3600 seconds. Local cache reads remain possible while another client listens; simultaneous network commands wait or fail. Read-only network use requires an existing ownership sidecar and matching account-identity cache; it cannot create them. Session replacement is atomic and private. Imports refuse an existing destination session. Account paths reject symlinks; Unix sessions reject hard-link aliases. Windows file protection relies on private directory ACLs.
+Every network client and login acquires exclusive session ownership. `--lock-wait` is cancellable and bounded to 3600 seconds. Local cache reads remain possible while another client listens; simultaneous network commands wait or fail. Read-only network use requires an existing ownership sidecar and matching account-identity cache; it cannot create them. Session replacement is atomic and private. Account paths reject symlinks; Unix sessions reject hard-link aliases. Windows file protection relies on private directory ACLs.
 
-Root-layout migration holds session ownership, stages moves and rolls back failures. It refuses an outstanding nonempty SQLite WAL: stop all users and checkpoint the legacy database before retrying. It does not silently move only the main database or ignore rename errors.
+Account files live only under `accounts/<name>/`. Root-level files are never adopted or moved. There is no session import or database conversion path. Unsupported cache schemas fail explicitly; use a separate new account cache rather than guessing peer identities. Existing files are not deleted.
 
-## Marked peer IDs and legacy caches
+## Marked peer IDs
 
 Users retain positive IDs; basic groups use `-raw_id`; channels/supergroups use `-1000000000000-raw_id`. Confirmation values, cached keys and emitted events use these marked IDs. Only raw IDs are sent inside the corresponding typed Telegram API peer.
 
-Old caches can contain irreversibly colliding user/group/channel IDs. Migration preserves their chat/entity/message/history-state tables under `_legacy_v1`, then creates empty active tables. It never guesses message ownership. `doctor` reports preserved legacy history. Re-discover and backfill the active cache; `export <legacy-id> --legacy-cache` reads the preserved history locally. Legacy rows cannot supply live write targets. Account/session identity mismatches stop startup.
+Account/session identity mismatches stop startup.
 
 ## Write outcomes and retries
 

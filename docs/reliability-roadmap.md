@@ -1,6 +1,6 @@
 # Reliability roadmap
 
-Research dated 12 September 2026, against the v0.1.9-era implementation and pinned gotd v0.144.0. Reliability repairs were subsequently authorized. This document preserves the independently researched feature proposals; B/C features are not implied to have been implemented. See [reliability and migration](reliability.md) for the repaired contract and verification scope.
+Research dated 12 September 2026, against the v0.1.9-era implementation and pinned gotd v0.144.0. Reliability repairs were subsequently authorized. This document preserves the independently researched feature proposals; B/C features are not implied to have been implemented. See [reliability](reliability.md) for the repaired contract and verification scope.
 
 Priorities: A (correctness and reliability) precedes B (everyday additions), then C (optional); D is deliberately excluded. Keep gotd, Cobra and SQLite. No feature-parity rewrite or dependency upgrade is required to implement the selected repairs.
 
@@ -67,7 +67,7 @@ The [content-licensing terms](https://telegram.org/tos/content-licensing) expres
 ## Execution order
 
 1. Complete A repairs and offline verification: peer/session identity, durable write outcomes, permissions/deletion semantics, recovery checkpoints, truthful reads, storage/privacy/waits.
-2. Review native OS CI and migration compatibility. Any live acceptance uses separately authorized test accounts and targets.
+2. Review native OS CI and current-schema validation. Any live acceptance uses separately authorized test accounts and targets.
 3. Consider B1–B5 individually, with the evidence, account-safety implications, complexity and tests above. B6–B8 follow demonstrated demand.
 4. C remains optional. Do not implement D.
 

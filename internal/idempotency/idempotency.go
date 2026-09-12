@@ -11,9 +11,8 @@ import (
 )
 
 // Reserve atomically claims an idempotency key for an album operation. The
-// pending marker is stored in the existing result_json column so this remains
-// compatible with databases created before album support. A false reserved
-// result returns the existing completed or pending envelope.
+// pending marker is stored in result_json. A false reserved result returns
+// the existing completed or pending envelope.
 func Reserve(db *sql.DB, key, command, requestID, fingerprint string) (existing map[string]any, reserved bool, err error) {
 	if key == "" {
 		return nil, true, nil

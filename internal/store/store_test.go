@@ -1,6 +1,7 @@
 package store
 
 import (
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -44,7 +45,7 @@ func TestConnectAppliesIndexes(t *testing.T) {
 	}
 }
 
-func TestMessagesHasMigratedColumns(t *testing.T) {
+func TestMessagesHasCurrentColumns(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "telegram.sqlite")
 	db, err := Connect(path)
@@ -60,42 +61,6 @@ func TestMessagesHasMigratedColumns(t *testing.T) {
 	}
 	if !columnExists(db, "tg_chats", "left") {
 		t.Fatalf("tg_chats missing column left")
-	}
-}
-
-func TestConnectMigratesOldSchema(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "telegram.sqlite")
-	db, err := Connect(path)
-	if err != nil {
-		t.Fatalf("Connect: %v", err)
-	}
-	// Drop migrated columns to simulate older DB. SQLite supports DROP
-	// COLUMN since 3.35; modernc.org/sqlite is current.
-	for _, alt := range []string{
-		"ALTER TABLE tg_messages DROP COLUMN media_path",
-		"ALTER TABLE tg_messages DROP COLUMN media_id",
-		"ALTER TABLE tg_messages DROP COLUMN deleted",
-		"ALTER TABLE tg_chats DROP COLUMN left",
-	} {
-		if _, err := db.Exec(alt); err != nil {
-			t.Fatalf("setup drop: %v", err)
-		}
-	}
-	db.Close()
-
-	db2, err := Connect(path)
-	if err != nil {
-		t.Fatalf("reopen: %v", err)
-	}
-	defer db2.Close()
-	for _, col := range []string{"media_path", "media_id", "deleted"} {
-		if !columnExists(db2, "tg_messages", col) {
-			t.Fatalf("migration failed: tg_messages.%s", col)
-		}
-	}
-	if !columnExists(db2, "tg_chats", "left") {
-		t.Fatalf("migration failed: tg_chats.left")
 	}
 }
 
@@ -126,4 +91,25 @@ func TestConnectReadonlyDoesNotCreateFile(t *testing.T) {
 	if _, err := ro.Exec("INSERT INTO tg_chats(chat_id, title) VALUES (1, 'x')"); err == nil {
 		t.Fatalf("read-only DB allowed write")
 	}
+}
+
+func columnExists(db schemaDB, table, column string) bool {
+	rows, err := db.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return false
+		}
+		if name == column {
+			return true
+		}
+	}
+	return false
 }

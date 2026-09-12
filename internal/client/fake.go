@@ -50,7 +50,7 @@ type FakeClient struct {
 	Discoveries    []int
 	ContactSyncs   []bool
 	Backfills      []BackfillReq
-	BackfillRows   []BackfillMessage // Legacy test configuration; used when BackfillResult.Messages is nil.
+	BackfillRows   []BackfillMessage // Shorthand fixture; used when BackfillResult.Messages is nil.
 	BackfillResult BackfillResult
 	BackfillErr    error
 	Topics         []TopicInfo

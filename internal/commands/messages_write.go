@@ -202,12 +202,12 @@ func prepareResolvedTypedWrite(cmd *cobra.Command, paths AccountPathProvider, se
 	}, nil
 }
 
-func runWriteWithResolvedConfirm(cmd *cobra.Command, name, telethonMethod, selector string, cfg CommandsConfig, payloadPreview map[string]any, slot string, expected func(int64) any, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
+func runWriteWithResolvedConfirm(cmd *cobra.Command, name, rpcMethod, selector string, cfg CommandsConfig, payloadPreview map[string]any, slot string, expected func(int64) any, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
 	operation, err := prepareResolvedTypedWrite(cmd, cfg.Paths, selector, slot, expected)
 	if err != nil {
 		return emitDispatchedFailure(cmd, name, err)
 	}
-	return runWriteResolvedTarget(cmd, name, telethonMethod, selector, cfg, operation.paths, payloadPreview, &operation.target, action)
+	return runWriteResolvedTarget(cmd, name, rpcMethod, selector, cfg, operation.paths, payloadPreview, &operation.target, action)
 }
 
 func resolveWritePaths(cmd *cobra.Command, paths AccountPathProvider) (string, string, string, error) {
@@ -218,31 +218,31 @@ func resolveWritePaths(cmd *cobra.Command, paths AccountPathProvider) (string, s
 	return resolved.dbPath, resolved.sessionPath, resolved.auditPath, nil
 }
 
-func runWrite(cmd *cobra.Command, name, telethonMethod, selector string, cfg CommandsConfig, payloadPreview map[string]any, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
+func runWrite(cmd *cobra.Command, name, rpcMethod, selector string, cfg CommandsConfig, payloadPreview map[string]any, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
 	paths, err := resolveWritePathSet(cmd, cfg.Paths)
 	if err != nil {
 		return emitDispatchedFailure(cmd, name, err)
 	}
-	return runWriteResolved(cmd, name, telethonMethod, selector, cfg, paths, payloadPreview, action)
+	return runWriteResolved(cmd, name, rpcMethod, selector, cfg, paths, payloadPreview, action)
 }
 
-func runWriteResolved(cmd *cobra.Command, name, telethonMethod, selector string, cfg CommandsConfig, paths resolvedWritePaths, payloadPreview map[string]any, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
-	return runWriteResolvedTarget(cmd, name, telethonMethod, selector, cfg, paths, payloadPreview, nil, action)
+func runWriteResolved(cmd *cobra.Command, name, rpcMethod, selector string, cfg CommandsConfig, paths resolvedWritePaths, payloadPreview map[string]any, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
+	return runWriteResolvedTarget(cmd, name, rpcMethod, selector, cfg, paths, payloadPreview, nil, action)
 }
 
-func runWriteResolvedTarget(cmd *cobra.Command, name, telethonMethod, selector string, cfg CommandsConfig, paths resolvedWritePaths, payloadPreview map[string]any, target *writes.ConfirmedTarget, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
-	return runWriteResolvedTargetOptions(cmd, name, telethonMethod, selector, cfg, paths, payloadPreview, target, false, nil, action)
+func runWriteResolvedTarget(cmd *cobra.Command, name, rpcMethod, selector string, cfg CommandsConfig, paths resolvedWritePaths, payloadPreview map[string]any, target *writes.ConfirmedTarget, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
+	return runWriteResolvedTargetOptions(cmd, name, rpcMethod, selector, cfg, paths, payloadPreview, target, false, nil, action)
 }
 
 // runWriteResolvedTargetDurable is used by writes whose Telegram operation has
 // committed before local/audit finalization. Durable audit failure is surfaced
 // as a committed write, so callers receive safe recovery metadata rather than
 // an ambiguous retry invitation.
-func runWriteResolvedTargetDurable(cmd *cobra.Command, name, telethonMethod, selector string, cfg CommandsConfig, paths resolvedWritePaths, payloadPreview map[string]any, target *writes.ConfirmedTarget, committedExtras map[string]any, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
-	return runWriteResolvedTargetOptions(cmd, name, telethonMethod, selector, cfg, paths, payloadPreview, target, true, committedExtras, action)
+func runWriteResolvedTargetDurable(cmd *cobra.Command, name, rpcMethod, selector string, cfg CommandsConfig, paths resolvedWritePaths, payloadPreview map[string]any, target *writes.ConfirmedTarget, committedExtras map[string]any, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
+	return runWriteResolvedTargetOptions(cmd, name, rpcMethod, selector, cfg, paths, payloadPreview, target, true, committedExtras, action)
 }
 
-func runWriteResolvedTargetOptions(cmd *cobra.Command, name, telethonMethod, selector string, cfg CommandsConfig, paths resolvedWritePaths, payloadPreview map[string]any, target *writes.ConfirmedTarget, durableAudit bool, committedExtras map[string]any, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
+func runWriteResolvedTargetOptions(cmd *cobra.Command, name, rpcMethod, selector string, cfg CommandsConfig, paths resolvedWritePaths, payloadPreview map[string]any, target *writes.ConfirmedTarget, durableAudit bool, committedExtras map[string]any, action func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error)) error {
 	wargs := writeArgsFrom(cmd)
 	args := map[string]any{"chat": selector, "dry_run": wargs.DryRun}
 	auditPath := paths.auditPath
@@ -276,7 +276,7 @@ func runWriteResolvedTargetOptions(cmd *cobra.Command, name, telethonMethod, sel
 			Args:            wargs,
 			DBPath:          paths.dbPath,
 			AuditPath:       paths.auditPath,
-			TelethonMethod:  telethonMethod,
+			RPCMethod:       rpcMethod,
 			PayloadPreview:  payloadPreview,
 			ConfirmedTarget: target,
 			CommittedExtras: committedExtras,
@@ -479,7 +479,7 @@ func forwardCommand(cfg CommandsConfig) *cobra.Command {
 			}, func(ctx context.Context) (any, error) {
 				return writes.Run(ctx, db, writes.PipelineInput{
 					Cmd: "forward", RawSelector: toSel, Args: wargs,
-					DBPath: dbPath, AuditPath: auditPath, TelethonMethod: "messages.ForwardMessages",
+					DBPath: dbPath, AuditPath: auditPath, RPCMethod: "messages.ForwardMessages",
 					PayloadPreview: payload,
 					Run: func(ctx context.Context, toChatID int64, toTitle string) (map[string]any, error) {
 						c, err := cfg.ClientFactory(ctx, sessionPath, dbPath)

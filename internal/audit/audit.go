@@ -38,7 +38,7 @@ type PreEntry struct {
 	RequestID         string
 	ResolvedChatID    int64
 	ResolvedChatTitle string
-	TelethonMethod    string
+	RPCMethod         string
 	PayloadPreview    map[string]any
 	DryRun            bool
 }
@@ -54,7 +54,7 @@ func Pre(path string, e PreEntry) error {
 		"cmd":        e.Cmd,
 		"request_id": e.RequestID,
 
-		"telethon_method": e.TelethonMethod,
+		"rpc_method": e.RPCMethod,
 
 		"dry_run": e.DryRun,
 	}

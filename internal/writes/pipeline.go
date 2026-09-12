@@ -60,11 +60,11 @@ type PipelineInput struct {
 	Cmd         string
 	RawSelector string
 	// LiveSelector defers username resolution to the action after reservation.
-	LiveSelector   bool
-	Args           Args
-	DBPath         string
-	AuditPath      string
-	TelethonMethod string
+	LiveSelector bool
+	Args         Args
+	DBPath       string
+	AuditPath    string
+	RPCMethod    string
 	// PayloadPreview is what the dry-run envelope returns and what shows up in audit_pre.
 	PayloadPreview map[string]any
 	// ConfirmedTarget carries the peer resolved and confirmed before writable
@@ -218,7 +218,7 @@ func Run(ctx context.Context, db *sql.DB, in PipelineInput) (any, error) {
 			RequestID:         dispatch.RequestIDFrom(ctx),
 			ResolvedChatID:    chatID,
 			ResolvedChatTitle: chatTitle,
-			TelethonMethod:    in.TelethonMethod,
+			RPCMethod:         in.RPCMethod,
 			PayloadPreview:    in.PayloadPreview,
 			DryRun:            false,
 		})
