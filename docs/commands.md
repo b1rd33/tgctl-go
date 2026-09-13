@@ -1,6 +1,6 @@
 # Commands
 
-`tg --help` shows 76 commands. This page is generated from Cobra help output.
+`tg --help` shows 81 commands. This page is generated from Cobra help output.
 
 Every command supports the global flags shown by `tg --help`: `--account`, `--full`, `--json`, `--human`, `--lock-wait`, `--read-only`, and `--version` where applicable.
 
@@ -8,6 +8,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 
 | Command | What |
 |---|---|
+| [`tg account-limits`](#tg-account-limits) | Show authenticated account capabilities and effective Telegram limits |
 | [`tg account-sessions`](#tg-account-sessions) | List authorized Telegram sessions |
 | [`tg accounts-add`](#tg-accounts-add) | Create a new account directory |
 | [`tg accounts-list`](#tg-accounts-list) | List known accounts |
@@ -21,6 +22,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg chat-description`](#tg-chat-description) | Edit chat description |
 | [`tg chat-invite-link`](#tg-chat-invite-link) | Export an invite link |
 | [`tg chat-members`](#tg-chat-members) | List chat members |
+| [`tg chat-permissions`](#tg-chat-permissions) | Inspect current or selected member rights for a chat |
 | [`tg chat-photo`](#tg-chat-photo) | Edit chat photo |
 | [`tg chat-pinned-list`](#tg-chat-pinned-list) | List up to 100 pinned messages in a chat |
 | [`tg chat-title`](#tg-chat-title) | Edit chat title |
@@ -32,6 +34,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg delete-msg`](#tg-delete-msg) | Delete one or more messages (revoke for everyone by default) |
 | [`tg demote`](#tg-demote) | demote user in chat |
 | [`tg discover`](#tg-discover) | Discover dialogs and cache chat metadata |
+| [`tg discussion-message`](#tg-discussion-message) | Resolve a channel post to its discussion thread without joining it |
 | [`tg doctor`](#tg-doctor) | Diagnose tgctl-go setup |
 | [`tg download-album`](#tg-download-album) | Download one cached Telegram media group |
 | [`tg download-media`](#tg-download-media) | Download media attached to a message |
@@ -59,6 +62,8 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg pin-msg`](#tg-pin-msg) | Pin a message in a chat |
 | [`tg promote`](#tg-promote) | promote user in chat |
 | [`tg react`](#tg-react) | Send a reaction to a message |
+| [`tg replies`](#tg-replies) | Retrieve a bounded server page of replies to a message |
+| [`tg resolve`](#tg-resolve) | Resolve a selector to a marked Telegram peer identity |
 | [`tg search`](#tg-search) | Search cached messages in a chat |
 | [`tg send`](#tg-send) | Send a text message |
 | [`tg send-by-username`](#tg-send-by-username) | Send a text message by resolving an @username (no entity cache required) |
@@ -84,6 +89,30 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg upload-video`](#tg-upload-video) | Upload a video |
 | [`tg upload-voice`](#tg-upload-voice) | Upload an OGG/Opus voice message |
 | [`tg version`](#tg-version) | Print build version |
+
+## `tg account-limits`
+
+Show authenticated account capabilities and effective Telegram limits
+
+**Use**
+
+```text
+tg account-limits [flags]
+```
+
+**Example**
+
+```bash
+tg account-limits [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `-h, --help` | help for account-limits |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 
 ## `tg account-sessions`
 
@@ -428,6 +457,30 @@ tg chat-members <group-chat-id> --limit 50 --json
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 | `--limit int` | Maximum members (default 50) |
 
+## `tg chat-permissions`
+
+Inspect current or selected member rights for a chat
+
+**Use**
+
+```text
+tg chat-permissions <chat> [user] [flags]
+```
+
+**Example**
+
+```bash
+tg chat-permissions <chat> [user] [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `-h, --help` | help for chat-permissions |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+
 ## `tg chat-photo`
 
 Edit chat photo
@@ -719,6 +772,30 @@ tg discover --allow-write --json
 | `--human` | Force human-readable output (default on a TTY) |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 | `--limit int` | Maximum dialogs to fetch (default 200) |
+
+## `tg discussion-message`
+
+Resolve a channel post to its discussion thread without joining it
+
+**Use**
+
+```text
+tg discussion-message <chat> <message-id> [flags]
+```
+
+**Example**
+
+```bash
+tg discussion-message <chat> <message-id> [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `-h, --help` | help for discussion-message |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 
 ## `tg doctor`
 
@@ -1151,6 +1228,7 @@ tg get-msg 123456789 1 --json
 | `--human` | Force human-readable output (default on a TTY) |
 | `--include-deleted` | Look up tombstoned messages too |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--source string` | Read source: cache or telegram (default "cache") |
 
 ## `tg help`
 
@@ -1260,6 +1338,7 @@ tg list-msgs 123456789 --limit 10 --json
 | `--limit int` | Max messages to return (default 50) |
 | `--reverse` | Oldest first |
 | `--since string` | YYYY-MM-DD inclusive lower bound |
+| `--source string` | Read source: cache or telegram (default "cache") |
 | `--until string` | YYYY-MM-DD inclusive upper bound |
 
 ## `tg listen`
@@ -1486,6 +1565,57 @@ tg react 123456789 1 "👍" --allow-write --json
 | `--idempotency-key string` | Per-account replay-safe key |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 
+## `tg replies`
+
+Retrieve a bounded server page of replies to a message
+
+**Use**
+
+```text
+tg replies <chat> <message-id> [flags]
+```
+
+**Example**
+
+```bash
+tg replies <chat> <message-id> [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--cursor string` | Continue from next_cursor using the same root and chat |
+| `-h, --help` | help for replies |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--limit int` | Maximum replies to return (1-100) (default 50) |
+
+## `tg resolve`
+
+Resolve a selector to a marked Telegram peer identity
+
+**Use**
+
+```text
+tg resolve <selector> [flags]
+```
+
+**Example**
+
+```bash
+tg resolve <selector> [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `-h, --help` | help for resolve |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--source string` | Resolution source: cache or telegram (default "cache") |
+
 ## `tg search`
 
 Search cached messages in a chat
@@ -1513,6 +1643,11 @@ tg search 123456789 "shipping" --limit 20 --json
 | `--include-deleted` | Include tombstoned messages |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 | `--limit int` | Max messages to return (default 50) |
+| `--media-type string` | Filter by media type: photo, video, photo-video, document, voice, or audio |
+| `--sender string` | Filter by sender selector in Telegram source |
+| `--since string` | YYYY-MM-DD inclusive lower bound (Telegram source) |
+| `--source string` | Read source: cache or telegram (default "cache") |
+| `--until string` | YYYY-MM-DD inclusive upper bound (Telegram source) |
 
 ## `tg send`
 
@@ -1631,7 +1766,7 @@ tg setup [flags] --json
 |---|---|
 | `--api-hash string` | Telegram app API hash (never printed) |
 | `--api-id string` | Telegram app API ID (never printed) |
-| `--env-file string` | Environment file to create or update (default ".env") |
+| `--env-file string` | Environment file to create or update (default: stable tgctl config root) |
 | `-h, --help` | help for setup |
 | `--human` | Force human-readable output (default on a TTY) |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
@@ -1663,6 +1798,7 @@ tg show 123456789 --limit 5 --json
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 | `--limit int` | Max messages to return (default 20) |
 | `--reverse` | Show oldest first |
+| `--source string` | Read source: cache or telegram (default "cache") |
 
 ## `tg stats`
 

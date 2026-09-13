@@ -31,13 +31,13 @@ product. Use the bundled [complete command reference](references/commands.md)
 for the exact usage, flags, examples, and output fields; it is generated from
 the same Cobra help used to build `docs/commands.md`.
 
-- **Identity and account state:** `account-sessions`, `accounts-add`,
+- **Identity and account state:** `account-limits`, `account-sessions`, `accounts-add`,
   `accounts-list`, `accounts-remove`, `accounts-show`, `accounts-use`,
   `login`, `me`, `setup`, `terminate-session`.
 - **Discovery, cache, and reads:** `backfill`, `backfill-entities`,
   `chats-info`, `chat-members`, `chat-pinned-list`, `contacts`, `discover`,
-  `doctor`, `get-msg`, `list-msgs`, `search`, `show`, `stats`, `sync-contacts`,
-  `topics-list`, `unread`.
+  `doctor`, `discussion-message`, `get-msg`, `list-msgs`, `replies`, `resolve`,
+  `search`, `show`, `stats`, `sync-contacts`, `topics-list`, `unread`.
 - **Messages:** `delete-msg`, `edit-msg`, `forward`, `mark-read`, `pin-msg`,
   `react`, `send`, `send-by-username`, `unpin-msg`.
 - **Media:** `download-album`, `download-media`, `upload-album`,
@@ -51,6 +51,8 @@ the same Cobra help used to build `docs/commands.md`.
   `leave-chat`, `promote`, `set-permissions`, `unban-from-chat`,
   `unblock-user`.
 - **Forum topics:** `topic-create`, `topic-edit`, `topic-pin`, `topic-unpin`.
+- **Permissions:** `chat-permissions` inspects current or selected-member
+  rights as advisory state; server authorization is still authoritative.
 - **Shell utilities:** `completion`, `help`, `version`.
 
 ### Universal CLI contract
@@ -97,6 +99,20 @@ stdout defaults to JSON; use `--human` only for a person at a terminal.
   an entity cache; `send-by-username` resolves an `@username` directly.
   `forward`, edit, reactions, read markers, pins, and deletes are Telegram
   writes and should return their JSON envelope for audit/retry decisions.
+- **Selector and server-read commands:** `self` is the reserved authenticated
+  account selector and is resolved from the account-bound cache when possible.
+  `resolve` reports a marked peer from `--source cache|telegram`. `show`,
+  `list-msgs`, `search`, and `get-msg` default to cache and require explicit
+  `--source telegram` for bounded server reads. Telegram reads do not mark
+  messages read or persist retrieved history; their opaque cursors are bound
+  to account, peer, operation, filters, and continuation offset.
+- **`replies` and `discussion-message`** retrieve bounded server context while
+  preserving original and linked discussion peer IDs. They never join a
+  discussion automatically. `chat-permissions` is advisory and may become
+  stale before a subsequent mutation.
+- **`account-limits`** reads authenticated Premium capability plus app-config
+  limits. Unknown Premium or missing limits remain explicitly unknown; the
+  reported upload cap is not a replacement for the operator's local cap.
 - **Media commands** upload one file or a 2–10 item group, or download media
   into the account-scoped media root. Use the album rules below and the
   complete reference for per-kind flags and size limits.
