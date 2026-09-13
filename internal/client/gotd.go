@@ -51,6 +51,7 @@ type GotdClient struct {
 	listenMu          sync.Mutex
 	lastEvent         int64
 	selfID            int64
+	resolvedPeers     map[int64]tg.InputPeerClass
 }
 
 // albumUploadAPI is the narrow Telegram surface needed by UploadAlbum. It is
@@ -403,6 +404,7 @@ func newClient(ctx context.Context, apiID int, apiHash, sessionPath, dbPath stri
 	}
 	gc := &GotdClient{
 		api: api, mediaAPI: api, selfID: selfID,
+		resolvedPeers:     make(map[int64]tg.InputPeerClass),
 		fileDownloader:    gotdFileDownloader{client: tgc, api: api},
 		destinationOpener: atomicDestinationOpener{},
 		tgc:               tgc, lifecycle: life, updateStore: updateStore,
@@ -434,13 +436,377 @@ func (g *GotdClient) GetMe(ctx context.Context) (User, error) {
 
 func userFromSelf(self *tg.User) User {
 	return User{
-		ID:          self.ID,
-		Username:    self.Username,
-		Phone:       self.Phone,
-		FirstName:   self.FirstName,
-		LastName:    self.LastName,
-		IsBot:       self.Bot,
-		DisplayName: DisplayName(self.FirstName, self.LastName, self.Username, self.ID),
+		ID:           self.ID,
+		Username:     self.Username,
+		Phone:        self.Phone,
+		FirstName:    self.FirstName,
+		LastName:     self.LastName,
+		IsBot:        self.Bot,
+		Premium:      self.Premium,
+		PremiumKnown: !self.Min,
+		DisplayName:  DisplayName(self.FirstName, self.LastName, self.Username, self.ID),
+	}
+}
+
+func (g *GotdClient) ResolveSelector(ctx context.Context, selector string) (ResolvedPeer, error) {
+	s := strings.TrimSpace(selector)
+	if strings.EqualFold(s, "self") || strings.EqualFold(s, "me") {
+		me, err := g.GetMe(ctx)
+		if err != nil {
+			return ResolvedPeer{}, err
+		}
+		return ResolvedPeer{ChatID: me.ID, Kind: string(store.EntityUser), Username: me.Username, Title: me.DisplayName, Self: true}, nil
+	}
+	if id, ok := parseSelectorID(s); ok {
+		peer, err := g.peerFromChatID(ctx, id)
+		if err != nil {
+			return ResolvedPeer{}, err
+		}
+		return resolvedPeerFromInput(peer, ""), nil
+	}
+	peer, err := g.resolvePeer(ctx, s)
+	if err != nil {
+		return ResolvedPeer{}, err
+	}
+	return resolvedPeerFromInput(peer, strings.TrimPrefix(s, "@")), nil
+}
+
+func parseSelectorID(value string) (int64, bool) {
+	if value == "" {
+		return 0, false
+	}
+	var id int64
+	for i, r := range value {
+		if i == 0 && r == '-' {
+			continue
+		}
+		if r < '0' || r > '9' {
+			return 0, false
+		}
+	}
+	if _, err := fmt.Sscan(value, &id); err != nil {
+		return 0, false
+	}
+	return id, true
+}
+
+func resolvedPeerFromInput(peer tg.InputPeerClass, username string) ResolvedPeer {
+	resolved := ResolvedPeer{Username: username}
+	switch p := peer.(type) {
+	case *tg.InputPeerSelf:
+		resolved.Self = true
+		resolved.Kind = string(store.EntityUser)
+	case *tg.InputPeerUser:
+		resolved.ChatID, resolved.Kind, resolved.AccessHash = p.UserID, string(store.EntityUser), p.AccessHash
+	case *tg.InputPeerChat:
+		resolved.ChatID, resolved.Kind = peerid.Chat(p.ChatID), string(store.EntityChat)
+	case *tg.InputPeerChannel:
+		resolved.ChatID, resolved.Kind, resolved.AccessHash = peerid.Channel(p.ChannelID), string(store.EntityChannel), p.AccessHash
+	}
+	return resolved
+}
+
+func (g *GotdClient) GetAccountLimits(ctx context.Context) (AccountLimits, error) {
+	me, err := g.GetMe(ctx)
+	if err != nil {
+		return AccountLimits{}, err
+	}
+	config, err := g.api.HelpGetAppConfig(ctx, 0)
+	if err != nil {
+		return AccountLimits{}, mapRPCErr(err)
+	}
+	app, ok := config.(*tg.HelpAppConfig)
+	if !ok {
+		return AccountLimits{Source: "telegram", Premium: premiumPointer(me), PremiumKnown: me.PremiumKnown, FreshAt: time.Now().UTC().Format(time.RFC3339)}, nil
+	}
+	raw := jsonValueToAny(app.Config)
+	values, _ := raw.(map[string]any)
+	limits := AccountLimits{
+		Source:       "telegram",
+		FreshAt:      time.Now().UTC().Format(time.RFC3339),
+		Premium:      premiumPointer(me),
+		PremiumKnown: me.PremiumKnown,
+		Raw:          values,
+	}
+	if me.PremiumKnown {
+		suffix := "default"
+		if me.Premium {
+			suffix = "premium"
+		}
+		limits.CaptionLength = jsonInt(values, "caption_length_limit_"+suffix)
+		limits.UploadMaxFileParts = jsonInt(values, "upload_max_fileparts_"+suffix)
+		if limits.UploadMaxFileParts > 0 {
+			limits.UploadMaxBytes = limits.UploadMaxFileParts * 524288
+		}
+		limits.FoldersLimit = jsonInt(values, "dialog_filters_limit_"+suffix)
+		limits.FolderChatsLimit = jsonInt(values, "dialog_filters_chats_limit_"+suffix)
+		limits.PinnedDialogsLimit = jsonInt(values, "dialogs_pinned_limit_"+suffix)
+	}
+	return limits, nil
+}
+
+func (g *GotdClient) RemoteHistory(ctx context.Context, req RemoteHistoryReq) (RemotePage, error) {
+	if req.Limit < 1 || req.Limit > 100 {
+		return RemotePage{}, safety.NewBadArgs("remote history limit must be between 1 and 100")
+	}
+	peer, err := g.peerFromChatID(ctx, req.ChatID)
+	if err != nil {
+		return RemotePage{}, err
+	}
+	api := g.backfillAPI
+	if api == nil {
+		api = g.api
+	}
+	if api == nil {
+		return RemotePage{}, errors.New("Telegram history API is not initialized")
+	}
+	resp, err := api.MessagesGetHistory(ctx, &tg.MessagesGetHistoryRequest{
+		Peer: peer, OffsetID: int(req.OffsetID), OffsetDate: int(req.OffsetDate), Limit: req.Limit,
+		MinID: int(req.MinID), MaxID: int(req.MaxID),
+	})
+	if err != nil {
+		return RemotePage{}, mapRPCErr(err)
+	}
+	return remotePageFromResp(req.ChatID, resp), nil
+}
+
+func (g *GotdClient) RemoteSearch(ctx context.Context, req RemoteSearchReq) (RemotePage, error) {
+	if req.Limit < 1 || req.Limit > 100 {
+		return RemotePage{}, safety.NewBadArgs("remote search limit must be between 1 and 100")
+	}
+	peer, err := g.peerFromChatID(ctx, req.ChatID)
+	if err != nil {
+		return RemotePage{}, err
+	}
+	r := &tg.MessagesSearchRequest{
+		Peer: peer, Q: req.Query, Limit: req.Limit, OffsetID: int(req.OffsetID),
+		MinID: int(req.MinID), MaxID: int(req.MaxID), MinDate: int(req.MinDate), MaxDate: int(req.MaxDate),
+		Filter: messagesFilter(req.Filter),
+	}
+	if req.SenderID != 0 {
+		sender, err := g.peerFromChatID(ctx, req.SenderID)
+		if err != nil {
+			return RemotePage{}, err
+		}
+		r.SetFromID(sender)
+	}
+	if req.TopMsgID != 0 {
+		r.SetTopMsgID(int(req.TopMsgID))
+	}
+	resp, err := g.api.MessagesSearch(ctx, r)
+	if err != nil {
+		return RemotePage{}, mapRPCErr(err)
+	}
+	return remotePageFromResp(req.ChatID, resp), nil
+}
+
+func messagesFilter(kind string) tg.MessagesFilterClass {
+	switch kind {
+	case "photo":
+		return &tg.InputMessagesFilterPhotos{}
+	case "video":
+		return &tg.InputMessagesFilterVideo{}
+	case "photo-video":
+		return &tg.InputMessagesFilterPhotoVideo{}
+	case "document":
+		return &tg.InputMessagesFilterDocument{}
+	case "voice":
+		return &tg.InputMessagesFilterVoice{}
+	case "audio":
+		return &tg.InputMessagesFilterMusic{}
+	default:
+		return &tg.InputMessagesFilterEmpty{}
+	}
+}
+
+func (g *GotdClient) RemoteGetMessage(ctx context.Context, chatID, messageID int64) (*BackfillMessage, error) {
+	if err := validatePositiveTelegramInt32(messageID, "message_id"); err != nil {
+		return nil, err
+	}
+	peer, err := g.peerFromChatID(ctx, chatID)
+	if err != nil {
+		return nil, err
+	}
+	input := []tg.InputMessageClass{&tg.InputMessageID{ID: int(messageID)}}
+	var resp tg.MessagesMessagesClass
+	if channel, ok := peer.(*tg.InputPeerChannel); ok {
+		resp, err = g.api.ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{
+			Channel: &tg.InputChannel{ChannelID: channel.ChannelID, AccessHash: channel.AccessHash}, ID: input,
+		})
+	} else {
+		resp, err = g.api.MessagesGetMessages(ctx, input)
+	}
+	if err != nil {
+		return nil, mapRPCErr(err)
+	}
+	for _, message := range messagesFromHistoryResp(resp) {
+		if row, ok := remoteMessageFromTL(chatID, message); ok && row.MessageID == messageID {
+			return &row, nil
+		}
+	}
+	return nil, nil
+}
+
+func (g *GotdClient) GetReplies(ctx context.Context, req RepliesReq) (RemotePage, error) {
+	if req.Limit < 1 || req.Limit > 100 {
+		return RemotePage{}, safety.NewBadArgs("replies limit must be between 1 and 100")
+	}
+	if err := validatePositiveTelegramInt32(req.RootID, "message_id"); err != nil {
+		return RemotePage{}, err
+	}
+	peer, err := g.peerFromChatID(ctx, req.ChatID)
+	if err != nil {
+		return RemotePage{}, err
+	}
+	resp, err := g.api.MessagesGetReplies(ctx, &tg.MessagesGetRepliesRequest{Peer: peer, MsgID: int(req.RootID), OffsetID: int(req.OffsetID), Limit: req.Limit})
+	if err != nil {
+		return RemotePage{}, mapRPCErr(err)
+	}
+	return remotePageFromResp(req.ChatID, resp), nil
+}
+
+func (g *GotdClient) GetDiscussionMessage(ctx context.Context, chatID, messageID int64) (DiscussionInfo, error) {
+	if err := validatePositiveTelegramInt32(messageID, "message_id"); err != nil {
+		return DiscussionInfo{}, err
+	}
+	peer, err := g.peerFromChatID(ctx, chatID)
+	if err != nil {
+		return DiscussionInfo{}, err
+	}
+	resp, err := g.api.MessagesGetDiscussionMessage(ctx, &tg.MessagesGetDiscussionMessageRequest{Peer: peer, MsgID: int(messageID)})
+	if err != nil {
+		return DiscussionInfo{}, mapRPCErr(err)
+	}
+	info := DiscussionInfo{OriginalChatID: chatID, OriginalMessageID: messageID, UnreadCount: resp.UnreadCount, MaxID: int64(resp.MaxID), ReadInboxMaxID: int64(resp.ReadInboxMaxID), ReadOutboxMaxID: int64(resp.ReadOutboxMaxID), Messages: make([]BackfillMessage, 0, len(resp.Messages))}
+	for _, chat := range resp.Chats {
+		switch v := chat.(type) {
+		case *tg.Channel:
+			id := peerid.Channel(v.ID)
+			if id != chatID {
+				info.DiscussionChatID = id
+			}
+		case *tg.Chat:
+			id := peerid.Chat(v.ID)
+			if id != chatID {
+				info.DiscussionChatID = id
+			}
+		}
+	}
+	for _, message := range resp.Messages {
+		if row, ok := remoteMessageFromTL(chatID, message); ok {
+			info.Messages = append(info.Messages, row)
+		}
+	}
+	return info, nil
+}
+
+func remotePageFromResp(chatID int64, resp tg.MessagesMessagesClass) RemotePage {
+	page := historyPageFromResp(resp)
+	out := make([]BackfillMessage, 0, len(page.Messages))
+	var next int64
+	for _, message := range page.Messages {
+		row, ok := remoteMessageFromTL(chatID, message)
+		if !ok {
+			continue
+		}
+		out = append(out, row)
+		if row.MessageID > 0 && (next == 0 || row.MessageID < next) {
+			next = row.MessageID
+		}
+	}
+	return RemotePage{Messages: out, Total: page.Total, TotalKnown: page.TotalKnown, NextOffsetID: next}
+}
+
+func remoteMessageFromTL(chatID int64, message tg.MessageClass) (BackfillMessage, bool) {
+	switch m := message.(type) {
+	case *tg.Message:
+		if m == nil {
+			return BackfillMessage{}, false
+		}
+		raw, err := json.Marshal(m)
+		if err != nil {
+			return BackfillMessage{}, false
+		}
+		messageChatID := peerID(m.PeerID)
+		if messageChatID == 0 {
+			messageChatID = chatID
+		}
+		return BackfillMessage{
+			ChatID: messageChatID, MessageID: int64(m.ID), SenderID: peerID(m.FromID), Date: timeFromUnix(m.Date),
+			Text: m.Message, IsOutgoing: m.Out, ReplyToMsgID: replyMessageID(m.ReplyTo), HasMedia: m.Media != nil,
+			GroupedID: m.GroupedID, MediaType: messageMediaType(m.Media), RawJSON: string(raw),
+		}, true
+	case *tg.MessageService:
+		if m == nil {
+			return BackfillMessage{}, false
+		}
+		raw, err := json.Marshal(m)
+		if err != nil {
+			return BackfillMessage{}, false
+		}
+		messageChatID := peerID(m.PeerID)
+		if messageChatID == 0 {
+			messageChatID = chatID
+		}
+		return BackfillMessage{ChatID: messageChatID, MessageID: int64(m.ID), SenderID: peerID(m.FromID), Date: timeFromUnix(m.Date), IsOutgoing: m.Out, RawJSON: string(raw)}, true
+	case *tg.MessageEmpty:
+		if m == nil {
+			return BackfillMessage{}, false
+		}
+		return BackfillMessage{ChatID: chatID, MessageID: int64(m.ID), Deleted: true}, true
+	default:
+		return BackfillMessage{}, false
+	}
+}
+
+func premiumPointer(me User) *bool {
+	if !me.PremiumKnown {
+		return nil
+	}
+	value := me.Premium
+	return &value
+}
+
+func jsonInt(values map[string]any, key string) int64 {
+	value, ok := values[key]
+	if !ok {
+		return 0
+	}
+	switch n := value.(type) {
+	case float64:
+		return int64(n)
+	case int:
+		return int64(n)
+	case int64:
+		return n
+	}
+	return 0
+}
+
+func jsonValueToAny(value tg.JSONValueClass) any {
+	switch v := value.(type) {
+	case *tg.JSONNull:
+		return nil
+	case *tg.JSONBool:
+		return v.Value
+	case *tg.JSONNumber:
+		return v.Value
+	case *tg.JSONString:
+		return v.Value
+	case *tg.JSONArray:
+		out := make([]any, len(v.Value))
+		for i, item := range v.Value {
+			out[i] = jsonValueToAny(item)
+		}
+		return out
+	case *tg.JSONObject:
+		out := make(map[string]any, len(v.Value))
+		for _, item := range v.Value {
+			out[item.Key] = jsonValueToAny(item.Value)
+		}
+		return out
+	default:
+		return nil
 	}
 }
 
@@ -468,23 +834,36 @@ func (g *GotdClient) resolvePeer(ctx context.Context, selector string) (tg.Input
 	if err := g.persistEntitiesFromResolved(resolved.Users, resolved.Chats); err != nil {
 		return nil, err
 	}
+	var peer tg.InputPeerClass
 	switch p := resolved.Peer.(type) {
 	case *tg.PeerUser:
 		for _, u := range resolved.Users {
 			user, ok := u.(*tg.User)
 			if ok && user.ID == p.UserID {
-				return &tg.InputPeerUser{UserID: user.ID, AccessHash: user.AccessHash}, nil
+				peer = &tg.InputPeerUser{UserID: user.ID, AccessHash: user.AccessHash}
+				break
 			}
 		}
 	case *tg.PeerChat:
-		return &tg.InputPeerChat{ChatID: p.ChatID}, nil
+		peer = &tg.InputPeerChat{ChatID: p.ChatID}
 	case *tg.PeerChannel:
 		for _, c := range resolved.Chats {
 			ch, ok := c.(*tg.Channel)
 			if ok && ch.ID == p.ChannelID {
-				return &tg.InputPeerChannel{ChannelID: ch.ID, AccessHash: ch.AccessHash}, nil
+				peer = &tg.InputPeerChannel{ChannelID: ch.ID, AccessHash: ch.AccessHash}
+				break
 			}
 		}
+	}
+	if peer != nil {
+		marked := resolvedPeerFromInput(peer, "").ChatID
+		if marked != 0 {
+			if g.resolvedPeers == nil {
+				g.resolvedPeers = make(map[int64]tg.InputPeerClass)
+			}
+			g.resolvedPeers[marked] = peer
+		}
+		return peer, nil
 	}
 	return nil, fmt.Errorf("could not build input peer for resolved username %q", username)
 }
@@ -572,6 +951,12 @@ func (g *GotdClient) SendMessage(ctx context.Context, req SendMessageReq) (SendM
 // InputPeer for it. Returns a clear error pointing at backfill-entities
 // when nothing is cached.
 func (g *GotdClient) peerFromChatID(_ context.Context, chatID int64) (tg.InputPeerClass, error) {
+	if chatID == g.selfID && chatID > 0 {
+		return &tg.InputPeerSelf{}, nil
+	}
+	if peer, ok := g.resolvedPeers[chatID]; ok {
+		return peer, nil
+	}
 	if g.db == nil {
 		return nil, safety.NewBadArgs("chat_id %d cannot be resolved without an entity cache (no DB available)", chatID)
 	}
@@ -1891,6 +2276,100 @@ func (g *GotdClient) GetChatsInfo(ctx context.Context, ids []int64) ([]ChatInfo,
 		result = append(result, row)
 	}
 	return result, nil
+}
+
+func (g *GotdClient) GetChatPermissions(ctx context.Context, chatID, userID int64) (PermissionInfo, error) {
+	chats, err := g.GetChatsInfo(ctx, []int64{chatID})
+	if err != nil {
+		return PermissionInfo{}, err
+	}
+	if len(chats) != 1 {
+		return PermissionInfo{}, safety.NewBadArgs("requested peer metadata was not returned by Telegram")
+	}
+	info := PermissionInfo{Chat: chats[0], UserID: userID, Role: "unknown", Effective: effectiveRights(chats[0].AdminRights, chats[0].DefaultBannedRights), Advisory: true}
+	if chats[0].Creator {
+		info.Role = "creator"
+	} else if hasAdminRights(chats[0].AdminRights) {
+		info.Role = "admin"
+	} else {
+		info.Role = "member"
+	}
+	if userID == 0 || chats[0].Type != "supergroup" && chats[0].Type != "channel" {
+		return info, nil
+	}
+	peer, err := g.peerFromChatID(ctx, chatID)
+	if err != nil {
+		return PermissionInfo{}, err
+	}
+	channel, ok := peer.(*tg.InputPeerChannel)
+	if !ok {
+		return info, nil
+	}
+	var target tg.InputPeerClass
+	if userID == g.selfID {
+		target = &tg.InputPeerSelf{}
+	} else {
+		target, err = g.peerFromChatID(ctx, userID)
+		if err != nil {
+			return PermissionInfo{}, err
+		}
+	}
+	participant, err := g.api.ChannelsGetParticipant(ctx, &tg.ChannelsGetParticipantRequest{
+		Channel: &tg.InputChannel{ChannelID: channel.ChannelID, AccessHash: channel.AccessHash}, Participant: target,
+	})
+	if err != nil {
+		return PermissionInfo{}, mapRPCErr(err)
+	}
+	info.Role, info.AdminRights, info.BannedRights = participantPermission(participant.Participant)
+	info.Effective = effectiveRights(info.AdminRights, info.BannedRights)
+	return info, nil
+}
+
+func hasAdminRights(rights *tg.ChatAdminRights) bool {
+	if rights == nil {
+		return false
+	}
+	return rights.Other || rights.ChangeInfo || rights.DeleteMessages || rights.BanUsers || rights.InviteUsers || rights.PinMessages || rights.ManageTopics || rights.PostMessages || rights.EditMessages || rights.ManageCall || rights.AddAdmins
+}
+
+func effectiveRights(admin *tg.ChatAdminRights, banned *tg.ChatBannedRights) map[string]bool {
+	out := map[string]bool{}
+	if admin != nil {
+		out["change_info"] = admin.ChangeInfo
+		out["delete_messages"] = admin.DeleteMessages
+		out["ban_users"] = admin.BanUsers
+		out["invite_users"] = admin.InviteUsers
+		out["pin_messages"] = admin.PinMessages
+		out["manage_topics"] = admin.ManageTopics
+		out["post_messages"] = admin.PostMessages
+		out["edit_messages"] = admin.EditMessages
+		out["manage_call"] = admin.ManageCall
+		out["add_admins"] = admin.AddAdmins
+		out["send_messages"] = admin.PostMessages
+	}
+	if banned != nil {
+		out["send_messages"] = !banned.SendMessages
+		out["send_media"] = !banned.SendMedia
+		out["send_stickers"] = !banned.SendStickers
+		out["send_polls"] = !banned.SendPolls
+		out["embed_links"] = !banned.EmbedLinks
+	}
+	return out
+}
+
+func participantPermission(participant tg.ChannelParticipantClass) (string, *tg.ChatAdminRights, *tg.ChatBannedRights) {
+	switch p := participant.(type) {
+	case *tg.ChannelParticipantCreator:
+		return "creator", nil, nil
+	case *tg.ChannelParticipantAdmin:
+		return "admin", &p.AdminRights, nil
+	case *tg.ChannelParticipantBanned:
+		return "banned", nil, &p.BannedRights
+	case *tg.ChannelParticipantLeft:
+		return "left", nil, nil
+	default:
+		return "member", nil, nil
+	}
 }
 
 func (g *GotdClient) ListenOnce(ctx context.Context) (ListenEvent, error) {

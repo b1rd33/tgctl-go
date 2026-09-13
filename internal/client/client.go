@@ -13,14 +13,52 @@ import (
 
 // User mirrors the subset of fields tgcli.commands.auth uses.
 type User struct {
-	ID          int64
-	Username    string
-	Phone       string
-	FirstName   string
-	LastName    string
-	IsBot       bool
-	DisplayName string
-	RawJSON     string
+	ID           int64
+	Username     string
+	Phone        string
+	FirstName    string
+	LastName     string
+	IsBot        bool
+	Premium      bool
+	PremiumKnown bool
+	DisplayName  string
+	RawJSON      string
+}
+
+// ResolvedPeer is the stable, marked identity returned by selector
+// resolution. ChatID uses the same peer-id marking as the local cache:
+// positive users, negative basic groups, and -100... channel IDs.
+type ResolvedPeer struct {
+	ChatID     int64  `json:"chat_id"`
+	Kind       string `json:"kind"`
+	Username   string `json:"username,omitempty"`
+	Title      string `json:"title,omitempty"`
+	AccessHash int64  `json:"-"`
+	Self       bool   `json:"self,omitempty"`
+}
+
+type AccountLimits struct {
+	Source             string         `json:"source"`
+	FreshAt            string         `json:"fresh_at,omitempty"`
+	Premium            *bool          `json:"premium"`
+	PremiumKnown       bool           `json:"premium_known"`
+	CaptionLength      int64          `json:"caption_length,omitempty"`
+	UploadMaxFileParts int64          `json:"upload_max_fileparts,omitempty"`
+	UploadMaxBytes     int64          `json:"upload_max_bytes,omitempty"`
+	FoldersLimit       int64          `json:"folders_limit,omitempty"`
+	FolderChatsLimit   int64          `json:"folder_chats_limit,omitempty"`
+	PinnedDialogsLimit int64          `json:"pinned_dialogs_limit,omitempty"`
+	Raw                map[string]any `json:"raw,omitempty"`
+}
+
+type PermissionInfo struct {
+	Chat         ChatInfo             `json:"chat"`
+	UserID       int64                `json:"user_id,omitempty"`
+	Role         string               `json:"role"`
+	AdminRights  *tg.ChatAdminRights  `json:"admin_rights,omitempty"`
+	BannedRights *tg.ChatBannedRights `json:"banned_rights,omitempty"`
+	Effective    map[string]bool      `json:"effective"`
+	Advisory     bool                 `json:"advisory"`
 }
 
 // SendMessageReq mirrors the input to messages.SendMessage.
@@ -312,6 +350,7 @@ type BackfillMessage struct {
 	MediaIdentity    string
 	MediaDisposition BackfillMediaStatus
 	RawJSON          string
+	Deleted          bool
 }
 
 type BackfillMediaStatus string
@@ -347,6 +386,57 @@ type BackfillResult struct {
 	MediaFailed     int
 	Warnings        []string
 	MediaOutcomes   []BackfillMediaOutcome `json:"-"`
+}
+
+// RemotePage is an explicitly server-fetched page. It is deliberately
+// separate from BackfillResult: remote reads do not persist messages or mark
+// them read.
+type RemotePage struct {
+	Messages     []BackfillMessage
+	Total        int
+	TotalKnown   bool
+	NextOffsetID int64
+}
+
+type RemoteHistoryReq struct {
+	ChatID     int64
+	OffsetID   int64
+	OffsetDate int64
+	Limit      int
+	MinID      int64
+	MaxID      int64
+}
+
+type RemoteSearchReq struct {
+	ChatID   int64
+	SenderID int64
+	Query    string
+	Filter   string
+	MinDate  int64
+	MaxDate  int64
+	OffsetID int64
+	Limit    int
+	MinID    int64
+	MaxID    int64
+	TopMsgID int64
+}
+
+type RepliesReq struct {
+	ChatID   int64
+	RootID   int64
+	OffsetID int64
+	Limit    int
+}
+
+type DiscussionInfo struct {
+	OriginalChatID    int64             `json:"original_chat_id"`
+	OriginalMessageID int64             `json:"original_message_id"`
+	DiscussionChatID  int64             `json:"discussion_chat_id,omitempty"`
+	MaxID             int64             `json:"max_id,omitempty"`
+	ReadInboxMaxID    int64             `json:"read_inbox_max_id,omitempty"`
+	ReadOutboxMaxID   int64             `json:"read_outbox_max_id,omitempty"`
+	UnreadCount       int               `json:"unread_count"`
+	Messages          []BackfillMessage `json:"messages"`
 }
 
 type TopicInfo struct {
@@ -448,6 +538,14 @@ type TerminateSessionReq struct {
 // Client is the narrow API command runners use.
 type Client interface {
 	GetMe(ctx context.Context) (User, error)
+	ResolveSelector(ctx context.Context, selector string) (ResolvedPeer, error)
+	GetAccountLimits(ctx context.Context) (AccountLimits, error)
+	RemoteHistory(ctx context.Context, req RemoteHistoryReq) (RemotePage, error)
+	RemoteSearch(ctx context.Context, req RemoteSearchReq) (RemotePage, error)
+	RemoteGetMessage(ctx context.Context, chatID, messageID int64) (*BackfillMessage, error)
+	GetChatPermissions(ctx context.Context, chatID, userID int64) (PermissionInfo, error)
+	GetReplies(ctx context.Context, req RepliesReq) (RemotePage, error)
+	GetDiscussionMessage(ctx context.Context, chatID, messageID int64) (DiscussionInfo, error)
 	SendMessage(ctx context.Context, req SendMessageReq) (SendMessageResp, error)
 	UploadFile(ctx context.Context, req UploadFileReq) (UploadFileResp, error)
 	UploadAlbum(ctx context.Context, req UploadAlbumReq) (UploadAlbumResp, error)

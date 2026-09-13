@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/b1rd33/tgctl-go/internal/client"
 	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
@@ -169,5 +170,43 @@ func TestShowCommandEmitsEnvelopeAndAudits(t *testing.T) {
 	}
 	if !bytes.Contains(b, []byte(`"cmd":"show"`)) {
 		t.Fatalf("audit log missing show entry: %s", b)
+	}
+}
+
+func TestRemoteHistoryUsesBoundedPageAndTypedCursor(t *testing.T) {
+	_, _, dir := setupWriteEnv(t)
+	fc := &client.FakeClient{
+		Resolved:          map[string]client.ResolvedPeer{"1": {ChatID: 1, Kind: "user", Title: "Saved"}},
+		RemoteHistoryPage: client.RemotePage{Messages: []client.BackfillMessage{{ChatID: 1, MessageID: 12, Date: "2026-05-03T10:00:00Z", Text: "new"}, {ChatID: 1, MessageID: 11, Date: "2026-05-02T10:00:00Z", Text: "old"}}, NextOffsetID: 11},
+	}
+	p := readPaths{account: "default", db: filepath.Join(dir, "telegram.sqlite"), session: filepath.Join(dir, "tg.session")}
+	cfg := CommandsConfig{ReadOnlyClientFactory: func(context.Context, string) (client.Client, error) { return fc, nil }}
+	data, err := RemoteHistoryRunner(context.Background(), cfg, p, "1", 2, "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := data.(map[string]any)
+	if result["source"] != "telegram" || result["next_cursor"] == "" {
+		t.Fatalf("result = %#v", result)
+	}
+	if len(result["messages"].([]MessageSummaryDTO)) != 2 {
+		t.Fatalf("messages = %#v", result["messages"])
+	}
+	if _, err := store.DecodeRemoteCursor(result["next_cursor"].(string), store.RemoteCursor{Account: "other", Operation: "history", Chat: 1}); err == nil {
+		t.Fatal("cross-account cursor was accepted")
+	}
+}
+
+func TestRemoteSearchUsesExplicitServerClient(t *testing.T) {
+	_, fc, dir := setupWriteEnv(t)
+	fc.Resolved = map[string]client.ResolvedPeer{"1": {ChatID: 1, Kind: "user", Title: "Saved"}}
+	p := readPaths{account: "default", db: filepath.Join(dir, "telegram.sqlite"), session: filepath.Join(dir, "tg.session")}
+	cfg := CommandsConfig{ReadOnlyClientFactory: func(context.Context, string) (client.Client, error) { return fc, nil }}
+	_, err := RemoteSearchRunner(context.Background(), cfg, p, "1", "term", 10, "", "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fc.Calls) == 0 || fc.Calls[0] != "ResolveSelector" {
+		t.Fatalf("calls = %#v", fc.Calls)
 	}
 }

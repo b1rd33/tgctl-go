@@ -409,7 +409,10 @@ func Execute() int {
 // subcommand calls.
 func RegisterAll(root *cobra.Command, mgr *accounts.Manager, cfg CommandsConfig) {
 	registerAuth(root, mgr)
-	registerReadCommands(root, mgr)
+	registerAccountLimits(root, cfg)
+	registerReadCommands(root, mgr, cfg)
+	registerResolveCommand(root, cfg)
+	registerThreadReadCommands(root, cfg)
 	registerWriteCommands(root, cfg)
 	registerMediaCommands(root, cfg)
 	registerTopicCommands(root, cfg)

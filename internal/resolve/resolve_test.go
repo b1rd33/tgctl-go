@@ -3,10 +3,9 @@ package resolve
 import (
 	"database/sql"
 	"errors"
+	"github.com/b1rd33/tgctl-go/internal/store"
 	"path/filepath"
 	"testing"
-
-	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
 func setupChats(t *testing.T) *sql.DB {
@@ -128,5 +127,23 @@ func TestResolveMissingIntReturnsNotFound(t *testing.T) {
 	var nf *NotFound
 	if !errors.As(err, &nf) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestResolveSelfUsesAccountBoundIdentity(t *testing.T) {
+	db := setupChats(t)
+	if err := store.UpsertMe(db, store.MeRow{UserID: 77, DisplayName: sql.NullString{String: "Self User", Valid: true}, CachedAt: "now"}); err != nil {
+		t.Fatal(err)
+	}
+	id, title, err := ResolveChatDB(db, "self")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != 77 || title != "Self User" {
+		t.Fatalf("got (%d,%q)", id, title)
+	}
+	id, _, err = ResolveChatDB(db, "77")
+	if err != nil || id != 77 {
+		t.Fatalf("numeric self = (%d,%v)", id, err)
 	}
 }

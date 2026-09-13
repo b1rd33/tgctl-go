@@ -14,15 +14,31 @@ type FakeClient struct {
 	// must not mutate those fields directly while calls are in flight.
 	mu sync.Mutex
 
-	Me        User
-	NextErr   error
-	Closed    bool
-	Calls     []string
-	Sent      []SendMessageReq
-	Uploads   []UploadFileReq
-	Albums    []UploadAlbumReq
-	AlbumResp UploadAlbumResp
-	AlbumErr  error
+	Me                User
+	Resolved          map[string]ResolvedPeer
+	ResolveErr        error
+	Limits            AccountLimits
+	LimitsErr         error
+	RemoteHistoryPage RemotePage
+	RemoteHistoryErr  error
+	RemoteSearchPage  RemotePage
+	RemoteSearchErr   error
+	RemoteMessage     *BackfillMessage
+	RemoteGetErr      error
+	Permissions       PermissionInfo
+	PermissionsErr    error
+	RepliesPage       RemotePage
+	RepliesErr        error
+	Discussion        DiscussionInfo
+	DiscussionErr     error
+	NextErr           error
+	Closed            bool
+	Calls             []string
+	Sent              []SendMessageReq
+	Uploads           []UploadFileReq
+	Albums            []UploadAlbumReq
+	AlbumResp         UploadAlbumResp
+	AlbumErr          error
 	// AlbumHook runs after an album request is recorded, outside the fake's
 	// mutex. Tests use it to hold the Telegram call while racing idempotency.
 	AlbumHook         func()
@@ -96,6 +112,93 @@ func (f *FakeClient) GetMe(_ context.Context) (User, error) {
 		return User{}, errors.New("fake client: Me not set")
 	}
 	return f.Me, nil
+}
+
+func (f *FakeClient) ResolveSelector(_ context.Context, selector string) (ResolvedPeer, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.record("ResolveSelector"); err != nil {
+		return ResolvedPeer{}, err
+	}
+	if f.ResolveErr != nil {
+		return ResolvedPeer{}, f.ResolveErr
+	}
+	if peer, ok := f.Resolved[selector]; ok {
+		return peer, nil
+	}
+	if (selector == "self" || selector == "me") && f.Me.ID != 0 {
+		return ResolvedPeer{ChatID: f.Me.ID, Kind: "user", Title: f.Me.DisplayName, Username: f.Me.Username, Self: true}, nil
+	}
+	return ResolvedPeer{}, errors.New("fake client: selector not configured")
+}
+
+func (f *FakeClient) GetAccountLimits(_ context.Context) (AccountLimits, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.record("GetAccountLimits"); err != nil {
+		return AccountLimits{}, err
+	}
+	if f.LimitsErr != nil {
+		return AccountLimits{}, f.LimitsErr
+	}
+	return f.Limits, nil
+}
+
+func (f *FakeClient) RemoteHistory(_ context.Context, _ RemoteHistoryReq) (RemotePage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.record("RemoteHistory"); err != nil {
+		return RemotePage{}, err
+	}
+	return f.RemoteHistoryPage, f.RemoteHistoryErr
+}
+
+func (f *FakeClient) RemoteSearch(_ context.Context, _ RemoteSearchReq) (RemotePage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.record("RemoteSearch"); err != nil {
+		return RemotePage{}, err
+	}
+	return f.RemoteSearchPage, f.RemoteSearchErr
+}
+
+func (f *FakeClient) RemoteGetMessage(_ context.Context, _, _ int64) (*BackfillMessage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.record("RemoteGetMessage"); err != nil {
+		return nil, err
+	}
+	return f.RemoteMessage, f.RemoteGetErr
+}
+
+func (f *FakeClient) GetChatPermissions(_ context.Context, _, _ int64) (PermissionInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.record("GetChatPermissions"); err != nil {
+		return PermissionInfo{}, err
+	}
+	if f.PermissionsErr != nil {
+		return PermissionInfo{}, f.PermissionsErr
+	}
+	return f.Permissions, nil
+}
+
+func (f *FakeClient) GetReplies(_ context.Context, _ RepliesReq) (RemotePage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.record("GetReplies"); err != nil {
+		return RemotePage{}, err
+	}
+	return f.RepliesPage, f.RepliesErr
+}
+
+func (f *FakeClient) GetDiscussionMessage(_ context.Context, _, _ int64) (DiscussionInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.record("GetDiscussionMessage"); err != nil {
+		return DiscussionInfo{}, err
+	}
+	return f.Discussion, f.DiscussionErr
 }
 
 func (f *FakeClient) SendMessage(_ context.Context, req SendMessageReq) (SendMessageResp, error) {

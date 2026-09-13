@@ -28,8 +28,15 @@ func registerSetup(root *cobra.Command) {
 				return emitDispatchedFailure(cmd, "setup", err)
 			}
 			envPath, _ := cmd.Flags().GetString("env-file")
-			if strings.TrimSpace(envPath) == "" {
+			if strings.TrimSpace(envPath) == "" && cmd.Flags().Changed("env-file") {
 				return emitDispatchedFailure(cmd, "setup", safety.NewBadArgs("--env-file cannot be blank"))
+			}
+			if strings.TrimSpace(envPath) == "" {
+				var err error
+				envPath, err = stableCredentialEnvPath()
+				if err != nil {
+					return emitDispatchedFailure(cmd, "setup", err)
+				}
 			}
 			envPath, err := filepath.Abs(filepath.Clean(envPath))
 			if err != nil {
@@ -58,9 +65,27 @@ func registerSetup(root *cobra.Command) {
 	}
 	cmd.Flags().String("api-id", "", "Telegram app API ID (never printed)")
 	cmd.Flags().String("api-hash", "", "Telegram app API hash (never printed)")
-	cmd.Flags().String("env-file", ".env", "Environment file to create or update")
+	cmd.Flags().String("env-file", "", "Environment file to create or update (default: stable tgctl config root)")
 	AddOutputFlags(cmd)
 	root.AddCommand(cmd)
+}
+
+func stableCredentialEnvPath() (string, error) {
+	root := strings.TrimSpace(os.Getenv("TGCTL_HOME"))
+	if root != "" {
+		if !filepath.IsAbs(root) {
+			return "", safety.NewBadArgs("TGCTL_HOME must be an absolute path")
+		}
+		if real, err := filepath.EvalSymlinks(root); err == nil {
+			root = real
+		}
+		return filepath.Join(filepath.Clean(root), ".env"), nil
+	}
+	config, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(config, "tgctl", ".env"), nil
 }
 
 func validateSetupCredentials(rawID, apiHash string) (int, string, error) {

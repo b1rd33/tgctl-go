@@ -53,6 +53,7 @@ func meLiveRunner(ctx context.Context, dbPath, sessionPath string, cache bool, f
 		DisplayName: nullStringOf(me.DisplayName),
 		IsBot:       boolInt(me.IsBot),
 		CachedAt:    timeNow(),
+		RawJSON:     premiumRawJSON(me),
 	}
 	if cache {
 		db, err := store.Connect(dbPath)
@@ -62,6 +63,11 @@ func meLiveRunner(ctx context.Context, dbPath, sessionPath string, cache bool, f
 		defer db.Close()
 		if err := store.UpsertMe(db, row); err != nil {
 			return nil, err
+		}
+		if me.ID > 0 {
+			if err := store.UpsertEntity(db, me.ID, store.EntityUser, 0); err != nil {
+				return nil, err
+			}
 		}
 		loaded, err := store.LoadMe(db)
 		if err != nil {
@@ -102,19 +108,61 @@ func mePayload(row *store.MeRow, source, sessionPath string) map[string]any {
 	if row.RawJSON.Valid && row.RawJSON.String != "" {
 		_ = json.Unmarshal([]byte(row.RawJSON.String), &raw)
 	}
-	return map[string]any{
-		"source":       source,
-		"user_id":      row.UserID,
-		"username":     nullString(row.Username),
-		"phone":        nullString(row.Phone),
-		"first_name":   nullString(row.FirstName),
-		"last_name":    nullString(row.LastName),
-		"display_name": nullString(row.DisplayName),
-		"is_bot":       row.IsBot != 0,
-		"cached_at":    row.CachedAt,
-		"session_path": sessionPath,
-		"raw_json":     raw,
+	premium, premiumKnown := premiumFromRaw(raw)
+	premiumValue := any(nil)
+	if premiumKnown {
+		premiumValue = premium
 	}
+	premiumSource := "unknown"
+	if premiumKnown {
+		premiumSource = source
+	}
+	return map[string]any{
+		"source":         source,
+		"user_id":        row.UserID,
+		"username":       nullString(row.Username),
+		"phone":          nullString(row.Phone),
+		"first_name":     nullString(row.FirstName),
+		"last_name":      nullString(row.LastName),
+		"display_name":   nullString(row.DisplayName),
+		"is_bot":         row.IsBot != 0,
+		"cached_at":      row.CachedAt,
+		"session_path":   sessionPath,
+		"raw_json":       raw,
+		"premium":        premiumValue,
+		"premium_known":  premiumKnown,
+		"premium_source": premiumSource,
+		"premium_fresh_at": func() any {
+			if premiumKnown {
+				return row.CachedAt
+			}
+			return nil
+		}(),
+	}
+}
+
+func premiumRawJSON(me client.User) sql.NullString {
+	b, err := json.Marshal(map[string]any{
+		"premium":       me.Premium,
+		"premium_known": me.PremiumKnown,
+	})
+	if err != nil {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: string(b), Valid: true}
+}
+
+func premiumFromRaw(raw any) (bool, bool) {
+	values, ok := raw.(map[string]any)
+	if !ok {
+		return false, false
+	}
+	known, ok := values["premium_known"].(bool)
+	if !ok || !known {
+		return false, false
+	}
+	premium, ok := values["premium"].(bool)
+	return premium, ok
 }
 
 func nullString(s sql.NullString) any {

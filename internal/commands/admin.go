@@ -24,6 +24,50 @@ func registerAdminCommands(root *cobra.Command, cfg CommandsConfig) {
 	root.AddCommand(chatMembersCommand(cfg))
 	root.AddCommand(chatsInfoCommand(cfg))
 	root.AddCommand(accountSessionsCommand(cfg))
+	root.AddCommand(chatPermissionsCommand(cfg))
+}
+
+func chatPermissionsCommand(cfg CommandsConfig) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:          "chat-permissions <chat> [user]",
+		Short:        "Inspect current or selected member rights for a chat",
+		Args:         cobra.RangeArgs(1, 2),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			userSelector := ""
+			if len(args) == 2 {
+				userSelector = args[1]
+			}
+			p, err := resolvePaths(cmd, cfg.Paths)
+			if err != nil {
+				return emitDispatchedFailure(cmd, "chat-permissions", err)
+			}
+			code := dispatch.Run("chat-permissions", dispatch.Options{Context: cmd.Context(), JSON: jsonMode(cmd), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), AuditPath: p.audit, Args: map[string]any{"chat": args[0], "user": userSelector}}, func(ctx context.Context) (any, error) {
+				c, err := openRemoteReadClient(ctx, cfg, p)
+				if err != nil {
+					return nil, err
+				}
+				defer c.Close()
+				peer, err := remoteChat(ctx, c, args[0])
+				if err != nil {
+					return nil, err
+				}
+				var userID int64
+				if userSelector != "" {
+					target, err := remoteChat(ctx, c, userSelector)
+					if err != nil {
+						return nil, err
+					}
+					userID = target.ChatID
+				}
+				return c.GetChatPermissions(ctx, peer.ChatID, userID)
+			})
+			storeExitCode(cmd, code)
+			return nil
+		},
+	}
+	AddOutputFlags(cmd)
+	return cmd
 }
 
 func setPermissionsCommand(cfg CommandsConfig) *cobra.Command {

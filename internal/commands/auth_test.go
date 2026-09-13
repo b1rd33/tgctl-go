@@ -68,6 +68,17 @@ func TestMeOfflineReturnsCachedRow(t *testing.T) {
 	if m["raw_json"].(map[string]any)["id"].(float64) != 99 {
 		t.Fatalf("raw_json = %#v", m["raw_json"])
 	}
+	if m["premium"] != nil || m["premium_known"] != false || m["premium_source"] != "unknown" {
+		t.Fatalf("unknown premium = %#v", map[string]any{"premium": m["premium"], "known": m["premium_known"], "source": m["premium_source"]})
+	}
+}
+
+func TestMePayloadPreservesKnownFreePremiumState(t *testing.T) {
+	row := &store.MeRow{UserID: 99, CachedAt: "2026-05-08T10:00:00Z", RawJSON: sql.NullString{String: `{"premium":false,"premium_known":true}`, Valid: true}}
+	payload := mePayload(row, "cache", "/tmp/session")
+	if payload["premium"] != false || payload["premium_known"] != true || payload["premium_source"] != "cache" {
+		t.Fatalf("payload = %#v", payload)
+	}
 }
 
 func TestMeOfflineMissingCacheReturnsNotFound(t *testing.T) {

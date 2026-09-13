@@ -16,12 +16,19 @@ func ResolveChatDB(db *sql.DB, raw string) (int64, string, error) {
 	if value == "" {
 		return 0, "", NewNotFound("empty chat selector")
 	}
+	if strings.EqualFold(value, "self") || strings.EqualFold(value, "me") {
+		return resolveSelfDB(db)
+	}
 
 	if id, ok := tryInt(value); ok {
 		var chatID int64
 		var title sql.NullString
 		err := db.QueryRow("SELECT chat_id, title FROM tg_chats WHERE chat_id = ?", id).Scan(&chatID, &title)
 		if err == sql.ErrNoRows {
+			var selfID int64
+			if selfErr := db.QueryRow("SELECT user_id FROM tg_me WHERE key='self'").Scan(&selfID); selfErr == nil && selfID == id {
+				return selfID, selfTitle(db, selfID), nil
+			}
 			return 0, "", NewNotFound("chat_id %s not in DB", value)
 		}
 		if err != nil {
@@ -53,6 +60,11 @@ func ResolveChatDB(db *sql.DB, raw string) (int64, string, error) {
 			return 0, "", err
 		}
 		if len(matches) == 0 {
+			var selfID int64
+			var selfUsername sql.NullString
+			if err := db.QueryRow("SELECT user_id, username FROM tg_me WHERE key='self'").Scan(&selfID, &selfUsername); err == nil && selfUsername.Valid && strings.EqualFold(selfUsername.String, username) {
+				return selfID, selfTitle(db, selfID), nil
+			}
 			return 0, "", NewNotFound("username %s not in DB", value)
 		}
 		if len(matches) > 1 {
@@ -93,6 +105,33 @@ func ResolveChatDB(db *sql.DB, raw string) (int64, string, error) {
 		return 0, "", NewNotFound("no chat title contains %q", value)
 	}
 	return 0, "", &Ambiguous{Raw: value, Candidates: matches}
+}
+
+func resolveSelfDB(db *sql.DB) (int64, string, error) {
+	var id int64
+	if err := db.QueryRow("SELECT user_id FROM tg_me WHERE key='self'").Scan(&id); err != nil {
+		if err == sql.ErrNoRows {
+			return 0, "", NewNotFound("self identity not in DB; run `tg me` once")
+		}
+		return 0, "", err
+	}
+	if id <= 0 {
+		return 0, "", NewNotFound("cached self identity is invalid")
+	}
+	return id, selfTitle(db, id), nil
+}
+
+func selfTitle(db *sql.DB, id int64) string {
+	var display, username sql.NullString
+	if err := db.QueryRow("SELECT display_name, username FROM tg_me WHERE key='self'").Scan(&display, &username); err == nil {
+		if display.Valid && strings.TrimSpace(display.String) != "" {
+			return display.String
+		}
+		if username.Valid && strings.TrimSpace(username.String) != "" {
+			return "@" + strings.TrimPrefix(strings.TrimSpace(username.String), "@")
+		}
+	}
+	return fmt.Sprintf("user_%d", id)
 }
 
 func tryInt(s string) (int64, bool) {

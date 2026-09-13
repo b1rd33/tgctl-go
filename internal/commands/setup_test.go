@@ -63,3 +63,20 @@ func TestSetupIsBlockedInReadOnlyMode(t *testing.T) {
 		t.Fatalf("code=%d out=%s", code, out)
 	}
 }
+
+func TestStableCredentialEnvPathUsesTGCTLHomeIndependentOfCWD(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("TGCTL_HOME", dir)
+	got, err := stableCredentialEnvPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	realDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(realDir, ".env")
+	if got != want {
+		t.Fatalf("path=%q want %q", got, want)
+	}
+}
