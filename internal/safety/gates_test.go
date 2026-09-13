@@ -121,6 +121,14 @@ func TestRequireExplicitOrFuzzyAcceptsUsername(t *testing.T) {
 	}
 }
 
+func TestRequireExplicitOrFuzzyAcceptsReservedSelfAliases(t *testing.T) {
+	for _, alias := range []string{"self", "SELF", "me", "ME"} {
+		if err := RequireExplicitOrFuzzy(Args{}, alias); err != nil {
+			t.Fatalf("alias %q rejected: %v", alias, err)
+		}
+	}
+}
+
 func TestRequireExplicitOrFuzzyRejectsTitleWithoutFlag(t *testing.T) {
 	err := RequireExplicitOrFuzzy(Args{}, "Bjørn")
 	var ba *BadArgs

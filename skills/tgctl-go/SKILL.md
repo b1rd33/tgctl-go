@@ -100,8 +100,8 @@ stdout defaults to JSON; use `--human` only for a person at a terminal.
   an entity cache; `send-by-username` resolves an `@username` directly.
   `forward`, edit, reactions, read markers, pins, and deletes are Telegram
   writes and should return their JSON envelope for audit/retry decisions.
-- **Selector and server-read commands:** `self` is the reserved authenticated
-  account selector and is resolved from the account-bound cache when possible.
+- **Selector and server-read commands:** `self`/`me` are reserved authenticated
+  account selectors and are resolved from the account-bound cache when possible.
   `resolve` reports a marked peer from `--source cache|telegram`. `show`,
   `list-msgs`, `search`, and `get-msg` default to cache and require explicit
   `--source telegram` for bounded server reads. Telegram reads do not mark

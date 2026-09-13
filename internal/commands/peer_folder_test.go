@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -45,7 +46,24 @@ func TestArchiveUnarchiveRouteOnePeerAndReplayByRequest(t *testing.T) {
 }
 
 func TestArchiveDryRunReadOnlyAndFuzzyGates(t *testing.T) {
-	cfg, fc, _ := setupWriteEnv(t)
+	cfg, fc, dir := setupWriteEnv(t)
+	db, err := store.Connect(filepath.Join(dir, "telegram.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertMe(db, store.MeRow{UserID: 1, DisplayName: sql.NullString{String: "Bjørn Müller", Valid: true}, CachedAt: "now"}); err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range []string{"archive", "unarchive"} {
+		out, code := runRoot(t, cfg, command, "self", "--allow-write", "--dry-run", "--json")
+		if code != 0 || !strings.Contains(out, `"dry_run":true`) || len(fc.PeerFolderUpdates) != 0 {
+			t.Fatalf("%s self dry-run code=%d output=%s updates=%#v", command, code, out, fc.PeerFolderUpdates)
+		}
+	}
 	out, code := runRoot(t, cfg, "archive", "1", "--allow-write", "--dry-run", "--json")
 	if code != 0 || !strings.Contains(out, `"dry_run":true`) || len(fc.PeerFolderUpdates) != 0 {
 		t.Fatalf("dry-run code=%d output=%s updates=%#v", code, out, fc.PeerFolderUpdates)

@@ -76,6 +76,9 @@ var explicitIntRE = regexp.MustCompile(`^[+-]?\d+$`)
 
 func isExplicitChatSelector(raw string) bool {
 	value := strings.TrimSpace(raw)
+	if strings.EqualFold(value, "self") || strings.EqualFold(value, "me") {
+		return true
+	}
 	if explicitIntRE.MatchString(value) {
 		return true
 	}
