@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.5.0 — 2026-09-13
+
+- Add `archive <chat>` and `unarchive <chat>` for one explicitly selected dialog, with account isolation, write gates, zero-network dry-run and durable idempotency handling.
+- Preserve committed outcomes when client or cache finalization fails. Report that cached dialog state requires refresh after a successful archive change.
+- Add typed Telegram request and command safety tests, and update generated documentation and the bundled skill.
+
+Archive operations have offline test coverage; no live Telegram archive/unarchive mutations were performed during verification. Custom dialog filters, pins and read markers are not edited by these commands.
+
 ## v0.4.0 — 2026-09-13
 
 - Add account-bound `self` resolution, explicit target resolution, Premium status and account limits, and consistent setup paths.
