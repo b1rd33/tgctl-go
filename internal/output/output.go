@@ -97,6 +97,8 @@ func ExitCodeFromString(name string) ExitCode {
 		return ArchiveChanged
 	case "ARCHIVE_EXTRA":
 		return ArchiveExtra
+	case "CANCELED":
+		return Canceled
 	default:
 		return Generic
 	}
@@ -127,6 +129,10 @@ const (
 	ArchiveMissing
 	ArchiveChanged
 	ArchiveExtra
+	// Canceled follows the conventional shell status for an interrupted
+	// foreground command. It deliberately sits outside the compact domain
+	// error range above.
+	Canceled ExitCode = 130
 )
 
 func (c ExitCode) String() string {
@@ -159,6 +165,8 @@ func (c ExitCode) String() string {
 		return "ARCHIVE_CHANGED"
 	case ArchiveExtra:
 		return "ARCHIVE_EXTRA"
+	case Canceled:
+		return "CANCELED"
 	default:
 		return "GENERIC"
 	}

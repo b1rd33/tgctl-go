@@ -156,6 +156,19 @@ func TestRunUnknownErrorMapsToGeneric(t *testing.T) {
 	}
 }
 
+func TestRunClassifiesCancellationWithStandardInterruptStatus(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Run("sync", Options{JSON: true, Stdout: &stdout, Stderr: &stderr},
+		func(context.Context) (any, error) { return nil, context.Canceled })
+	if code != int(output.Canceled) {
+		t.Fatalf("code=%d, want %d", code, output.Canceled)
+	}
+	if !bytes.Contains(stdout.Bytes(), []byte(`"code":"CANCELED"`)) ||
+		!bytes.Contains(stdout.Bytes(), []byte(`"message":"operation canceled"`)) {
+		t.Fatalf("stdout=%q", stdout.String())
+	}
+}
+
 func TestRunClassifiesCommittedCleanupFailure(t *testing.T) {
 	dir := t.TempDir()
 	auditPath := filepath.Join(dir, "audit.jsonl")
@@ -297,5 +310,31 @@ func TestRunHumanFailureGoesToStderr(t *testing.T) {
 	}
 	if !bytes.Contains(stderr.Bytes(), []byte("ERROR [NOT_FOUND]: missing")) {
 		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestCancellationPreservesWriteOutcomes(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		key  string
+		want any
+	}{
+		{"committed", safety.NewCommittedWrite("already committed", context.Canceled), "committed", true},
+		{"unknown", &safety.UnknownWrite{Err: context.Canceled, OperationID: "test"}, "retry_safe", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			code, _, extra := Classify(tc.err)
+			if code != output.Generic || extra[tc.key] != tc.want {
+				t.Fatalf("code=%v extras=%v", code, extra)
+			}
+		})
+	}
+	code, _, _ := Classify(context.DeadlineExceeded)
+	if code == output.Canceled {
+		t.Fatal("deadline classified as user cancellation")
+	}
+	if output.ExitCodeFromString("CANCELED") != output.Canceled || output.Canceled.String() != "CANCELED" {
+		t.Fatal("cancellation mapping mismatch")
 	}
 }

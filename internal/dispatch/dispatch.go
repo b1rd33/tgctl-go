@@ -127,6 +127,12 @@ func Classify(err error) (output.ExitCode, string, map[string]any) {
 		}
 		return code, archive.Error(), archive.Results
 	}
+	// An interrupted command is not an application failure. Unknown and
+	// committed write wrappers above intentionally take precedence, since they
+	// retain the retry-safety information required for a possibly sent write.
+	if errors.Is(err, context.Canceled) {
+		return output.Canceled, "operation canceled", nil
+	}
 	return output.Generic, err.Error(), nil
 }
 

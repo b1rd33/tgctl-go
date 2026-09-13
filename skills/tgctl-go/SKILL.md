@@ -256,6 +256,7 @@ private live-test output.
 
 Important exit codes are `FLOOD_WAIT` (5), `PERMISSION_DENIED` (10),
 `ARCHIVE_MISSING` (11), `ARCHIVE_CHANGED` (12), and `ARCHIVE_EXTRA` (13).
+An interrupted foreground command returns `CANCELED` (130).
 Thumbnails, disk-space preflight, transfer concurrency, all-or-nothing album
 orchestration, and safe resumable transfers remain future hardening—not hidden
 requirements of the current CLI.

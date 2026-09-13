@@ -255,7 +255,7 @@ handling; they do not use the ordinary pipeline above. See the
 | `--dry-run` | On commands that expose it, returns the resolved payload without contacting Telegram; it still requires the write and confirmation gates |
 | Audit log | NDJSON at `accounts/<name>/audit.log`; Telegram write-pipeline entries share a `request_id` across pre-call and final records, while local media/cache commands record final dispatch outcomes |
 
-Stable exit codes (0–13): `OK`, `GENERIC`, `BAD_ARGS`, `NOT_AUTHED`, `NOT_FOUND`, `FLOOD_WAIT`, `WRITE_DISALLOWED`, `NEEDS_CONFIRM`, `LOCAL_RATE_LIMIT`, `PREMIUM_REQUIRED`, `PERMISSION_DENIED`, `ARCHIVE_MISSING`, `ARCHIVE_CHANGED`, `ARCHIVE_EXTRA`.
+Stable exit codes (0–13): `OK`, `GENERIC`, `BAD_ARGS`, `NOT_AUTHED`, `NOT_FOUND`, `FLOOD_WAIT`, `WRITE_DISALLOWED`, `NEEDS_CONFIRM`, `LOCAL_RATE_LIMIT`, `PREMIUM_REQUIRED`, `PERMISSION_DENIED`, `ARCHIVE_MISSING`, `ARCHIVE_CHANGED`, `ARCHIVE_EXTRA`. An interrupted foreground command returns `CANCELED` with conventional shell exit status 130.
 
 For typed destructive operations, an omitted `--confirm` is
 `NEEDS_CONFIRM` (exit 7); a supplied value that does not match the resolved

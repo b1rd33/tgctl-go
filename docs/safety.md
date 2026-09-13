@@ -221,6 +221,7 @@ root's inherited ACL is the protection boundary instead.
 | 11 | ARCHIVE_MISSING | Local archive manifest references missing media |
 | 12 | ARCHIVE_CHANGED | Local archive media size or hash changed |
 | 13 | ARCHIVE_EXTRA | Local media root contains an unrecorded artifact |
+| 130 | CANCELED | The foreground command was interrupted by its caller |
 
 ## Handling FloodWait
 

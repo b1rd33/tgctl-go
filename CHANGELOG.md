@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.1 — 2026-09-13
+
+- Report interrupted commands as `CANCELED` with exit status 130. Preserve committed and unknown write classifications when cancellation occurs after a possible mutation.
+- Document cancellation handling for scripts and agents.
+
 ## v0.3.0 — 2026-09-12
 
 - Remove root-layout migration, old-cache schema upgrades and export fallbacks, and Telethon session import. Only current account state is supported. Unsupported caches fail without conversion.

@@ -162,6 +162,7 @@ The process exit code matches the envelope error code family:
 | 11 | ARCHIVE_MISSING |
 | 12 | ARCHIVE_CHANGED |
 | 13 | ARCHIVE_EXTRA |
+| 130 | CANCELED |
 
 Use both the exit code and `.error.code`. The numeric code is stable
 for shells; the string is better for logs and metrics.
