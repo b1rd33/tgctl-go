@@ -192,6 +192,9 @@ func TestRemoteHistoryUsesBoundedPageAndTypedCursor(t *testing.T) {
 	if len(result["messages"].([]MessageSummaryDTO)) != 2 {
 		t.Fatalf("messages = %#v", result["messages"])
 	}
+	if len(fc.RemoteHistoryReqs) != 1 || fc.RemoteHistoryReqs[0].ChatID != 1 || fc.RemoteHistoryReqs[0].Limit != 2 || fc.RemoteHistoryReqs[0].OffsetID != 0 {
+		t.Fatalf("history request = %#v", fc.RemoteHistoryReqs)
+	}
 	if _, err := store.DecodeRemoteCursor(result["next_cursor"].(string), store.RemoteCursor{Account: "other", Operation: "history", Chat: 1}); err == nil {
 		t.Fatal("cross-account cursor was accepted")
 	}
@@ -199,14 +202,26 @@ func TestRemoteHistoryUsesBoundedPageAndTypedCursor(t *testing.T) {
 
 func TestRemoteSearchUsesExplicitServerClient(t *testing.T) {
 	_, fc, dir := setupWriteEnv(t)
-	fc.Resolved = map[string]client.ResolvedPeer{"1": {ChatID: 1, Kind: "user", Title: "Saved"}}
+	fc.Resolved = map[string]client.ResolvedPeer{
+		"1": {ChatID: 1, Kind: "user", Title: "Saved"},
+		"8": {ChatID: 8, Kind: "user", Title: "Sender"},
+	}
+	fc.RemoteSearchPage = client.RemotePage{Messages: []client.BackfillMessage{{ChatID: 1, MessageID: 40, Date: "2026-05-02T00:00:00Z", Text: "term"}}, NextOffsetID: 40}
 	p := readPaths{account: "default", db: filepath.Join(dir, "telegram.sqlite"), session: filepath.Join(dir, "tg.session")}
 	cfg := CommandsConfig{ReadOnlyClientFactory: func(context.Context, string) (client.Client, error) { return fc, nil }}
-	_, err := RemoteSearchRunner(context.Background(), cfg, p, "1", "term", 10, "", "", "", "", "")
+	cursor := store.EncodeRemoteCursor(store.RemoteCursor{Account: "default", Operation: "search", Chat: 1, Query: "term", Sender: 8, Media: "photo-video", Since: "2026-05-01", Until: "2026-05-03", OffsetID: 42})
+	_, err := RemoteSearchRunner(context.Background(), cfg, p, "1", "term", 10, "8", "photo-video", "2026-05-01", "2026-05-03", cursor)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(fc.Calls) == 0 || fc.Calls[0] != "ResolveSelector" {
 		t.Fatalf("calls = %#v", fc.Calls)
+	}
+	if len(fc.RemoteSearchReqs) != 1 {
+		t.Fatalf("search requests = %#v", fc.RemoteSearchReqs)
+	}
+	req := fc.RemoteSearchReqs[0]
+	if req.ChatID != 1 || req.SenderID != 8 || req.Query != "term" || req.Filter != "photo-video" || req.OffsetID != 42 || req.Limit != 10 {
+		t.Fatalf("search request = %+v", req)
 	}
 }

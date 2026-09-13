@@ -7,17 +7,17 @@ import (
 	"testing"
 
 	"github.com/b1rd33/tgctl-go/internal/client"
+	"github.com/b1rd33/tgctl-go/internal/store"
 )
 
 func TestRepliesRunnerBindsCursorToRootAndChat(t *testing.T) {
-	cfg, fc, dir := setupWriteEnv(t)
+	cfg, fc, _ := setupWriteEnv(t)
 	fc.Resolved = map[string]client.ResolvedPeer{"1": {ChatID: 1, Kind: "supergroup", Title: "Forum"}}
 	fc.RepliesPage = client.RemotePage{Messages: []client.BackfillMessage{{ChatID: 1, MessageID: 30, Date: "2026-05-01T00:00:00Z", Text: "reply"}}, NextOffsetID: 30}
-	p := readPaths{account: "default", db: dir + "/telegram.sqlite", session: dir + "/tg.session"}
 	cfg.ReadOnlyClientFactory = func(context.Context, string) (client.Client, error) { return fc, nil }
 	root := NewRootCommand()
 	registerThreadReadCommands(root, cfg)
-	root.SetArgs([]string{"replies", "1", "7", "--json"})
+	root.SetArgs([]string{"replies", "1", "7", "--limit", "1", "--json"})
 	var out strings.Builder
 	root.SetOut(&out)
 	root.SetErr(&strings.Builder{})
@@ -32,7 +32,29 @@ func TestRepliesRunnerBindsCursorToRootAndChat(t *testing.T) {
 	if data["root_message_id"].(float64) != 7 || data["source"] != "telegram" {
 		t.Fatalf("data = %#v", data)
 	}
-	_ = p
+	if len(fc.RepliesReqs) != 1 || fc.RepliesReqs[0].ChatID != 1 || fc.RepliesReqs[0].RootID != 7 || fc.RepliesReqs[0].Limit != 1 || fc.RepliesReqs[0].OffsetID != 0 {
+		t.Fatalf("initial replies request = %#v", fc.RepliesReqs)
+	}
+	next := data["next_cursor"].(string)
+	out.Reset()
+	root.SetArgs([]string{"replies", "1", "7", "--limit", "1", "--cursor", next, "--json"})
+	if code := ExecuteRoot(root); code != 0 {
+		t.Fatalf("continuation code=%d output=%s", code, out.String())
+	}
+	if len(fc.RepliesReqs) != 2 || fc.RepliesReqs[1].OffsetID != 30 {
+		t.Fatalf("continuation replies request = %#v", fc.RepliesReqs)
+	}
+	for name, cursor := range map[string]string{
+		"wrong-root":    store.EncodeRemoteCursor(store.RemoteCursor{Account: "default", Operation: "replies", Chat: 1, Root: 8, OffsetID: 30}),
+		"wrong-chat":    store.EncodeRemoteCursor(store.RemoteCursor{Account: "default", Operation: "replies", Chat: 2, Root: 7, OffsetID: 30}),
+		"wrong-account": store.EncodeRemoteCursor(store.RemoteCursor{Account: "other", Operation: "replies", Chat: 1, Root: 7, OffsetID: 30}),
+	} {
+		out.Reset()
+		root.SetArgs([]string{"replies", "1", "7", "--cursor", cursor, "--json"})
+		if code := ExecuteRoot(root); code == 0 {
+			t.Fatalf("%s cursor unexpectedly accepted: %s", name, out.String())
+		}
+	}
 }
 
 func TestChatPermissionsReadUsesFakeAndMarksAdvisory(t *testing.T) {

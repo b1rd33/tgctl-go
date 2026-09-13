@@ -35,7 +35,7 @@ no private Telegram transcript is stored in this repository.
 | `delete-msg` | `internal/commands/destructive_test.go` delete confirmation and execution tests; `internal/client/destructive_rpc_test.go` peer/count tests | unverified | No live deletion |
 | `demote` | `internal/commands/admin_test.go:TestDemoteRequiresResolvedChatConfirmation` | unverified | Offline confirmation only |
 | `discover` | `internal/commands/localdb_test.go:TestDiscoverUpsertsChats` | unverified | Fake-backed cache write asserted |
-| `discussion-message` | `internal/commands/phase24_test.go` thread command coverage | unverified | Fake-backed response shape; no live linked discussion |
+| `discussion-message` | `internal/commands/phase24_test.go` thread command coverage; `internal/client/remote_read_test.go:TestRepliesAndDiscussionAdaptersPreservePeerRouting` | unverified | Fake/TL-backed response and peer routing; no live linked discussion |
 | `doctor` | account selection and doctor tests | unverified | Diagnostics asserted; no live report |
 | `download-album` | `internal/commands/media_album_download_test.go` dry-run, partial, overwrite, recovery tests | unverified | Fake-backed local/media behavior |
 | `download-media` | `internal/commands/media_download_test.go` gate, selector, artifact identity, recovery tests | unverified | Fake-backed local/media behavior |
@@ -62,8 +62,8 @@ no private Telegram transcript is stored in this repository.
 | `operations-list` | `internal/commands/recovery.go` plus write ledger tests | unverified | Durable outcome inspection covered through store/client tests |
 | `pin-msg` | `internal/commands/messages_write_test.go:TestPinUnpinInvokesClient` | unverified | No live pin |
 | `promote` | `internal/commands/admin_test.go:TestPromoteRequiresResolvedChatConfirmation` | unverified | Offline confirmation only |
-| `react` | `internal/commands/messages_write_test.go:TestReactRejectsEmptyEmoji` | unverified | Big animation/Premium semantics not yet covered |
-| `replies` | `internal/commands/phase24_test.go:TestRepliesRunnerBindsCursorToRootAndChat` | unverified | Fake-backed bounded page; no live thread fixture |
+| `react` | `internal/commands/messages_write_test.go:TestReactRejectsEmptyEmoji`, `TestReactBigFlagDoesNotClaimPremiumEligibility` | unverified | Offline animation/Premium-label semantics; no live reaction |
+| `replies` | `internal/commands/phase24_test.go:TestRepliesRunnerBindsCursorToRootAndChat`; `internal/client/remote_read_test.go:TestRepliesAndDiscussionAdaptersPreservePeerRouting` | unverified | Cursor binding/continuation and fake/TL request routing; no live thread fixture |
 | `resolve` | `internal/commands/phase24_test.go:TestResolveAndAccountLimitsExposeExplicitSources` | unverified | Fake-backed typed identity; no live username evidence |
 | `search` | `internal/commands/messages_read_test.go` empty/case tests; remote runner tests | unverified | Defaults to cache; Telegram source is bounded and unverified live |
 | `send` | `internal/commands/messages_write_test.go` gate, dry-run, fuzzy, idempotency, topic tests | unverified | No live send |

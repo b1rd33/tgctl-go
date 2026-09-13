@@ -582,7 +582,7 @@ func reactCommand(cfg CommandsConfig) *cobra.Command {
 			)
 		},
 	}
-	cmd.Flags().Bool("big", false, "Send a big reaction (Premium)")
+	cmd.Flags().Bool("big", false, "Send an animated big reaction")
 	addWriteFlags(cmd)
 	return cmd
 }

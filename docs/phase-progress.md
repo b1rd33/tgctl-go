@@ -7,10 +7,10 @@ acceptance.
 
 | Phase | Status | Evidence | Commit | Remaining gate |
 | --- | --- | --- | --- | --- |
-| 1. Baseline and coverage | complete (offline) | Baseline v0.3.1 pinned; command matrix and docs checks established | `cefcfa3` | Live mutation matrix remains intentionally unrun |
-| 2. Account identity and limits | complete (offline) | `self`/`me`, account-bound resolution, Premium metadata, app-config limits, stable setup path | `81beb22` | Disposable live account read and Premium/non-Premium comparison |
-| 3. Explicit server reads | complete (offline) | Telegram source for history/search/get, typed bounded cursors, filters, deleted placeholders | `81beb22` | Redacted live read fixtures and pagination verification |
-| 4. Threads and permissions | complete (offline) | Replies, linked discussion lookup without joining, topic-safe peer handling, advisory permissions | `81beb22` | Disposable forum/admin fixture and live rights comparison |
+| 1. Establish reliable coverage | complete (offline evidence) | Baseline v0.3.1 pinned; one-row current command matrix and repository checks established | `cefcfa3` | Live command matrix and fixture-dependent assertions remain unrun |
+| 2. Make account and target selection explicit | implemented (offline evidence) | `self`/`me`, account-bound resolution, known/unknown Premium metadata, app-config limits, stable setup path | `81beb22` | Disposable live account read, Premium comparison, and full edge-case matrix |
+| 3. Fetch messages directly from Telegram | implemented (offline evidence) | Telegram source for history/search/get, typed bounded cursors, filters, deleted placeholders, adapter propagation tests | `81beb22` | Redacted live reads, full/empty/truncated pagination, and failure-path matrix |
+| 4. Retrieve conversation context correctly | partial (offline evidence) | Replies, linked discussion lookup without joining, distinct discussion peers, advisory permissions | `81beb22` | Explicit topic-scoped history/identification, nested/deleted-root coverage, and disposable forum/admin fixture |
 | Documentation and release hygiene | complete | Generated command docs, skill reference, coverage matrix, public-hygiene checks | `e10f990` | None for this implementation handoff |
 
 No Telegram mutation was run, and no live acceptance gate is claimed as

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/b1rd33/tgctl-go/internal/client"
@@ -207,6 +208,13 @@ func TestReactRejectsEmptyEmoji(t *testing.T) {
 	out, code := runRoot(t, cfg, "react", "1", "10", "", "--allow-write", "--json")
 	if code != 2 {
 		t.Fatalf("code=%d, want 2\nout: %s", code, out)
+	}
+}
+
+func TestReactBigFlagDoesNotClaimPremiumEligibility(t *testing.T) {
+	flag := reactCommand(CommandsConfig{}).Flags().Lookup("big")
+	if flag == nil || strings.Contains(strings.ToLower(flag.Usage), "premium") {
+		t.Fatalf("big flag usage = %#v", flag)
 	}
 }
 

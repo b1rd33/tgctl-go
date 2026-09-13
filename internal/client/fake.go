@@ -21,16 +21,23 @@ type FakeClient struct {
 	LimitsErr         error
 	RemoteHistoryPage RemotePage
 	RemoteHistoryErr  error
+	RemoteHistoryReqs []RemoteHistoryReq
 	RemoteSearchPage  RemotePage
 	RemoteSearchErr   error
+	RemoteSearchReqs  []RemoteSearchReq
 	RemoteMessage     *BackfillMessage
 	RemoteGetErr      error
+	RemoteGetChatIDs  []int64
+	RemoteGetMsgIDs   []int64
 	Permissions       PermissionInfo
 	PermissionsErr    error
 	RepliesPage       RemotePage
 	RepliesErr        error
+	RepliesReqs       []RepliesReq
 	Discussion        DiscussionInfo
 	DiscussionErr     error
+	DiscussionChatIDs []int64
+	DiscussionMsgIDs  []int64
 	NextErr           error
 	Closed            bool
 	Calls             []string
@@ -144,30 +151,34 @@ func (f *FakeClient) GetAccountLimits(_ context.Context) (AccountLimits, error) 
 	return f.Limits, nil
 }
 
-func (f *FakeClient) RemoteHistory(_ context.Context, _ RemoteHistoryReq) (RemotePage, error) {
+func (f *FakeClient) RemoteHistory(_ context.Context, req RemoteHistoryReq) (RemotePage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err := f.record("RemoteHistory"); err != nil {
 		return RemotePage{}, err
 	}
+	f.RemoteHistoryReqs = append(f.RemoteHistoryReqs, req)
 	return f.RemoteHistoryPage, f.RemoteHistoryErr
 }
 
-func (f *FakeClient) RemoteSearch(_ context.Context, _ RemoteSearchReq) (RemotePage, error) {
+func (f *FakeClient) RemoteSearch(_ context.Context, req RemoteSearchReq) (RemotePage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err := f.record("RemoteSearch"); err != nil {
 		return RemotePage{}, err
 	}
+	f.RemoteSearchReqs = append(f.RemoteSearchReqs, req)
 	return f.RemoteSearchPage, f.RemoteSearchErr
 }
 
-func (f *FakeClient) RemoteGetMessage(_ context.Context, _, _ int64) (*BackfillMessage, error) {
+func (f *FakeClient) RemoteGetMessage(_ context.Context, chatID, messageID int64) (*BackfillMessage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err := f.record("RemoteGetMessage"); err != nil {
 		return nil, err
 	}
+	f.RemoteGetChatIDs = append(f.RemoteGetChatIDs, chatID)
+	f.RemoteGetMsgIDs = append(f.RemoteGetMsgIDs, messageID)
 	return f.RemoteMessage, f.RemoteGetErr
 }
 
@@ -183,21 +194,24 @@ func (f *FakeClient) GetChatPermissions(_ context.Context, _, _ int64) (Permissi
 	return f.Permissions, nil
 }
 
-func (f *FakeClient) GetReplies(_ context.Context, _ RepliesReq) (RemotePage, error) {
+func (f *FakeClient) GetReplies(_ context.Context, req RepliesReq) (RemotePage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err := f.record("GetReplies"); err != nil {
 		return RemotePage{}, err
 	}
+	f.RepliesReqs = append(f.RepliesReqs, req)
 	return f.RepliesPage, f.RepliesErr
 }
 
-func (f *FakeClient) GetDiscussionMessage(_ context.Context, _, _ int64) (DiscussionInfo, error) {
+func (f *FakeClient) GetDiscussionMessage(_ context.Context, chatID, messageID int64) (DiscussionInfo, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err := f.record("GetDiscussionMessage"); err != nil {
 		return DiscussionInfo{}, err
 	}
+	f.DiscussionChatIDs = append(f.DiscussionChatIDs, chatID)
+	f.DiscussionMsgIDs = append(f.DiscussionMsgIDs, messageID)
 	return f.Discussion, f.DiscussionErr
 }
 

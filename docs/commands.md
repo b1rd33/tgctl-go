@@ -1556,7 +1556,7 @@ tg react 123456789 1 "👍" --allow-write --json
 | Flag | Description |
 |---|---|
 | `--allow-write` | Required for any Telegram-side write |
-| `--big` | Send a big reaction (Premium) |
+| `--big` | Send an animated big reaction |
 | `--confirm string` | Typed confirm against the resolved id |
 | `--dry-run` | Print payload preview without contacting Telegram |
 | `--fuzzy` | Allow title-based selectors for write commands |
