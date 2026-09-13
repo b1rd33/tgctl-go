@@ -24,6 +24,7 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/media"
 	"github.com/b1rd33/tgctl-go/internal/output"
 	"github.com/b1rd33/tgctl-go/internal/peerid"
+	"github.com/b1rd33/tgctl-go/internal/resolve"
 	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
 )
@@ -663,6 +664,33 @@ func (g *GotdClient) GetReplies(ctx context.Context, req RepliesReq) (RemotePage
 		return RemotePage{}, mapRPCErr(err)
 	}
 	return remotePageFromResp(req.ChatID, resp), nil
+}
+
+func (g *GotdClient) TopicHistory(ctx context.Context, req TopicHistoryReq) (RemotePage, error) {
+	if req.Limit < 1 || req.Limit > 100 {
+		return RemotePage{}, safety.NewBadArgs("topic history limit must be between 1 and 100")
+	}
+	if err := validatePositiveTelegramInt32(req.TopicID, "topic-id"); err != nil {
+		return RemotePage{}, err
+	}
+	chats, err := g.GetChatsInfo(ctx, []int64{req.ChatID})
+	if err != nil {
+		return RemotePage{}, err
+	}
+	if len(chats) != 1 || chats[0].Type != "supergroup" || !chats[0].Forum {
+		return RemotePage{}, safety.NewBadArgs("topic history target must be a forum supergroup")
+	}
+	root, err := g.RemoteGetMessage(ctx, req.ChatID, req.TopicID)
+	if err != nil {
+		return RemotePage{}, err
+	}
+	if root == nil || root.Deleted {
+		return RemotePage{}, resolve.NewNotFound("topic %d root message was not found", req.TopicID)
+	}
+	if root.ChatID != 0 && root.ChatID != req.ChatID {
+		return RemotePage{}, safety.NewBadArgs("topic root belongs to a different peer")
+	}
+	return g.GetReplies(ctx, RepliesReq{ChatID: req.ChatID, RootID: req.TopicID, OffsetID: req.OffsetID, Limit: req.Limit})
 }
 
 func (g *GotdClient) GetDiscussionMessage(ctx context.Context, chatID, messageID int64) (DiscussionInfo, error) {

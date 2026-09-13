@@ -61,6 +61,13 @@ type PermissionInfo struct {
 	Advisory     bool                 `json:"advisory"`
 }
 
+type TopicHistoryReq struct {
+	ChatID   int64
+	TopicID  int64
+	OffsetID int64
+	Limit    int
+}
+
 // SendMessageReq mirrors the input to messages.SendMessage.
 type SendMessageReq struct {
 	ChatID    int64
@@ -301,6 +308,7 @@ type ChatInfo struct {
 	FolderID            int                  `json:"folder_id"`
 	TopMessageID        int                  `json:"top_message_id"`
 	Creator             bool                 `json:"creator,omitempty"`
+	Forum               bool                 `json:"forum,omitempty"`
 	DefaultBannedRights *tg.ChatBannedRights `json:"default_banned_rights,omitempty"`
 	AdminRights         *tg.ChatAdminRights  `json:"admin_rights,omitempty"`
 	ID                  int64                `json:"chat_id"`
@@ -545,6 +553,7 @@ type Client interface {
 	RemoteGetMessage(ctx context.Context, chatID, messageID int64) (*BackfillMessage, error)
 	GetChatPermissions(ctx context.Context, chatID, userID int64) (PermissionInfo, error)
 	GetReplies(ctx context.Context, req RepliesReq) (RemotePage, error)
+	TopicHistory(ctx context.Context, req TopicHistoryReq) (RemotePage, error)
 	GetDiscussionMessage(ctx context.Context, chatID, messageID int64) (DiscussionInfo, error)
 	SendMessage(ctx context.Context, req SendMessageReq) (SendMessageResp, error)
 	UploadFile(ctx context.Context, req UploadFileReq) (UploadFileResp, error)

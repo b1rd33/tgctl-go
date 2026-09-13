@@ -1,6 +1,6 @@
 # Commands
 
-`tg --help` shows 81 commands. This page is generated from Cobra help output.
+`tg --help` shows 82 commands. This page is generated from Cobra help output.
 
 Every command supports the global flags shown by `tg --help`: `--account`, `--full`, `--json`, `--human`, `--lock-wait`, `--read-only`, and `--version` where applicable.
 
@@ -76,6 +76,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg terminate-session`](#tg-terminate-session) | Terminate one of your authorized Telegram sessions |
 | [`tg topic-create`](#tg-topic-create) | Create a forum topic |
 | [`tg topic-edit`](#tg-topic-edit) | Edit a forum topic |
+| [`tg topic-history`](#tg-topic-history) | Retrieve a bounded server page from a forum topic |
 | [`tg topic-pin`](#tg-topic-pin) | Pin a forum topic |
 | [`tg topic-unpin`](#tg-topic-unpin) | Unpin a forum topic |
 | [`tg topics-list`](#tg-topics-list) | List forum topics |
@@ -1971,6 +1972,32 @@ tg topic-edit <forum-chat-id> 1 --title "Renamed" --allow-write --json
 | `--idempotency-key string` | Per-account replay-safe key |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 | `--title string` | New topic title |
+
+## `tg topic-history`
+
+Retrieve a bounded server page from a forum topic
+
+**Use**
+
+```text
+tg topic-history <chat> <topic-id> [flags]
+```
+
+**Example**
+
+```bash
+tg topic-history <chat> <topic-id> [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--cursor string` | Continue from next_cursor using the same topic and chat |
+| `-h, --help` | help for topic-history |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--limit int` | Maximum topic messages to return (1-100) (default 50) |
 
 ## `tg topic-pin`
 

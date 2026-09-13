@@ -2,9 +2,11 @@ package client
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/b1rd33/tgctl-go/internal/peerid"
+	"github.com/b1rd33/tgctl-go/internal/resolve"
 	"github.com/b1rd33/tgctl-go/internal/store"
 	"github.com/gotd/td/bin"
 	"github.com/gotd/td/tg"
@@ -158,5 +160,52 @@ func TestRepliesAndDiscussionAdaptersPreservePeerRouting(t *testing.T) {
 	}
 	if discussionCalls != 1 || info.DiscussionChatID != peerid.Channel(9) || len(info.Messages) != 2 || info.Messages[0].ChatID != peerid.Channel(7) || info.Messages[1].ChatID != peerid.Channel(9) {
 		t.Fatalf("discussion info = %+v", info)
+	}
+}
+
+func TestTopicHistoryAdapterValidatesForumRootAndRoutesReplies(t *testing.T) {
+	newClient := func(forum bool, root tg.MessageClass) *GotdClient {
+		db := updateTestDB(t)
+		if err := store.UpsertEntity(db, 7, store.EntityChannel, 70); err != nil {
+			t.Fatal(err)
+		}
+		return &GotdClient{db: db, resolvedPeers: map[int64]tg.InputPeerClass{}, api: tg.NewClient(invokeFunc(func(_ context.Context, in bin.Encoder, out bin.Decoder) error {
+			switch req := in.(type) {
+			case *tg.MessagesGetPeerDialogsRequest:
+				out.(*tg.MessagesPeerDialogs).Chats = []tg.ChatClass{&tg.Channel{ID: 7, AccessHash: 70, Megagroup: true, Forum: forum, Title: "Forum"}}
+				out.(*tg.MessagesPeerDialogs).Dialogs = []tg.DialogClass{&tg.Dialog{Peer: &tg.PeerChannel{ChannelID: 7}}}
+			case *tg.ChannelsGetMessagesRequest:
+				peer, ok := req.Channel.(*tg.InputChannel)
+				if !ok || peer.ChannelID != 7 || peer.AccessHash != 70 || len(req.ID) != 1 {
+					t.Fatalf("topic root request = %+v", req)
+				}
+				out.(*tg.MessagesMessagesBox).Messages = &tg.MessagesChannelMessages{Messages: []tg.MessageClass{root}}
+			case *tg.MessagesGetRepliesRequest:
+				peer, ok := req.Peer.(*tg.InputPeerChannel)
+				if !ok || peer.ChannelID != 7 || peer.AccessHash != 70 || req.MsgID != 11 || req.OffsetID != 5 || req.Limit != 3 {
+					t.Fatalf("topic replies request = %+v", req)
+				}
+				out.(*tg.MessagesMessagesBox).Messages = &tg.MessagesChannelMessages{Messages: []tg.MessageClass{
+					&tg.Message{ID: 10, PeerID: &tg.PeerChannel{ChannelID: 7}, Date: 100, Message: "topic reply"},
+				}}
+			default:
+				t.Fatalf("unexpected topic request %T", in)
+			}
+			return nil
+		}))}
+	}
+
+	page, err := newClient(true, &tg.Message{ID: 11, PeerID: &tg.PeerChannel{ChannelID: 7}, Date: 99, Message: "topic root"}).TopicHistory(context.Background(), TopicHistoryReq{ChatID: peerid.Channel(7), TopicID: 11, OffsetID: 5, Limit: 3})
+	if err != nil || len(page.Messages) != 1 || page.Messages[0].ChatID != peerid.Channel(7) {
+		t.Fatalf("topic history page = %+v err=%v", page, err)
+	}
+
+	if _, err := newClient(false, &tg.Message{ID: 11}).TopicHistory(context.Background(), TopicHistoryReq{ChatID: peerid.Channel(7), TopicID: 11, Limit: 3}); err == nil {
+		t.Fatal("non-forum peer was accepted")
+	}
+	_, err = newClient(true, &tg.MessageEmpty{ID: 11}).TopicHistory(context.Background(), TopicHistoryReq{ChatID: peerid.Channel(7), TopicID: 11, Limit: 3})
+	var notFound *resolve.NotFound
+	if !errors.As(err, &notFound) {
+		t.Fatalf("deleted topic root error = %T %v", err, err)
 	}
 }

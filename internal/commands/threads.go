@@ -13,6 +13,7 @@ import (
 
 func registerThreadReadCommands(root *cobra.Command, cfg CommandsConfig) {
 	root.AddCommand(repliesCommand(cfg))
+	root.AddCommand(topicHistoryCommand(cfg))
 	root.AddCommand(discussionMessageCommand(cfg))
 }
 
@@ -57,6 +58,51 @@ func repliesCommand(cfg CommandsConfig) *cobra.Command {
 	}
 	cmd.Flags().Int("limit", 50, "Maximum replies to return (1-100)")
 	cmd.Flags().String("cursor", "", "Continue from next_cursor using the same root and chat")
+	AddOutputFlags(cmd)
+	return cmd
+}
+
+func topicHistoryCommand(cfg CommandsConfig) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:          "topic-history <chat> <topic-id>",
+		Short:        "Retrieve a bounded server page from a forum topic",
+		Args:         cobra.ExactArgs(2),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			topicID, err := parsePositiveInt32Decimal(args[1], "topic-id")
+			if err != nil {
+				return emitDispatchedFailure(cmd, "topic-history", err)
+			}
+			limit, _ := cmd.Flags().GetInt("limit")
+			if limit < 1 || limit > 100 {
+				return emitDispatchedFailure(cmd, "topic-history", fmt.Errorf("topic history limit must be between 1 and 100"))
+			}
+			cursor, _ := cmd.Flags().GetString("cursor")
+			return runThreadRead(cmd, cfg, "topic-history", args[0], map[string]any{"chat": args[0], "topic_id": topicID, "limit": limit}, func(ctx context.Context, c client.Client, p readPaths, peer client.ResolvedPeer) (any, error) {
+				expected := store.RemoteCursor{Account: p.account, Operation: "topic-history", Chat: peer.ChatID, Topic: int64(topicID)}
+				decoded, err := remoteCursor(cursor, expected)
+				if err != nil {
+					return nil, err
+				}
+				page, err := c.TopicHistory(ctx, client.TopicHistoryReq{ChatID: peer.ChatID, TopicID: int64(topicID), OffsetID: decoded.OffsetID, Limit: limit})
+				if err != nil {
+					return nil, err
+				}
+				rows, nextID := remoteRows(page, decoded.OffsetID, limit)
+				var next string
+				if nextID != 0 {
+					next = store.EncodeRemoteCursor(store.RemoteCursor{Account: p.account, Operation: "topic-history", Chat: peer.ChatID, Topic: int64(topicID), OffsetID: nextID})
+				}
+				messages := make([]MessageSummaryDTO, len(rows))
+				for i, row := range rows {
+					messages[i] = remoteSummaryDTO(row)
+				}
+				return map[string]any{"source": "telegram", "coverage": "one bounded server page; not a frozen snapshot", "chat": ChatRef{ChatID: peer.ChatID, Title: peer.Title}, "topic_id": topicID, "topic_root_message_id": topicID, "next_cursor": next, "messages": messages}, nil
+			})
+		},
+	}
+	cmd.Flags().Int("limit", 50, "Maximum topic messages to return (1-100)")
+	cmd.Flags().String("cursor", "", "Continue from next_cursor using the same topic and chat")
 	AddOutputFlags(cmd)
 	return cmd
 }

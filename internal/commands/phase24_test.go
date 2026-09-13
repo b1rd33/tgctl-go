@@ -57,6 +57,54 @@ func TestRepliesRunnerBindsCursorToRootAndChat(t *testing.T) {
 	}
 }
 
+func TestTopicHistoryRunnerBindsCursorToTopicAndChat(t *testing.T) {
+	cfg, fc, _ := setupWriteEnv(t)
+	fc.Resolved = map[string]client.ResolvedPeer{"1": {ChatID: 1, Kind: "supergroup", Title: "Forum"}}
+	fc.TopicHistoryPage = client.RemotePage{Messages: []client.BackfillMessage{{ChatID: 1, MessageID: 30, Date: "2026-05-01T00:00:00Z", Text: "topic reply"}}, NextOffsetID: 30}
+	cfg.ReadOnlyClientFactory = func(context.Context, string) (client.Client, error) { return fc, nil }
+	root := NewRootCommand()
+	registerThreadReadCommands(root, cfg)
+	root.SetArgs([]string{"topic-history", "1", "7", "--limit", "1", "--json"})
+	var out strings.Builder
+	root.SetOut(&out)
+	root.SetErr(&strings.Builder{})
+	if code := ExecuteRoot(root); code != 0 {
+		t.Fatalf("code=%d output=%s", code, out.String())
+	}
+	var envelope map[string]any
+	if err := json.Unmarshal([]byte(out.String()), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	data := envelope["data"].(map[string]any)
+	if data["topic_id"].(float64) != 7 || data["topic_root_message_id"].(float64) != 7 {
+		t.Fatalf("topic identity = %#v", data)
+	}
+	if len(fc.TopicHistoryReqs) != 1 || fc.TopicHistoryReqs[0].ChatID != 1 || fc.TopicHistoryReqs[0].TopicID != 7 || fc.TopicHistoryReqs[0].OffsetID != 0 || fc.TopicHistoryReqs[0].Limit != 1 {
+		t.Fatalf("initial topic request = %#v", fc.TopicHistoryReqs)
+	}
+	next := data["next_cursor"].(string)
+	out.Reset()
+	root.SetArgs([]string{"topic-history", "1", "7", "--limit", "1", "--cursor", next, "--json"})
+	if code := ExecuteRoot(root); code != 0 {
+		t.Fatalf("continuation code=%d output=%s", code, out.String())
+	}
+	if len(fc.TopicHistoryReqs) != 2 || fc.TopicHistoryReqs[1].OffsetID != 30 {
+		t.Fatalf("continuation topic request = %#v", fc.TopicHistoryReqs)
+	}
+	for name, cursor := range map[string]string{
+		"wrong-topic":   store.EncodeRemoteCursor(store.RemoteCursor{Account: "default", Operation: "topic-history", Chat: 1, Topic: 8, OffsetID: 30}),
+		"wrong-root":    store.EncodeRemoteCursor(store.RemoteCursor{Account: "default", Operation: "topic-history", Chat: 1, Root: 7, Topic: 7, OffsetID: 30}),
+		"wrong-chat":    store.EncodeRemoteCursor(store.RemoteCursor{Account: "default", Operation: "topic-history", Chat: 2, Topic: 7, OffsetID: 30}),
+		"wrong-account": store.EncodeRemoteCursor(store.RemoteCursor{Account: "other", Operation: "topic-history", Chat: 1, Topic: 7, OffsetID: 30}),
+	} {
+		out.Reset()
+		root.SetArgs([]string{"topic-history", "1", "7", "--cursor", cursor, "--json"})
+		if code := ExecuteRoot(root); code == 0 {
+			t.Fatalf("%s cursor unexpectedly accepted: %s", name, out.String())
+		}
+	}
+}
+
 func TestChatPermissionsReadUsesFakeAndMarksAdvisory(t *testing.T) {
 	cfg, fc, _ := setupWriteEnv(t)
 	fc.Resolved = map[string]client.ResolvedPeer{"1": {ChatID: 1, Kind: "supergroup", Title: "Forum"}}

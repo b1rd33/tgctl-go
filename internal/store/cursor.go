@@ -22,6 +22,7 @@ type RemoteCursor struct {
 	Operation string `json:"o"`
 	Chat      int64  `json:"c"`
 	Root      int64  `json:"t,omitempty"`
+	Topic     int64  `json:"p,omitempty"`
 	Query     string `json:"q,omitempty"`
 	Sender    int64  `json:"s,omitempty"`
 	Media     string `json:"m,omitempty"`
@@ -53,7 +54,7 @@ func DecodeRemoteCursor(raw string, expected RemoteCursor) (RemoteCursor, error)
 		return RemoteCursor{}, fmt.Errorf("invalid remote message cursor")
 	}
 	if got.Account != expected.Account || got.Operation != expected.Operation || got.Chat != expected.Chat ||
-		got.Root != expected.Root || got.Query != expected.Query || got.Sender != expected.Sender || got.Media != expected.Media ||
+		got.Root != expected.Root || got.Topic != expected.Topic || got.Query != expected.Query || got.Sender != expected.Sender || got.Media != expected.Media ||
 		got.Since != expected.Since || got.Until != expected.Until || got.Reverse != expected.Reverse || got.OffsetID <= 0 {
 		return RemoteCursor{}, fmt.Errorf("remote cursor does not match account, chat, filters, or order")
 	}

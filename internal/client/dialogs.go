@@ -23,7 +23,7 @@ func dialogEntityInfo(users []tg.UserClass, chats []tg.ChatClass) map[int64]Chat
 			if v.Megagroup {
 				kind = "supergroup"
 			}
-			out[peerid.Channel(v.ID)] = ChatInfo{ID: peerid.Channel(v.ID), Type: kind, Title: v.Title, Username: v.Username, Source: "telegram", Creator: v.Creator, DefaultBannedRights: &v.DefaultBannedRights, AdminRights: &v.AdminRights}
+			out[peerid.Channel(v.ID)] = ChatInfo{ID: peerid.Channel(v.ID), Type: kind, Title: v.Title, Username: v.Username, Source: "telegram", Creator: v.Creator, Forum: v.Forum, DefaultBannedRights: &v.DefaultBannedRights, AdminRights: &v.AdminRights}
 		case *tg.Chat:
 			out[peerid.Chat(v.ID)] = ChatInfo{ID: peerid.Chat(v.ID), Type: "group", Title: v.Title, Source: "telegram", Creator: v.Creator, DefaultBannedRights: &v.DefaultBannedRights, AdminRights: &v.AdminRights}
 		}

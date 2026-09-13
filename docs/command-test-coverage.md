@@ -77,6 +77,7 @@ no private Telegram transcript is stored in this repository.
 | `terminate-session` | `internal/commands/destructive_test.go:TestTerminateSessionTypedConfirm` | unverified | No live session revocation |
 | `topic-create` | `internal/commands/topics_folders_test.go:TestTopicCreateCallsClientAndReplaysIdempotency` | unverified | No live forum fixture |
 | `topic-edit` | `internal/commands/topics_folders_test.go:TestTopicEditRequiresMutation` | unverified | No live forum fixture |
+| `topic-history` | `internal/commands/phase24_test.go:TestTopicHistoryRunnerBindsCursorToTopicAndChat`; `internal/client/remote_read_test.go:TestTopicHistoryAdapterValidatesForumRootAndRoutesReplies` | unverified | Topic/root-bound cursor, forum/root validation, deleted-root and TL routing coverage; no live forum fixture |
 | `topic-pin` | topic command tests | unverified | No live forum fixture |
 | `topic-unpin` | topic command tests | unverified | No live forum fixture |
 | `topics-list` | topic command tests | unverified | No live forum fixture |

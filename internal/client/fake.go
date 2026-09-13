@@ -34,6 +34,9 @@ type FakeClient struct {
 	RepliesPage       RemotePage
 	RepliesErr        error
 	RepliesReqs       []RepliesReq
+	TopicHistoryPage  RemotePage
+	TopicHistoryErr   error
+	TopicHistoryReqs  []TopicHistoryReq
 	Discussion        DiscussionInfo
 	DiscussionErr     error
 	DiscussionChatIDs []int64
@@ -202,6 +205,16 @@ func (f *FakeClient) GetReplies(_ context.Context, req RepliesReq) (RemotePage, 
 	}
 	f.RepliesReqs = append(f.RepliesReqs, req)
 	return f.RepliesPage, f.RepliesErr
+}
+
+func (f *FakeClient) TopicHistory(_ context.Context, req TopicHistoryReq) (RemotePage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.record("TopicHistory"); err != nil {
+		return RemotePage{}, err
+	}
+	f.TopicHistoryReqs = append(f.TopicHistoryReqs, req)
+	return f.TopicHistoryPage, f.TopicHistoryErr
 }
 
 func (f *FakeClient) GetDiscussionMessage(_ context.Context, chatID, messageID int64) (DiscussionInfo, error) {

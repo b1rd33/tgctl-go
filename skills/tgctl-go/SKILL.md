@@ -37,7 +37,7 @@ the same Cobra help used to build `docs/commands.md`.
 - **Discovery, cache, and reads:** `backfill`, `backfill-entities`,
   `chats-info`, `chat-members`, `chat-pinned-list`, `contacts`, `discover`,
   `doctor`, `discussion-message`, `get-msg`, `list-msgs`, `replies`, `resolve`,
-  `search`, `show`, `stats`, `sync-contacts`, `topics-list`, `unread`.
+  `search`, `show`, `stats`, `sync-contacts`, `topic-history`, `topics-list`, `unread`.
 - **Messages:** `delete-msg`, `edit-msg`, `forward`, `mark-read`, `pin-msg`,
   `react`, `send`, `send-by-username`, `unpin-msg`.
 - **Media:** `download-album`, `download-media`, `upload-album`,
@@ -106,10 +106,13 @@ stdout defaults to JSON; use `--human` only for a person at a terminal.
   `--source telegram` for bounded server reads. Telegram reads do not mark
   messages read or persist retrieved history; their opaque cursors are bound
   to account, peer, operation, filters, and continuation offset.
-- **`replies` and `discussion-message`** retrieve bounded server context while
-  preserving original and linked discussion peer IDs. They never join a
-  discussion automatically. `chat-permissions` is advisory and may become
-  stale before a subsequent mutation.
+- **`replies`, `topic-history`, and `discussion-message`** retrieve bounded
+  server context while preserving topic/root identity and original/linked
+  discussion peer IDs. `topic-history` validates a forum supergroup and an
+  existing topic root before using `messages.getReplies`; it never invents
+  results for missing/deleted roots or non-forum peers. These commands never
+  join a discussion automatically. `chat-permissions` is advisory and may
+  become stale before a subsequent mutation.
 - **`account-limits`** reads authenticated Premium capability plus app-config
   limits. Unknown Premium or missing limits remain explicitly unknown; the
   reported upload cap is not a replacement for the operator's local cap.
