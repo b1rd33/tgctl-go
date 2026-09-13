@@ -1,0 +1,971 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Telegram CLI for Go — account operations in a single static binary">
+      
+      
+      
+        <link rel="canonical" href="https://b1rd33.github.io/tgctl-go/next-release-plan/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Execution plan after v0.3.1 - tgctl-go</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#execution-plan-after-v031" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="tgctl-go" class="md-header__button md-logo" aria-label="tgctl-go" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            tgctl-go
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Execution plan after v0.3.1
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/b1rd33/tgctl-go" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    b1rd33/tgctl-go
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="tgctl-go" class="md-nav__button md-logo" aria-label="tgctl-go" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    tgctl-go
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/b1rd33/tgctl-go" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    b1rd33/tgctl-go
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Library use
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../safety/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Safety model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reliability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reliability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reliability-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Capability roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multi-account/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-account
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-establish-reliable-coverage-before-adding-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Establish reliable coverage before adding features
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-make-account-and-target-selection-explicit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Make account and target selection explicit
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-fetch-messages-directly-from-telegram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Fetch messages directly from Telegram
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-retrieve-conversation-context-correctly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Retrieve conversation context correctly
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-add-everyday-account-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Add everyday account management
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-optional-premium-and-convenience-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Optional Premium and convenience features
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#release-and-completion-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Release and completion rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evidence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-handoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation handoff
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implementation handoff">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#concrete-design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Concrete design decisions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#work-sequence-and-evidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Work sequence and evidence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#live-test-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Live-test boundaries
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="execution-plan-after-v031">Execution plan after v0.3.1<a class="headerlink" href="#execution-plan-after-v031" title="Permanent link">&para;</a></h1>
+<p>Status: proposed, not implementation approval. Baseline: v0.3.1, commit 8c42d8b. Version targets below are tentative and depend on acceptance gates. No legacy migrations, compatibility aliases, or feature-parity rewrite.</p>
+<h2 id="1-establish-reliable-coverage-before-adding-features">1. Establish reliable coverage before adding features<a class="headerlink" href="#1-establish-reliable-coverage-before-adding-features" title="Permanent link">&para;</a></h2>
+<p>Priority A. Estimated complexity: medium. Deliverable: one row per current Cobra command, with separate columns for offline tests, live execution, behavioral assertions, tested binary/commit, cleanup verification, and remaining limitations. Include relevant flag combinations and failure paths; merely opening help or receiving exit 0 does not prove correctness. Every row must be passed, failed, unsupported in the chosen fixture, or not tested. Existing claims from the other task must be checked against actual evidence.</p>
+<p>Use temporary databases and fake/TL invokers for destructive failures, account removal, session revocation, moderation, quota exhaustion and ambiguous writes. Keep raw private results outside the repository; publish redacted evidence only. Read-based smoke tests and controlled Saved Messages operations are distinct coverage categories. Do not infer new live-write authorization from this plan.</p>
+<p>Required checks:
+- Text: create/reply/edit/forward/reaction/delete, confirmed resulting state, stable idempotent replay, changed-request rejection, and cleanup of test-created messages only.
+- Media: valid photo, document, video and voice fixtures; photo/video, audio and document albums; order/caption/grouping, downloaded bytes or appropriate media validation, cancellation and partial failure. No multi-gigabyte live transfers merely to test boundary arithmetic.
+- History: pagination overlaps/timestamp ties, empty pages, deleted roots, edit freshness, absent cache coverage, account isolation and unread/read-marker behavior.
+- Updates: controlled incoming event, persisted outbox acknowledgment, restart replay, simulated network interruption and gap recovery, failed persistence, SIGINT and released ownership. Inject dangerous faults offline. Do not weaken exclusive session ownership to generate events; a user action from an official client can provide a controlled event.
+- Local operations: consistent backup with WAL, restore into empty isolated state, restore rejection for occupied destinations, archives/manifests and missing/changed/extra media.
+- Safety: zero-network dry run, write/confirmation gates, secret-free output, invalid IDs, denied peers, server waits and committed/unknown outcomes.</p>
+<p>Live moderation/topic tests require a disposable forum supergroup and suitable explicitly authorized roles; some denial cases require a second account. Provisioning or changing that group is a separate explicit action. Temporary folders can contain only test targets and must preserve unrelated folder state. Existing accounts/sessions are never sacrificed for a test.</p>
+<p>Gate: no unresolved observed correctness failures; the complete matrix truthfully identifies remaining fixture-dependent gaps. Release a patch only if repairs result. Lack of a disposable group does not block independent tests, but prevents claiming live admin coverage.</p>
+<h2 id="2-make-account-and-target-selection-explicit">2. Make account and target selection explicit<a class="headerlink" href="#2-make-account-and-target-selection-explicit" title="Permanent link">&para;</a></h2>
+<p>Proposed v0.4.0, after phase 1. Priorities A/B. Complexity: small to medium.</p>
+<ul>
+<li>Add an explicit self/Saved Messages selector and a resolve operation returning typed marked identity and source. Keep one target-resolution and idempotency pipeline. Never silently treat an unresolved title as a recipient or introduce a raw-RPC escape hatch.</li>
+<li>Surface Premium status in live <code>me</code>; cached status must carry freshness or be explicitly unknown. Read Telegram configuration for effective upload, caption and folder limits. Missing configuration must not silently imply Premium or an unlimited allowance. Preserve the operator's local transfer cap.</li>
+<li>Correct the misleading Premium label on <code>react --big</code>; the flag describes the animation and is not itself proof of subscription eligibility.</li>
+<li>Make setup consistently explain where credentials are written and loaded; test the default data directory and explicit TGCTL_HOME from unrelated working directories.</li>
+</ul>
+<p>Tests: free/Premium/unknown/expired status, malformed or missing config, account switch, username reassignment, self peer typing, target/fingerprint consistency, offline dry-run, large-file part calculations, Unicode caption boundaries and secret-free diagnostics. Verify known installed gotd types before changing dependencies.</p>
+<p>Gate: verified account identity and effective limits are observable; users can address Saved Messages without copying a numeric ID. No schema migration machinery added.</p>
+<h2 id="3-fetch-messages-directly-from-telegram">3. Fetch messages directly from Telegram<a class="headerlink" href="#3-fetch-messages-directly-from-telegram" title="Permanent link">&para;</a></h2>
+<p>Proposed v0.5.0. Priority B. Complexity: medium.</p>
+<ul>
+<li>Add explicit remote history, search and single-message retrieval, with sender/date/media filters and bounded pagination. Final command naming should be selected in a short CLI design review; examples such as <code>search --source telegram</code> are proposals, not existing commands.</li>
+<li>Preserve the distinction between local cache and server results. A cache miss is never reported as proof a message does not exist remotely.</li>
+<li>Cursors must bind account, peer, query/filter/order and continuation. Return clear source, bounds and coverage; do not promise an immutable server snapshot.</li>
+<li>Remote reads must not implicitly mark messages read, join chats, or download media. Any cache writes must follow an explicit documented mode and the existing write gate.</li>
+</ul>
+<p>Support: messages.getHistory, messages.search, messages.getMessages and channels.getMessages in pinned gotd.</p>
+<p>Tests: full and empty pages, overlap/deduplication, server truncation, malformed/cross-account cursors, deleted messages, inaccessible peers, slow/flood waits, cancellation, media filters and no implicit read acknowledgment.</p>
+<p>Gate: find an uncached message without whole-chat backfill, retrieve it, and paginate without duplicates under stable data. Document concurrent-edit limitations.</p>
+<h2 id="4-retrieve-conversation-context-correctly">4. Retrieve conversation context correctly<a class="headerlink" href="#4-retrieve-conversation-context-correctly" title="Permanent link">&para;</a></h2>
+<p>Proposed v0.6.0. Priority B. Complexity: medium; depends on phase 3 pagination.</p>
+<ul>
+<li>Add replies/thread retrieval, channel-discussion resolution and topic-scoped history.</li>
+<li>Preserve root, reply and topic identifiers, formatting metadata, and distinct broadcast/discussion peers. Never automatically join a linked discussion.</li>
+<li>Verify topic-plus-reply send routing and expose full effective permissions/slow-mode information to explain denied operations. Rights inspection is advisory: execution must still honor server rejection.</li>
+</ul>
+<p>Support: messages.getReplies, messages.getDiscussionMessage, existing forum APIs, channels.getParticipant, channels.getFullChannel and messages.getFullChat.</p>
+<p>Tests: empty/deleted roots, channel-local ID collisions, linked discussion membership denial, general/forum topics, nested replies, topic pagination, owner/admin/member/restricted rights and permissions changing between inspection and execution.</p>
+<p>Gate: retrieve the context of a selected message and identify the correct reply destination without scanning an entire chat. Full live forum coverage remains conditional on an authorized disposable fixture.</p>
+<h2 id="5-add-everyday-account-management">5. Add everyday account management<a class="headerlink" href="#5-add-everyday-account-management" title="Permanent link">&para;</a></h2>
+<p>Later bounded increments, not one large release. Priority B. Complexity: small to medium each.</p>
+<table>
+<thead>
+<tr>
+<th>Addition</th>
+<th>Use case and API support</th>
+<th>Required tests and safety</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Logout current session</td>
+<td>Retire this CLI authorization via auth.logOut</td>
+<td>Confirmation, already revoked, unknown remote result, cleanup failure, unrelated sessions preserved; test revocation offline until a disposable session is authorized</td>
+</tr>
+<tr>
+<td>Archive/unarchive</td>
+<td>Triage chats via folders.editPeerFolders</td>
+<td>Correct folder ID, no-op replay, pinned state and account isolation; preserve existing folders</td>
+</tr>
+<tr>
+<td>Mute/unmute</td>
+<td>Control one chat via account.updateNotifySettings</td>
+<td>Inherited versus explicit settings, expiry/time zone, unrelated settings preserved; no implicit account-wide changes</td>
+</tr>
+<tr>
+<td>Contact add/remove</td>
+<td>Maintain a known contact via contacts.addContact/deleteContacts</td>
+<td>Typed target, duplicate/non-contact, explicit phone-sharing choice, dry-run and remote-success/local-failure handling; no bulk harvesting</td>
+</tr>
+<tr>
+<td>Formatted text/captions</td>
+<td>Code blocks and links via message entities</td>
+<td>Explicit formatting input, UTF-16 offsets, emoji/surrogate pairs, invalid overlaps, length limits and idempotency fingerprint; plain text default</td>
+</tr>
+</tbody>
+</table>
+<p>Gate each addition independently; a failure does not justify widening the change to unrelated command families.</p>
+<h2 id="6-optional-premium-and-convenience-features">6. Optional Premium and convenience features<a class="headerlink" href="#6-optional-premium-and-convenience-features" title="Permanent link">&para;</a></h2>
+<p>Priorities B when a recurring use case is established, otherwise C. Each is a separate proposal; subscription does not add CLI commands automatically.</p>
+<table>
+<thead>
+<tr>
+<th>Addition</th>
+<th>Benefit/support</th>
+<th>Complexity, tests and constraints</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Voice transcription</td>
+<td>Read voice notes; messages.transcribeAudio and updateTranscribedAudio are in pinned gotd</td>
+<td>Medium. Pending/final updates, quota/trial fields, unavailable transcription, waits, cancellation and transcript privacy. No automatic transcription of all chats</td>
+</tr>
+<tr>
+<td>Translation</td>
+<td>Selected multilingual messages; messages.translateText exists</td>
+<td>Medium. Language errors, entities, batches, partial failures, gating and privacy. Distinguish selected-message translation from automatic chat translation</td>
+</tr>
+<tr>
+<td>Saved Messages tags</td>
+<td>Organize personal notes; saved reaction tags and search APIs</td>
+<td>Medium. Preserve unrelated tags, pagination, account capabilities, deletion and replay; dependent on remote search</td>
+</tr>
+<tr>
+<td>Custom emoji reactions</td>
+<td>Use chosen custom reactions</td>
+<td>Medium. Document IDs, chat allowed reactions, Premium/server rejection, multiple reactions and preservation semantics</td>
+</tr>
+<tr>
+<td>Drafts and scheduled messages</td>
+<td>Compose across devices or schedule one approved send</td>
+<td>Medium. Draft conflicts, explicit schedule/time zone, cancellation, idempotency and scheduling versus delivery; no recurring mass automation</td>
+</tr>
+<tr>
+<td>Transfer progress</td>
+<td>Understand long operations</td>
+<td>Medium. stderr-only progress, bounded concurrency, cancellation, low disk and aggregate resource limits; resume remains excluded until its correctness is demonstrated</td>
+</tr>
+</tbody>
+</table>
+<p>Defer cosmetic profile features, stories, calls, payments/Stars, broad business automation and general-purpose bot management. No automatic subscription purchases, automatic retries of unknown sends, relaxed flood controls or restoration of legacy compatibility.</p>
+<h2 id="release-and-completion-rules">Release and completion rules<a class="headerlink" href="#release-and-completion-rules" title="Permanent link">&para;</a></h2>
+<p>For each implemented phase: review the patch; run meaningful regression tests, full unit/race tests, vet, native build, Windows cross-build, formatting, generated documentation and hygiene checks; require native CI before tagging. Update bundled and installed skills with verified behavior only. Publish clear release notes and verify archive checksums and Homebrew metadata before installation. Re-run a bounded relevant installed-binary smoke test.</p>
+<p>Complete phase 1 first. Then implement phases 2–4 in order, releasing only when their gates pass. Phase 5 items are selected independently; phase 6 remains optional. Estimates describe complexity, not calendar commitments.</p>
+<h2 id="evidence">Evidence<a class="headerlink" href="#evidence" title="Permanent link">&para;</a></h2>
+<p>This plan builds on the source-backed <a href="../reliability-roadmap/">reliability roadmap</a> and Premium research checked on 12 September 2026. Recheck API/dependency details when implementation starts; these references are not proof of current CLI support:
+- https://core.telegram.org/api/premium
+- https://core.telegram.org/api/config
+- https://core.telegram.org/method/messages.search
+- https://core.telegram.org/method/messages.getReplies
+- https://core.telegram.org/method/messages.getDiscussionMessage
+- https://core.telegram.org/api/transcribe
+- https://core.telegram.org/api/translation
+- https://core.telegram.org/api/saved-messages</p>
+<p>The existing roadmap also records a channel sponsored-message support/release-scope question. Resolve it against current official requirements before expanding channel functionality; it was not closed by the v0.3.1 cancellation patch.</p>
+<h2 id="implementation-handoff">Implementation handoff<a class="headerlink" href="#implementation-handoff" title="Permanent link">&para;</a></h2>
+<p>The user authorized execution of this plan using GPT-5.6 Luna with high reasoning on 13 September 2026. The original “proposed” status above describes its drafting stage; execution is now authorized, subject to the scope below. Start with phase 1 and continue through phases 2–4 when their gates pass. Phase 5 remains separate bounded increments after the core work; phase 6 remains optional and is not part of this handoff. Suggested version numbers are planning labels, not authorization to tag or publish.</p>
+<h3 id="concrete-design-decisions">Concrete design decisions<a class="headerlink" href="#concrete-design-decisions" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Do not build a new framework or replace gotd. Follow existing Cobra commands, narrow client interfaces, marked peer IDs, SQLite stores, dispatch envelopes and fake/TL-invoker tests.</li>
+<li>First create <code>docs/command-test-coverage.md</code>: enumerate commands from the built binary and explicitly distinguish execution from assertion-backed tests. Cite repository test names and redacted live evidence. Track absent evidence as unverified. Prior broad claims are not acceptance evidence.</li>
+<li>For phase 2, use <code>self</code> as the reserved selector for the authenticated account, consistently across relevant read/write commands. Resolve without network when an account-bound cache supplies identity; an unresolved dry-run must not log in or make RPCs. Add a dedicated <code>resolve &lt;selector&gt;</code> command with explicit local/server source selection. Ensure username reassignment and account identity cannot redirect a previously confirmed operation.</li>
+<li>Expose Premium status and its source/freshness through <code>me</code>; do not treat a missing field as false. Avoid adding a schema column just for this: reuse current cached self metadata where appropriate. Add a bounded account-limits read command backed by help.getAppConfig and authenticated account capabilities. Report unknown values explicitly. The effective file cap is the minimum of known server and explicit operator limits, with conservative refusal or an actionable error when limits cannot be safely established.</li>
+<li>Setup's default credential destination must match the runtime's selected stable root, independent of cwd. Preserve explicit --env-file overrides and existing read-only/secret-handling gates. Keep help output deterministic so generated docs do not embed personal paths.</li>
+<li>For phase 3, extend the existing history/search/get command families with an explicit <code>--source cache|telegram</code>, defaulting to cache. Remote mode does not silently persist retrieved history or acknowledge reads. Prefer opaque typed JSON cursors encoded with standard encoding/base64; validate version, account identity, peer, filters, order and server offset before use. These are continuation tokens, not authentication tokens or frozen snapshots. Refuse combinations the API cannot faithfully support rather than emulating them with unbounded scanning.</li>
+<li>For phase 4, add <code>replies &lt;chat&gt; &lt;message-id&gt;</code> and a discussion-resolution command, reusing the phase 3 cursor and normalization code only where semantics actually match. Topic history must explicitly identify its topic. Keep original channel and linked discussion peers distinct. Add full/effective rights inspection without claiming it guarantees a subsequent mutation will succeed.</li>
+<li>Add interface methods/types only as each command requires; update FakeClient and invoker tests in the same change. Do not add unused speculative capability layers. Respect current-schema-only policy and preserve existing data without destructive resets.</li>
+</ul>
+<h3 id="work-sequence-and-evidence">Work sequence and evidence<a class="headerlink" href="#work-sequence-and-evidence" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Establish baseline commit/version and inspect local changes. Run baseline checks once; create the coverage matrix and verify existing tests actually assert expected behavior.</li>
+<li>Repair validated issues with a minimal reproducer first. Reuse the installed v0.3.1 cancellation result and committed/unknown precedence; do not redo or overwrite the already-merged fix.</li>
+<li>Implement phase 2 in small reviewable commits, then phase 3, then phase 4. Check current official API docs and the pinned dependency's generated request types before each adapter change. Complete local validation at each phase and keep unresolved live coverage visible.</li>
+<li>Update bundled skill, generated references, documentation and the phase status ledger. Do not overwrite the installed skill until the matching CLI changes are installed. Do not change the user's installed binary, push to main, merge, tag or publish in this execution task.</li>
+<li>Finish with completed phases, remaining items, exact commits/files, validation evidence, compatibility changes and a proposed release scope for review. If a prerequisite is missing, continue independent work and identify the specific blocked test.</li>
+</ol>
+<h3 id="live-test-boundaries">Live-test boundaries<a class="headerlink" href="#live-test-boundaries" title="Permanent link">&para;</a></h3>
+<p>This coding handoff authorizes code changes, offline fixtures, and bounded live account reads/local cache operations already used in the parent task. It does not enlarge earlier permission to mutate Telegram. The parent task encountered an explicit automatic-review block on live writes; do not infer authorization to bypass it from earlier task summaries. Prepare tests that create/edit/delete Saved Messages probes, temporary folders or disposable groups, but run their Telegram mutations only after explicit approval in this task. Never touch unrelated messages, folders, contacts, permissions or sessions. No credential or private content belongs in a commit or report.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      MIT licensed. Built on gotd/td.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/b1rd33/tgctl-go" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://pkg.go.dev/github.com/b1rd33/tgctl-go" target="_blank" rel="noopener" title="pkg.go.dev" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M400.1 194.8c-10.9 2.8-19.9 4.3-29.1 7.6-7.3 1.9-14.7 3.9-23.2 6.1l-.6.1c-4.2 1.2-4.6 1.3-8.5-3.2-4.7-5.3-8.1-8.7-14.6-11.9-19.7-9.6-38.7-6.8-56.4 4.7-21.2 13.7-32.1 34-31.8 59.2.3 25 17.4 45.5 41.2 48.9 22 2.8 39.8-4.6 53.8-20.5 2.1-2.6 4-5.3 6.1-8.3.8-1 1.5-2.1 2.3-3.3h-60.1c-6.5 0-8.1-4-5.9-9.3 4-9.7 11.5-25.9 15.9-34 .9-1.8 3.1-5.8 6.9-5.8h101.1c4.5-13.4 11.8-26.9 21.6-39.7 22.7-29.9 49.3-45.5 87.2-52 31.8-5.6 61.7-2.5 88.9 15.9 24.6 16.8 39.8 39.6 43.9 69.5 5.3 42.1-6.9 76.3-36.7 105.6-19.7 20.9-44.9 34-73.9 39.9-5.6 1-11.1 1.5-16.5 2-2.9.2-5.7.5-8.5.8-28.3-.6-54.2-8.7-76-27.4-15.3-13.3-25.9-29.6-31.1-48.5-3.7 7.3-8 14.4-14 21.1-21.6 29.6-50.9 48-87.9 52.9-30.6 4.1-58.9-1.8-83.9-20.5-23-17.5-36.1-40.5-39.5-69.2-4.1-34 5.9-65.4 26.4-91.3 22.2-29 51.5-47.4 87.3-53.9 29.3-6.2 57.3-1.9 82.6 15.3 16.5 10.9 28.3 25.8 36.1 43.9 1.9 2.8.6 4.4-3.1 5.3m-351.8 5.6c-1.3 0-1.6-.6-.9-1.6l6.6-8.4c.6-.9 2.2-1.5 3.4-1.5h111.3c1.2 0 1.5.9.9 1.8l-5.3 8.1c-.6 1-2.2 1.9-3.1 1.9l-112.8-.3zM1.2 229.1c-1.2 0-1.6-.7-.9-1.6l6.5-8.4c.6-.9 2.2-1.6 3.4-1.6h142.1c1.2 0 1.8 1 1.5 1.9l-2.5 7.5c-.3 1.2-1.5 1.9-2.8 1.9zm74.5 26.8c-.6.9-.3 1.8.9 1.8l68 .3c.9 0 2.2-.9 2.2-2.1l.6-7.5c0-1.3-.6-2.2-1.9-2.2H83.2c-1.2 0-2.5.9-3.1 1.9zm501.5-18c-.2-2.6-.3-4.8-.7-7-5.6-30.8-34-48.3-63.6-41.4-29 6.5-47.7 24.9-54.5 54.2-5.6 24.3 6.2 48.9 28.6 58.9 17.2 7.5 34.3 6.6 50.8-1.9 24.6-13.6 38-32.7 39.6-59.5-.1-1.2-.1-2.3-.2-3.3"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "search.highlight", "search.share", "search.suggest", "content.code.copy", "content.code.annotate", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
