@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.5.1 — 2026-09-13
+
+- Accept reserved `self` and `me` account selectors in write commands without `--fuzzy`. Ordinary chat titles still require explicit fuzzy-selection permission.
+- Add archive/unarchive self dry-run regressions and update the Telegram skill.
+
 ## v0.5.0 — 2026-09-13
 
 - Add `archive <chat>` and `unarchive <chat>` for one explicitly selected dialog, with account isolation, write gates, zero-network dry-run and durable idempotency handling.
