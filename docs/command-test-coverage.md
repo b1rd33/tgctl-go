@@ -1,11 +1,11 @@
 # Command test coverage
 
 Baseline reviewed: v0.3.1, commit `8c42d8b1d2f9df091e0e76734755f33e8c807c8c`.
-The command list below is generated from the baseline Cobra binary (`tg --help`)
-and records repository evidence, not inferred capability. “Offline asserted”
-means a test checks behavior beyond merely registering the command. “Live” is
-not claimed for this baseline unless a redacted, reproducible evidence file is
-listed; no private Telegram transcript is stored in this repository.
+The matrix covers the current Cobra command surface, while retaining the
+baseline evidence review and recording the phase 2–4 additions. “Offline
+asserted” means a test checks behavior beyond merely registering the command.
+“Live” is not claimed unless a redacted, reproducible evidence file is listed;
+no private Telegram transcript is stored in this repository.
 
 | Command | Offline asserted evidence | Live execution | Status / limitation |
 | --- | --- | --- | --- |
@@ -29,6 +29,7 @@ listed; no private Telegram transcript is stored in this repository.
 | `chat-title` | `internal/commands/admin_test.go:TestChatTitleInvokesClient` | unverified | Offline fake invocation asserted |
 | `chats-info` | `internal/commands/admin_test.go:TestChatsInfoAndMembersReadCommands` | unverified | Read client invocation asserted |
 | `completion` | Cobra registration exercised by binary help generation | unverified | Shell output not behaviorally tested |
+| `contacts` | `internal/commands/read_extra_test.go:TestStatsContactsUnreadReadFromCache` | unverified | Cache-only |
 | `db-backup` | `internal/store/backup_test.go` | unverified | Local snapshot behavior asserted |
 | `db-restore` | `internal/store/backup_test.go` | unverified | Empty-destination and validation behavior asserted |
 | `delete-msg` | `internal/commands/destructive_test.go` delete confirmation and execution tests; `internal/client/destructive_rpc_test.go` peer/count tests | unverified | No live deletion |
