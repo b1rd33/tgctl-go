@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.4.0 — 2026-09-13
+
+- Add account-bound `self` resolution, explicit target resolution, Premium status and account limits, and consistent setup paths.
+- Add explicit Telegram-source history, search and message retrieval with bounded, account-bound cursors; cached reads remain the default.
+- Add replies, linked-discussion lookup, validated forum topic history, and advisory permissions with slow-mode information.
+- Correct the Premium description of reaction animations and update generated command documentation and the bundled Telegram skill.
+- Extend offline coverage for request routing, pagination, cursor isolation, deleted topics/messages, cancellation and failed reads.
+
+Live forum/admin, Premium comparison and stable-data acceptance checks remain unverified. Remote reads do not implicitly mark messages read or join chats. No legacy compatibility or cache migrations are introduced.
+
 ## v0.3.1 — 2026-09-13
 
 - Report interrupted commands as `CANCELED` with exit status 130. Preserve committed and unknown write classifications when cancellation occurs after a possible mutation.
