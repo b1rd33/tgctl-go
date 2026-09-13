@@ -5,6 +5,30 @@ import (
 	"testing"
 )
 
+func TestRemoteCursorRejectsMalformedOffsetsAndMismatchedQueries(t *testing.T) {
+	expected := RemoteCursor{Account: "default", Operation: "history", Chat: 7, Since: "2026-01-01", Until: "2026-01-02"}
+	for _, tc := range []struct {
+		name string
+		raw  string
+	}{
+		{name: "malformed base64", raw: "not-a-cursor"},
+		{name: "zero offset", raw: EncodeRemoteCursor(RemoteCursor{Account: "default", Operation: "history", Chat: 7, Since: "2026-01-01", Until: "2026-01-02"})},
+		{name: "cross account", raw: EncodeRemoteCursor(RemoteCursor{Account: "other", Operation: "history", Chat: 7, Since: "2026-01-01", Until: "2026-01-02", OffsetID: 9})},
+		{name: "cross filter", raw: EncodeRemoteCursor(RemoteCursor{Account: "default", Operation: "history", Chat: 7, Since: "2026-01-02", Until: "2026-01-02", OffsetID: 9})},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := DecodeRemoteCursor(tc.raw, expected); err == nil {
+				t.Fatal("invalid remote cursor was accepted")
+			}
+		})
+	}
+	valid := EncodeRemoteCursor(RemoteCursor{Account: "default", Operation: "history", Chat: 7, Since: "2026-01-01", Until: "2026-01-02", OffsetID: 9})
+	got, err := DecodeRemoteCursor(valid, expected)
+	if err != nil || got.OffsetID != 9 {
+		t.Fatalf("valid cursor=%+v err=%v", got, err)
+	}
+}
+
 func TestCursorPagesEqualTimestampsWithoutDuplicates(t *testing.T) {
 	db, err := Connect(filepath.Join(t.TempDir(), "db"))
 	if err != nil {

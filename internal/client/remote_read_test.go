@@ -71,6 +71,33 @@ func TestRemoteHistoryAdapterPropagatesAllOffsets(t *testing.T) {
 	}
 }
 
+func TestRemoteGetAdapterPreservesDeletedPlaceholder(t *testing.T) {
+	db := updateTestDB(t)
+	if err := store.UpsertEntity(db, 7, store.EntityUser, 70); err != nil {
+		t.Fatal(err)
+	}
+	g := &GotdClient{db: db, resolvedPeers: map[int64]tg.InputPeerClass{}, api: tg.NewClient(invokeFunc(func(_ context.Context, in bin.Encoder, out bin.Decoder) error {
+		req, ok := in.(*tg.MessagesGetMessagesRequest)
+		if !ok {
+			t.Fatalf("wrong get request %T", in)
+		}
+		if len(req.ID) != 1 {
+			t.Fatalf("get IDs = %+v", req.ID)
+		}
+		messageID, ok := req.ID[0].(*tg.InputMessageID)
+		if !ok || messageID.ID != 9 {
+			t.Fatalf("get ID = %+v", req.ID[0])
+		}
+		out.(*tg.MessagesMessagesBox).Messages = &tg.MessagesMessages{Messages: []tg.MessageClass{&tg.MessageEmpty{ID: 9}}}
+		return nil
+	}))}
+
+	message, err := g.RemoteGetMessage(context.Background(), 7, 9)
+	if err != nil || message == nil || message.ChatID != 7 || message.MessageID != 9 || !message.Deleted {
+		t.Fatalf("deleted remote message = %+v err=%v", message, err)
+	}
+}
+
 func TestRemoteSearchAdapterPropagatesFiltersAndOffsets(t *testing.T) {
 	db := updateTestDB(t)
 	if err := store.UpsertEntity(db, 7, store.EntityUser, 70); err != nil {
@@ -245,5 +272,85 @@ func TestChatPermissionsAdapterIncludesSlowmode(t *testing.T) {
 	}
 	if !info.Chat.SlowmodeKnown || info.Chat.SlowmodeSeconds != 30 || info.Chat.SlowmodeNextSendDate != 123 {
 		t.Fatalf("permissions slowmode = %+v", info.Chat)
+	}
+}
+
+func TestRemoteReadsDoNotWriteCacheOrReadStateOnFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		cancelled bool
+		run       func(context.Context, *GotdClient) error
+	}{
+		{name: "history rpc failure", run: func(ctx context.Context, g *GotdClient) error {
+			_, err := g.RemoteHistory(ctx, RemoteHistoryReq{ChatID: 7, Limit: 1})
+			return err
+		}},
+		{name: "search rpc failure", run: func(ctx context.Context, g *GotdClient) error {
+			_, err := g.RemoteSearch(ctx, RemoteSearchReq{ChatID: 7, Query: "needle", Limit: 1})
+			return err
+		}},
+		{name: "get rpc failure", run: func(ctx context.Context, g *GotdClient) error {
+			_, err := g.RemoteGetMessage(ctx, 7, 9)
+			return err
+		}},
+		{name: "history cancellation", cancelled: true, run: func(ctx context.Context, g *GotdClient) error {
+			_, err := g.RemoteHistory(ctx, RemoteHistoryReq{ChatID: 7, Limit: 1})
+			return err
+		}},
+		{name: "search cancellation", cancelled: true, run: func(ctx context.Context, g *GotdClient) error {
+			_, err := g.RemoteSearch(ctx, RemoteSearchReq{ChatID: 7, Query: "needle", Limit: 1})
+			return err
+		}},
+		{name: "get cancellation", cancelled: true, run: func(ctx context.Context, g *GotdClient) error {
+			_, err := g.RemoteGetMessage(ctx, 7, 9)
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := updateTestDB(t)
+			if err := store.UpsertEntity(db, 7, store.EntityUser, 70); err != nil {
+				t.Fatal(err)
+			}
+			if err := store.UpsertLiveMessage(db, store.LiveMessage{ChatID: 7, MessageID: 1, Date: "2026-01-01T00:00:00Z"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.Exec("INSERT INTO tg_read_state(chat_id, max_id) VALUES (7, 1)"); err != nil {
+				t.Fatal(err)
+			}
+			var rpcErr error = errors.New("synthetic RPC failure")
+			api := tg.NewClient(invokeFunc(func(ctx context.Context, _ bin.Encoder, _ bin.Decoder) error {
+				if tc.cancelled {
+					return ctx.Err()
+				}
+				return rpcErr
+			}))
+			g := &GotdClient{db: db, resolvedPeers: map[int64]tg.InputPeerClass{}, api: api}
+			ctx := context.Background()
+			if tc.cancelled {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+			err := tc.run(ctx, g)
+			if err == nil {
+				t.Fatal("failed remote read succeeded")
+			}
+			if tc.cancelled && !errors.Is(err, context.Canceled) {
+				t.Fatalf("error=%v, want context.Canceled", err)
+			}
+			var messages, entities, markers int
+			if err := db.QueryRow("SELECT COUNT(*) FROM tg_messages").Scan(&messages); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.QueryRow("SELECT COUNT(*) FROM tg_entities").Scan(&entities); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.QueryRow("SELECT COUNT(*) FROM tg_read_state").Scan(&markers); err != nil {
+				t.Fatal(err)
+			}
+			if messages != 1 || entities != 1 || markers != 1 {
+				t.Fatalf("failure changed cache state: messages=%d entities=%d read_markers=%d", messages, entities, markers)
+			}
+		})
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/b1rd33/tgctl-go/internal/client"
@@ -224,4 +225,49 @@ func TestRemoteSearchUsesExplicitServerClient(t *testing.T) {
 	if req.ChatID != 1 || req.SenderID != 8 || req.Query != "term" || req.Filter != "photo-video" || req.OffsetID != 42 || req.Limit != 10 {
 		t.Fatalf("search request = %+v", req)
 	}
+}
+
+func TestRemoteRowsBoundPagesAndTerminateContinuation(t *testing.T) {
+	tests := []struct {
+		name   string
+		page   client.RemotePage
+		offset int64
+		limit  int
+		ids    []int64
+		next   int64
+	}{
+		{name: "empty", page: client.RemotePage{NextOffsetID: 99}, limit: 3, ids: []int64{}},
+		{name: "exact full", page: client.RemotePage{Messages: remoteTestMessages(3, 10), NextOffsetID: 8}, limit: 3, ids: []int64{10, 9, 8}, next: 8},
+		{name: "short server page", page: client.RemotePage{Messages: remoteTestMessages(2, 10), NextOffsetID: 8}, limit: 3, ids: []int64{10, 9}},
+		{name: "overlap and duplicate", page: client.RemotePage{Messages: []client.BackfillMessage{{MessageID: 8}, {MessageID: 7}, {MessageID: 7}, {MessageID: 6}, {MessageID: 0}}, NextOffsetID: 8}, offset: 8, limit: 3, ids: []int64{7, 6}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rows, next := remoteRows(tt.page, tt.offset, tt.limit)
+			if next != tt.next {
+				t.Fatalf("next=%d, want %d", next, tt.next)
+			}
+			got := make([]int64, len(rows))
+			for i, row := range rows {
+				got[i] = row.MessageID
+			}
+			if !reflect.DeepEqual(got, tt.ids) {
+				t.Fatalf("ids=%v, want %v", got, tt.ids)
+			}
+		})
+	}
+
+	first, next := remoteRows(client.RemotePage{Messages: remoteTestMessages(2, 10), NextOffsetID: 9}, 0, 2)
+	second, final := remoteRows(client.RemotePage{Messages: []client.BackfillMessage{{MessageID: 9}, {MessageID: 8}, {MessageID: 8}}, NextOffsetID: 9}, next, 2)
+	if next != 9 || final != 0 || len(first) != 2 || len(second) != 1 || second[0].MessageID != 8 {
+		t.Fatalf("continuation first=%v next=%d second=%v final=%d", first, next, second, final)
+	}
+}
+
+func remoteTestMessages(count int, first int64) []client.BackfillMessage {
+	rows := make([]client.BackfillMessage, count)
+	for i := range rows {
+		rows[i].MessageID = first - int64(i)
+	}
+	return rows
 }
