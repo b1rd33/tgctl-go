@@ -496,6 +496,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#tg-archive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg archive
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#tg-backfill" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1204,6 +1215,17 @@
     <span class="md-ellipsis">
       
         tg topics-list
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tg-unarchive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg unarchive
       
     </span>
   </a>
@@ -1605,6 +1627,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#tg-archive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg archive
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#tg-backfill" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2320,6 +2353,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#tg-unarchive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tg unarchive
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#tg-unban-from-chat" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2450,7 +2494,7 @@
 
 
 <h1 id="commands">Commands<a class="headerlink" href="#commands" title="Permanent link">&para;</a></h1>
-<p><code>tg --help</code> shows 82 commands. This page is generated from Cobra help output.</p>
+<p><code>tg --help</code> shows 84 commands. This page is generated from Cobra help output.</p>
 <p>Every command supports the global flags shown by <code>tg --help</code>: <code>--account</code>, <code>--full</code>, <code>--json</code>, <code>--human</code>, <code>--lock-wait</code>, <code>--read-only</code>, and <code>--version</code> where applicable.</p>
 <h2 id="index">Index<a class="headerlink" href="#index" title="Permanent link">&para;</a></h2>
 <table>
@@ -2488,6 +2532,10 @@
 <tr>
 <td><a href="#tg-accounts-use"><code>tg accounts-use</code></a></td>
 <td>Select an existing account</td>
+</tr>
+<tr>
+<td><a href="#tg-archive"><code>tg archive</code></a></td>
+<td>Archive one chat</td>
 </tr>
 <tr>
 <td><a href="#tg-backfill"><code>tg backfill</code></a></td>
@@ -2748,6 +2796,10 @@
 <tr>
 <td><a href="#tg-topics-list"><code>tg topics-list</code></a></td>
 <td>List forum topics</td>
+</tr>
+<tr>
+<td><a href="#tg-unarchive"><code>tg unarchive</code></a></td>
+<td>Move one chat to the inbox</td>
 </tr>
 <tr>
 <td><a href="#tg-unban-from-chat"><code>tg unban-from-chat</code></a></td>
@@ -3012,13 +3064,60 @@
 </tr>
 </tbody>
 </table>
+<h2 id="tg-archive"><code>tg archive</code><a class="headerlink" href="#tg-archive" title="Permanent link">&para;</a></h2>
+<p>Archive one chat</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>tg archive &lt;chat&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>tg<span class="w"> </span>archive<span class="w"> </span>&lt;chat&gt;<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for archive</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
 <h2 id="tg-backfill"><code>tg backfill</code><a class="headerlink" href="#tg-backfill" title="Permanent link">&para;</a></h2>
 <p>Backfill cached messages for a chat</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>tg backfill &lt;chat&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>tg backfill &lt;chat&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>tg<span class="w"> </span>backfill<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--max-messages<span class="w"> </span><span class="m">100</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>tg<span class="w"> </span>backfill<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--max-messages<span class="w"> </span><span class="m">100</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3074,10 +3173,10 @@
 <h2 id="tg-backfill-entities"><code>tg backfill-entities</code><a class="headerlink" href="#tg-backfill-entities" title="Permanent link">&para;</a></h2>
 <p>Populate the local entity cache so chat_id-keyed sends work</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>tg backfill-entities [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>tg backfill-entities [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>tg<span class="w"> </span>backfill-entities<span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>tg<span class="w"> </span>backfill-entities<span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3113,10 +3212,10 @@
 <h2 id="tg-ban-from-chat"><code>tg ban-from-chat</code><a class="headerlink" href="#tg-ban-from-chat" title="Permanent link">&para;</a></h2>
 <p>ban-from-chat user in chat</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>tg ban-from-chat &lt;chat&gt; &lt;user-id&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>tg ban-from-chat &lt;chat&gt; &lt;user-id&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>tg<span class="w"> </span>ban-from-chat<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>tg<span class="w"> </span>ban-from-chat<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3164,10 +3263,10 @@
 <h2 id="tg-block-user"><code>tg block-user</code><a class="headerlink" href="#tg-block-user" title="Permanent link">&para;</a></h2>
 <p>Block a user</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>tg block-user &lt;user&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>tg block-user &lt;user&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>tg<span class="w"> </span>block-user<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>tg<span class="w"> </span>block-user<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3215,10 +3314,10 @@
 <h2 id="tg-chat-description"><code>tg chat-description</code><a class="headerlink" href="#tg-chat-description" title="Permanent link">&para;</a></h2>
 <p>Edit chat description</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>tg chat-description &lt;chat&gt; &lt;value&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>tg chat-description &lt;chat&gt; &lt;value&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>tg<span class="w"> </span>chat-description<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span><span class="s2">"Description"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>tg<span class="w"> </span>chat-description<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span><span class="s2">"Description"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3266,10 +3365,10 @@
 <h2 id="tg-chat-invite-link"><code>tg chat-invite-link</code><a class="headerlink" href="#tg-chat-invite-link" title="Permanent link">&para;</a></h2>
 <p>Export an invite link</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>tg chat-invite-link &lt;chat&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>tg chat-invite-link &lt;chat&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>tg<span class="w"> </span>chat-invite-link<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>tg<span class="w"> </span>chat-invite-link<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3317,10 +3416,10 @@
 <h2 id="tg-chat-members"><code>tg chat-members</code><a class="headerlink" href="#tg-chat-members" title="Permanent link">&para;</a></h2>
 <p>List chat members</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>tg chat-members &lt;chat&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>tg chat-members &lt;chat&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>tg<span class="w"> </span>chat-members<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span>--limit<span class="w"> </span><span class="m">50</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>tg<span class="w"> </span>chat-members<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span>--limit<span class="w"> </span><span class="m">50</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3352,10 +3451,10 @@
 <h2 id="tg-chat-permissions"><code>tg chat-permissions</code><a class="headerlink" href="#tg-chat-permissions" title="Permanent link">&para;</a></h2>
 <p>Inspect current or selected member rights for a chat</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>tg chat-permissions &lt;chat&gt; [user] [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>tg chat-permissions &lt;chat&gt; [user] [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>tg<span class="w"> </span>chat-permissions<span class="w"> </span>&lt;chat&gt;<span class="w"> </span><span class="o">[</span>user<span class="o">]</span><span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>tg<span class="w"> </span>chat-permissions<span class="w"> </span>&lt;chat&gt;<span class="w"> </span><span class="o">[</span>user<span class="o">]</span><span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3383,10 +3482,10 @@
 <h2 id="tg-chat-photo"><code>tg chat-photo</code><a class="headerlink" href="#tg-chat-photo" title="Permanent link">&para;</a></h2>
 <p>Edit chat photo</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>tg chat-photo &lt;chat&gt; &lt;value&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>tg chat-photo &lt;chat&gt; &lt;value&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>tg<span class="w"> </span>chat-photo<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span>./photo.png<span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>tg<span class="w"> </span>chat-photo<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span>./photo.png<span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3434,10 +3533,10 @@
 <h2 id="tg-chat-pinned-list"><code>tg chat-pinned-list</code><a class="headerlink" href="#tg-chat-pinned-list" title="Permanent link">&para;</a></h2>
 <p>List up to 100 pinned messages in a chat</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>tg chat-pinned-list &lt;chat&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>tg chat-pinned-list &lt;chat&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>tg<span class="w"> </span>chat-pinned-list<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>tg<span class="w"> </span>chat-pinned-list<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3465,10 +3564,10 @@
 <h2 id="tg-chat-title"><code>tg chat-title</code><a class="headerlink" href="#tg-chat-title" title="Permanent link">&para;</a></h2>
 <p>Edit chat title</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>tg chat-title &lt;chat&gt; &lt;value&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>tg chat-title &lt;chat&gt; &lt;value&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>tg<span class="w"> </span>chat-title<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span><span class="s2">"New title"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>tg<span class="w"> </span>chat-title<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span><span class="s2">"New title"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3516,10 +3615,10 @@
 <h2 id="tg-chats-info"><code>tg chats-info</code><a class="headerlink" href="#tg-chats-info" title="Permanent link">&para;</a></h2>
 <p>Show chat info for comma-separated chat ids</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>tg chats-info &lt;chat-ids&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>tg chats-info &lt;chat-ids&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>tg<span class="w"> </span>chats-info<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>tg<span class="w"> </span>chats-info<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3547,11 +3646,11 @@
 <h2 id="tg-completion"><code>tg completion</code><a class="headerlink" href="#tg-completion" title="Permanent link">&para;</a></h2>
 <p>Generate the autocompletion script for tg for the specified shell.</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>tg completion [flags]
-</span><span id="__span-38-2"><a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a>tg completion [command]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>tg completion [flags]
+</span><span id="__span-40-2"><a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a>tg completion [command]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>tg<span class="w"> </span>completion<span class="w"> </span>zsh<span class="w"> </span>&gt;<span class="w"> </span>~/.zsh/completions/_tg
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>tg<span class="w"> </span>completion<span class="w"> </span>zsh<span class="w"> </span>&gt;<span class="w"> </span>~/.zsh/completions/_tg
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3571,10 +3670,10 @@
 <h2 id="tg-contacts"><code>tg contacts</code><a class="headerlink" href="#tg-contacts" title="Permanent link">&para;</a></h2>
 <p>List cached contacts</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>tg contacts [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>tg contacts [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>tg<span class="w"> </span>contacts<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>tg<span class="w"> </span>contacts<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3606,10 +3705,10 @@
 <h2 id="tg-db-backup"><code>tg db-backup</code><a class="headerlink" href="#tg-db-backup" title="Permanent link">&para;</a></h2>
 <p>Create a consistent private cache snapshot (session and media excluded)</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>tg db-backup &lt;snapshot&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>tg db-backup &lt;snapshot&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>tg<span class="w"> </span>db-backup<span class="w"> </span>&lt;snapshot&gt;<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a>tg<span class="w"> </span>db-backup<span class="w"> </span>&lt;snapshot&gt;<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3645,10 +3744,10 @@
 <h2 id="tg-db-restore"><code>tg db-restore</code><a class="headerlink" href="#tg-db-restore" title="Permanent link">&para;</a></h2>
 <p>Restore a cache snapshot into an account with no existing database</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>tg db-restore &lt;snapshot&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>tg db-restore &lt;snapshot&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a>tg<span class="w"> </span>db-restore<span class="w"> </span>&lt;snapshot&gt;<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>tg<span class="w"> </span>db-restore<span class="w"> </span>&lt;snapshot&gt;<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3684,10 +3783,10 @@
 <h2 id="tg-delete-msg"><code>tg delete-msg</code><a class="headerlink" href="#tg-delete-msg" title="Permanent link">&para;</a></h2>
 <p>Delete one or more messages (revoke for everyone by default)</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>tg delete-msg &lt;chat&gt; &lt;message-ids&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-48-1"><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a>tg delete-msg &lt;chat&gt; &lt;message-ids&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>tg<span class="w"> </span>delete-msg<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>tg<span class="w"> </span>delete-msg<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3743,10 +3842,10 @@
 <h2 id="tg-demote"><code>tg demote</code><a class="headerlink" href="#tg-demote" title="Permanent link">&para;</a></h2>
 <p>demote user in chat</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-48-1"><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a>tg demote &lt;chat&gt; &lt;user-id&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-50-1"><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>tg demote &lt;chat&gt; &lt;user-id&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>tg<span class="w"> </span>demote<span class="w"> </span><span class="m">987654321</span><span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">987654321</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-51-1"><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a>tg<span class="w"> </span>demote<span class="w"> </span><span class="m">987654321</span><span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">987654321</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3794,10 +3893,10 @@
 <h2 id="tg-discover"><code>tg discover</code><a class="headerlink" href="#tg-discover" title="Permanent link">&para;</a></h2>
 <p>Discover dialogs and cache chat metadata</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-50-1"><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>tg discover [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-52-1"><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a>tg discover [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-51-1"><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a>tg<span class="w"> </span>discover<span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-53-1"><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a>tg<span class="w"> </span>discover<span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3833,10 +3932,10 @@
 <h2 id="tg-discussion-message"><code>tg discussion-message</code><a class="headerlink" href="#tg-discussion-message" title="Permanent link">&para;</a></h2>
 <p>Resolve a channel post to its discussion thread without joining it</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-52-1"><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a>tg discussion-message &lt;chat&gt; &lt;message-id&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-54-1"><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a>tg discussion-message &lt;chat&gt; &lt;message-id&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-53-1"><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a>tg<span class="w"> </span>discussion-message<span class="w"> </span>&lt;chat&gt;<span class="w"> </span>&lt;message-id&gt;<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-55-1"><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a>tg<span class="w"> </span>discussion-message<span class="w"> </span>&lt;chat&gt;<span class="w"> </span>&lt;message-id&gt;<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3864,10 +3963,10 @@
 <h2 id="tg-doctor"><code>tg doctor</code><a class="headerlink" href="#tg-doctor" title="Permanent link">&para;</a></h2>
 <p>Diagnose tgctl-go setup</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-54-1"><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a>tg doctor [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-56-1"><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a>tg doctor [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-55-1"><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a>tg<span class="w"> </span>doctor<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-57-1"><a id="__codelineno-57-1" name="__codelineno-57-1" href="#__codelineno-57-1"></a>tg<span class="w"> </span>doctor<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3895,10 +3994,10 @@
 <h2 id="tg-download-album"><code>tg download-album</code><a class="headerlink" href="#tg-download-album" title="Permanent link">&para;</a></h2>
 <p>Download one cached Telegram media group</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-56-1"><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a>tg download-album &lt;chat&gt; [message-id] [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-58-1"><a id="__codelineno-58-1" name="__codelineno-58-1" href="#__codelineno-58-1"></a>tg download-album &lt;chat&gt; [message-id] [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-57-1"><a id="__codelineno-57-1" name="__codelineno-57-1" href="#__codelineno-57-1"></a>tg<span class="w"> </span>download-album<span class="w"> </span>&lt;chat&gt;<span class="w"> </span><span class="o">[</span>message-id<span class="o">]</span><span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-59-1"><a id="__codelineno-59-1" name="__codelineno-59-1" href="#__codelineno-59-1"></a>tg<span class="w"> </span>download-album<span class="w"> </span>&lt;chat&gt;<span class="w"> </span><span class="o">[</span>message-id<span class="o">]</span><span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -3958,10 +4057,10 @@
 <h2 id="tg-download-media"><code>tg download-media</code><a class="headerlink" href="#tg-download-media" title="Permanent link">&para;</a></h2>
 <p>Download media attached to a message</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-58-1"><a id="__codelineno-58-1" name="__codelineno-58-1" href="#__codelineno-58-1"></a>tg download-media &lt;chat&gt; &lt;message-id&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-60-1"><a id="__codelineno-60-1" name="__codelineno-60-1" href="#__codelineno-60-1"></a>tg download-media &lt;chat&gt; &lt;message-id&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-59-1"><a id="__codelineno-59-1" name="__codelineno-59-1" href="#__codelineno-59-1"></a>tg<span class="w"> </span>download-media<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="m">42</span><span class="w"> </span>--max-size-mb<span class="w"> </span><span class="m">100</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-61-1"><a id="__codelineno-61-1" name="__codelineno-61-1" href="#__codelineno-61-1"></a>tg<span class="w"> </span>download-media<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="m">42</span><span class="w"> </span>--max-size-mb<span class="w"> </span><span class="m">100</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4009,10 +4108,10 @@
 <h2 id="tg-edit-msg"><code>tg edit-msg</code><a class="headerlink" href="#tg-edit-msg" title="Permanent link">&para;</a></h2>
 <p>Edit a previously sent message</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-60-1"><a id="__codelineno-60-1" name="__codelineno-60-1" href="#__codelineno-60-1"></a>tg edit-msg &lt;chat&gt; &lt;message-id&gt; &lt;new-text&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-62-1"><a id="__codelineno-62-1" name="__codelineno-62-1" href="#__codelineno-62-1"></a>tg edit-msg &lt;chat&gt; &lt;message-id&gt; &lt;new-text&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-61-1"><a id="__codelineno-61-1" name="__codelineno-61-1" href="#__codelineno-61-1"></a>tg<span class="w"> </span>edit-msg<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="s2">"updated"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-63-1"><a id="__codelineno-63-1" name="__codelineno-63-1" href="#__codelineno-63-1"></a>tg<span class="w"> </span>edit-msg<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="s2">"updated"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4060,10 +4159,10 @@
 <h2 id="tg-export"><code>tg export</code><a class="headerlink" href="#tg-export" title="Permanent link">&para;</a></h2>
 <p>Export cached Telegram history locally</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-62-1"><a id="__codelineno-62-1" name="__codelineno-62-1" href="#__codelineno-62-1"></a>tg export &lt;chat&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-64-1"><a id="__codelineno-64-1" name="__codelineno-64-1" href="#__codelineno-64-1"></a>tg export &lt;chat&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-63-1"><a id="__codelineno-63-1" name="__codelineno-63-1" href="#__codelineno-63-1"></a>tg<span class="w"> </span><span class="nb">export</span><span class="w"> </span>&lt;chat&gt;<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-65-1"><a id="__codelineno-65-1" name="__codelineno-65-1" href="#__codelineno-65-1"></a>tg<span class="w"> </span><span class="nb">export</span><span class="w"> </span>&lt;chat&gt;<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4127,10 +4226,10 @@
 <h2 id="tg-folder-add-chat"><code>tg folder-add-chat</code><a class="headerlink" href="#tg-folder-add-chat" title="Permanent link">&para;</a></h2>
 <p>Mutate folder chat membership</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-64-1"><a id="__codelineno-64-1" name="__codelineno-64-1" href="#__codelineno-64-1"></a>tg folder-add-chat &lt;id&gt; &lt;chat&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-66-1"><a id="__codelineno-66-1" name="__codelineno-66-1" href="#__codelineno-66-1"></a>tg folder-add-chat &lt;id&gt; &lt;chat&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-65-1"><a id="__codelineno-65-1" name="__codelineno-65-1" href="#__codelineno-65-1"></a>tg<span class="w"> </span>folder-add-chat<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-67-1"><a id="__codelineno-67-1" name="__codelineno-67-1" href="#__codelineno-67-1"></a>tg<span class="w"> </span>folder-add-chat<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4178,10 +4277,10 @@
 <h2 id="tg-folder-create"><code>tg folder-create</code><a class="headerlink" href="#tg-folder-create" title="Permanent link">&para;</a></h2>
 <p>Create a dialog folder</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-66-1"><a id="__codelineno-66-1" name="__codelineno-66-1" href="#__codelineno-66-1"></a>tg folder-create &lt;name&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-68-1"><a id="__codelineno-68-1" name="__codelineno-68-1" href="#__codelineno-68-1"></a>tg folder-create &lt;name&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-67-1"><a id="__codelineno-67-1" name="__codelineno-67-1" href="#__codelineno-67-1"></a>tg<span class="w"> </span>folder-create<span class="w"> </span><span class="s2">"support"</span><span class="w"> </span>--include-chats<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-69-1"><a id="__codelineno-69-1" name="__codelineno-69-1" href="#__codelineno-69-1"></a>tg<span class="w"> </span>folder-create<span class="w"> </span><span class="s2">"support"</span><span class="w"> </span>--include-chats<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4241,10 +4340,10 @@
 <h2 id="tg-folder-delete"><code>tg folder-delete</code><a class="headerlink" href="#tg-folder-delete" title="Permanent link">&para;</a></h2>
 <p>Delete a dialog folder</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-68-1"><a id="__codelineno-68-1" name="__codelineno-68-1" href="#__codelineno-68-1"></a>tg folder-delete &lt;id&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-70-1"><a id="__codelineno-70-1" name="__codelineno-70-1" href="#__codelineno-70-1"></a>tg folder-delete &lt;id&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-69-1"><a id="__codelineno-69-1" name="__codelineno-69-1" href="#__codelineno-69-1"></a>tg<span class="w"> </span>folder-delete<span class="w"> </span><span class="m">2</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">2</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-71-1"><a id="__codelineno-71-1" name="__codelineno-71-1" href="#__codelineno-71-1"></a>tg<span class="w"> </span>folder-delete<span class="w"> </span><span class="m">2</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">2</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4292,10 +4391,10 @@
 <h2 id="tg-folder-edit"><code>tg folder-edit</code><a class="headerlink" href="#tg-folder-edit" title="Permanent link">&para;</a></h2>
 <p>Edit a dialog folder</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-70-1"><a id="__codelineno-70-1" name="__codelineno-70-1" href="#__codelineno-70-1"></a>tg folder-edit &lt;id&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-72-1"><a id="__codelineno-72-1" name="__codelineno-72-1" href="#__codelineno-72-1"></a>tg folder-edit &lt;id&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-71-1"><a id="__codelineno-71-1" name="__codelineno-71-1" href="#__codelineno-71-1"></a>tg<span class="w"> </span>folder-edit<span class="w"> </span><span class="m">2</span><span class="w"> </span>--name<span class="w"> </span><span class="s2">"support"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-73-1"><a id="__codelineno-73-1" name="__codelineno-73-1" href="#__codelineno-73-1"></a>tg<span class="w"> </span>folder-edit<span class="w"> </span><span class="m">2</span><span class="w"> </span>--name<span class="w"> </span><span class="s2">"support"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4359,10 +4458,10 @@
 <h2 id="tg-folder-remove-chat"><code>tg folder-remove-chat</code><a class="headerlink" href="#tg-folder-remove-chat" title="Permanent link">&para;</a></h2>
 <p>Mutate folder chat membership</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-72-1"><a id="__codelineno-72-1" name="__codelineno-72-1" href="#__codelineno-72-1"></a>tg folder-remove-chat &lt;id&gt; &lt;chat&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-74-1"><a id="__codelineno-74-1" name="__codelineno-74-1" href="#__codelineno-74-1"></a>tg folder-remove-chat &lt;id&gt; &lt;chat&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-73-1"><a id="__codelineno-73-1" name="__codelineno-73-1" href="#__codelineno-73-1"></a>tg<span class="w"> </span>folder-remove-chat<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-75-1"><a id="__codelineno-75-1" name="__codelineno-75-1" href="#__codelineno-75-1"></a>tg<span class="w"> </span>folder-remove-chat<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4410,10 +4509,10 @@
 <h2 id="tg-folder-show"><code>tg folder-show</code><a class="headerlink" href="#tg-folder-show" title="Permanent link">&para;</a></h2>
 <p>Show one dialog folder</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-74-1"><a id="__codelineno-74-1" name="__codelineno-74-1" href="#__codelineno-74-1"></a>tg folder-show &lt;id&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-76-1"><a id="__codelineno-76-1" name="__codelineno-76-1" href="#__codelineno-76-1"></a>tg folder-show &lt;id&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-75-1"><a id="__codelineno-75-1" name="__codelineno-75-1" href="#__codelineno-75-1"></a>tg<span class="w"> </span>folder-show<span class="w"> </span><span class="m">2</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-77-1"><a id="__codelineno-77-1" name="__codelineno-77-1" href="#__codelineno-77-1"></a>tg<span class="w"> </span>folder-show<span class="w"> </span><span class="m">2</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4441,10 +4540,10 @@
 <h2 id="tg-folders-list"><code>tg folders-list</code><a class="headerlink" href="#tg-folders-list" title="Permanent link">&para;</a></h2>
 <p>List dialog folders</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-76-1"><a id="__codelineno-76-1" name="__codelineno-76-1" href="#__codelineno-76-1"></a>tg folders-list [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-78-1"><a id="__codelineno-78-1" name="__codelineno-78-1" href="#__codelineno-78-1"></a>tg folders-list [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-77-1"><a id="__codelineno-77-1" name="__codelineno-77-1" href="#__codelineno-77-1"></a>tg<span class="w"> </span>folders-list<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-79-1"><a id="__codelineno-79-1" name="__codelineno-79-1" href="#__codelineno-79-1"></a>tg<span class="w"> </span>folders-list<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4476,10 +4575,10 @@
 <h2 id="tg-folders-reorder"><code>tg folders-reorder</code><a class="headerlink" href="#tg-folders-reorder" title="Permanent link">&para;</a></h2>
 <p>Reorder dialog folders</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-78-1"><a id="__codelineno-78-1" name="__codelineno-78-1" href="#__codelineno-78-1"></a>tg folders-reorder &lt;id-csv&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-80-1"><a id="__codelineno-80-1" name="__codelineno-80-1" href="#__codelineno-80-1"></a>tg folders-reorder &lt;id-csv&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-79-1"><a id="__codelineno-79-1" name="__codelineno-79-1" href="#__codelineno-79-1"></a>tg<span class="w"> </span>folders-reorder<span class="w"> </span><span class="m">2</span>,3,4<span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-81-1"><a id="__codelineno-81-1" name="__codelineno-81-1" href="#__codelineno-81-1"></a>tg<span class="w"> </span>folders-reorder<span class="w"> </span><span class="m">2</span>,3,4<span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4527,10 +4626,10 @@
 <h2 id="tg-forward"><code>tg forward</code><a class="headerlink" href="#tg-forward" title="Permanent link">&para;</a></h2>
 <p>Forward one or more messages between chats</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-80-1"><a id="__codelineno-80-1" name="__codelineno-80-1" href="#__codelineno-80-1"></a>tg forward &lt;from-chat&gt; &lt;to-chat&gt; &lt;message-ids&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-82-1"><a id="__codelineno-82-1" name="__codelineno-82-1" href="#__codelineno-82-1"></a>tg forward &lt;from-chat&gt; &lt;to-chat&gt; &lt;message-ids&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-81-1"><a id="__codelineno-81-1" name="__codelineno-81-1" href="#__codelineno-81-1"></a>tg<span class="w"> </span>forward<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-83-1"><a id="__codelineno-83-1" name="__codelineno-83-1" href="#__codelineno-83-1"></a>tg<span class="w"> </span>forward<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4582,10 +4681,10 @@
 <h2 id="tg-get-msg"><code>tg get-msg</code><a class="headerlink" href="#tg-get-msg" title="Permanent link">&para;</a></h2>
 <p>Print one cached message in full</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-82-1"><a id="__codelineno-82-1" name="__codelineno-82-1" href="#__codelineno-82-1"></a>tg get-msg &lt;chat&gt; &lt;message-id&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-84-1"><a id="__codelineno-84-1" name="__codelineno-84-1" href="#__codelineno-84-1"></a>tg get-msg &lt;chat&gt; &lt;message-id&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-83-1"><a id="__codelineno-83-1" name="__codelineno-83-1" href="#__codelineno-83-1"></a>tg<span class="w"> </span>get-msg<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-85-1"><a id="__codelineno-85-1" name="__codelineno-85-1" href="#__codelineno-85-1"></a>tg<span class="w"> </span>get-msg<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4621,10 +4720,10 @@
 <h2 id="tg-help"><code>tg help</code><a class="headerlink" href="#tg-help" title="Permanent link">&para;</a></h2>
 <p>Help provides help for any command in the application.</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-84-1"><a id="__codelineno-84-1" name="__codelineno-84-1" href="#__codelineno-84-1"></a>tg help [command] [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-86-1"><a id="__codelineno-86-1" name="__codelineno-86-1" href="#__codelineno-86-1"></a>tg help [command] [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-85-1"><a id="__codelineno-85-1" name="__codelineno-85-1" href="#__codelineno-85-1"></a>tg<span class="w"> </span><span class="nb">help</span><span class="w"> </span>send
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-87-1"><a id="__codelineno-87-1" name="__codelineno-87-1" href="#__codelineno-87-1"></a>tg<span class="w"> </span><span class="nb">help</span><span class="w"> </span>send
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4644,10 +4743,10 @@
 <h2 id="tg-kick"><code>tg kick</code><a class="headerlink" href="#tg-kick" title="Permanent link">&para;</a></h2>
 <p>kick user in chat</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-86-1"><a id="__codelineno-86-1" name="__codelineno-86-1" href="#__codelineno-86-1"></a>tg kick &lt;chat&gt; &lt;user-id&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-88-1"><a id="__codelineno-88-1" name="__codelineno-88-1" href="#__codelineno-88-1"></a>tg kick &lt;chat&gt; &lt;user-id&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-87-1"><a id="__codelineno-87-1" name="__codelineno-87-1" href="#__codelineno-87-1"></a>tg<span class="w"> </span>kick<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-89-1"><a id="__codelineno-89-1" name="__codelineno-89-1" href="#__codelineno-89-1"></a>tg<span class="w"> </span>kick<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4695,10 +4794,10 @@
 <h2 id="tg-leave-chat"><code>tg leave-chat</code><a class="headerlink" href="#tg-leave-chat" title="Permanent link">&para;</a></h2>
 <p>Leave a group or channel (typed confirm required)</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-88-1"><a id="__codelineno-88-1" name="__codelineno-88-1" href="#__codelineno-88-1"></a>tg leave-chat &lt;chat&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-90-1"><a id="__codelineno-90-1" name="__codelineno-90-1" href="#__codelineno-90-1"></a>tg leave-chat &lt;chat&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-89-1"><a id="__codelineno-89-1" name="__codelineno-89-1" href="#__codelineno-89-1"></a>tg<span class="w"> </span>leave-chat<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-91-1"><a id="__codelineno-91-1" name="__codelineno-91-1" href="#__codelineno-91-1"></a>tg<span class="w"> </span>leave-chat<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4746,10 +4845,10 @@
 <h2 id="tg-list-msgs"><code>tg list-msgs</code><a class="headerlink" href="#tg-list-msgs" title="Permanent link">&para;</a></h2>
 <p>List cached messages in a chat with optional date filters</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-90-1"><a id="__codelineno-90-1" name="__codelineno-90-1" href="#__codelineno-90-1"></a>tg list-msgs &lt;chat&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-92-1"><a id="__codelineno-92-1" name="__codelineno-92-1" href="#__codelineno-92-1"></a>tg list-msgs &lt;chat&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-91-1"><a id="__codelineno-91-1" name="__codelineno-91-1" href="#__codelineno-91-1"></a>tg<span class="w"> </span>list-msgs<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-93-1"><a id="__codelineno-93-1" name="__codelineno-93-1" href="#__codelineno-93-1"></a>tg<span class="w"> </span>list-msgs<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4805,10 +4904,10 @@
 <h2 id="tg-listen"><code>tg listen</code><a class="headerlink" href="#tg-listen" title="Permanent link">&para;</a></h2>
 <p>Listen for live Telegram updates</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-92-1"><a id="__codelineno-92-1" name="__codelineno-92-1" href="#__codelineno-92-1"></a>tg listen [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-94-1"><a id="__codelineno-94-1" name="__codelineno-94-1" href="#__codelineno-94-1"></a>tg listen [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-93-1"><a id="__codelineno-93-1" name="__codelineno-93-1" href="#__codelineno-93-1"></a>tg<span class="w"> </span>listen<span class="w"> </span>--once<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-95-1"><a id="__codelineno-95-1" name="__codelineno-95-1" href="#__codelineno-95-1"></a>tg<span class="w"> </span>listen<span class="w"> </span>--once<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4852,10 +4951,10 @@
 <h2 id="tg-login"><code>tg login</code><a class="headerlink" href="#tg-login" title="Permanent link">&para;</a></h2>
 <p>Interactively authorize this account against Telegram</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-94-1"><a id="__codelineno-94-1" name="__codelineno-94-1" href="#__codelineno-94-1"></a>tg login [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-96-1"><a id="__codelineno-96-1" name="__codelineno-96-1" href="#__codelineno-96-1"></a>tg login [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-95-1"><a id="__codelineno-95-1" name="__codelineno-95-1" href="#__codelineno-95-1"></a>tg<span class="w"> </span>login
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-97-1"><a id="__codelineno-97-1" name="__codelineno-97-1" href="#__codelineno-97-1"></a>tg<span class="w"> </span>login
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4891,10 +4990,10 @@
 <h2 id="tg-mark-read"><code>tg mark-read</code><a class="headerlink" href="#tg-mark-read" title="Permanent link">&para;</a></h2>
 <p>Mark history read up to and including --up-to</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-96-1"><a id="__codelineno-96-1" name="__codelineno-96-1" href="#__codelineno-96-1"></a>tg mark-read &lt;chat&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-98-1"><a id="__codelineno-98-1" name="__codelineno-98-1" href="#__codelineno-98-1"></a>tg mark-read &lt;chat&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-97-1"><a id="__codelineno-97-1" name="__codelineno-97-1" href="#__codelineno-97-1"></a>tg<span class="w"> </span>mark-read<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--up-to<span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-99-1"><a id="__codelineno-99-1" name="__codelineno-99-1" href="#__codelineno-99-1"></a>tg<span class="w"> </span>mark-read<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--up-to<span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4946,10 +5045,10 @@
 <h2 id="tg-me"><code>tg me</code><a class="headerlink" href="#tg-me" title="Permanent link">&para;</a></h2>
 <p>Print authenticated user info</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-98-1"><a id="__codelineno-98-1" name="__codelineno-98-1" href="#__codelineno-98-1"></a>tg me [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-100-1"><a id="__codelineno-100-1" name="__codelineno-100-1" href="#__codelineno-100-1"></a>tg me [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-99-1"><a id="__codelineno-99-1" name="__codelineno-99-1" href="#__codelineno-99-1"></a>tg<span class="w"> </span>me<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-101-1"><a id="__codelineno-101-1" name="__codelineno-101-1" href="#__codelineno-101-1"></a>tg<span class="w"> </span>me<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -4981,10 +5080,10 @@
 <h2 id="tg-operations-list"><code>tg operations-list</code><a class="headerlink" href="#tg-operations-list" title="Permanent link">&para;</a></h2>
 <p>Inspect durable write outcomes without exposing request payloads</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-100-1"><a id="__codelineno-100-1" name="__codelineno-100-1" href="#__codelineno-100-1"></a>tg operations-list [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-102-1"><a id="__codelineno-102-1" name="__codelineno-102-1" href="#__codelineno-102-1"></a>tg operations-list [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-101-1"><a id="__codelineno-101-1" name="__codelineno-101-1" href="#__codelineno-101-1"></a>tg<span class="w"> </span>operations-list<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-103-1"><a id="__codelineno-103-1" name="__codelineno-103-1" href="#__codelineno-103-1"></a>tg<span class="w"> </span>operations-list<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5016,10 +5115,10 @@
 <h2 id="tg-pin-msg"><code>tg pin-msg</code><a class="headerlink" href="#tg-pin-msg" title="Permanent link">&para;</a></h2>
 <p>Pin a message in a chat</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-102-1"><a id="__codelineno-102-1" name="__codelineno-102-1" href="#__codelineno-102-1"></a>tg pin-msg &lt;chat&gt; &lt;message-id&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-104-1"><a id="__codelineno-104-1" name="__codelineno-104-1" href="#__codelineno-104-1"></a>tg pin-msg &lt;chat&gt; &lt;message-id&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-103-1"><a id="__codelineno-103-1" name="__codelineno-103-1" href="#__codelineno-103-1"></a>tg<span class="w"> </span>pin-msg<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-105-1"><a id="__codelineno-105-1" name="__codelineno-105-1" href="#__codelineno-105-1"></a>tg<span class="w"> </span>pin-msg<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5071,10 +5170,10 @@
 <h2 id="tg-promote"><code>tg promote</code><a class="headerlink" href="#tg-promote" title="Permanent link">&para;</a></h2>
 <p>promote user in chat</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-104-1"><a id="__codelineno-104-1" name="__codelineno-104-1" href="#__codelineno-104-1"></a>tg promote &lt;chat&gt; &lt;user-id&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-106-1"><a id="__codelineno-106-1" name="__codelineno-106-1" href="#__codelineno-106-1"></a>tg promote &lt;chat&gt; &lt;user-id&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-105-1"><a id="__codelineno-105-1" name="__codelineno-105-1" href="#__codelineno-105-1"></a>tg<span class="w"> </span>promote<span class="w"> </span><span class="m">987654321</span><span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">987654321</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-107-1"><a id="__codelineno-107-1" name="__codelineno-107-1" href="#__codelineno-107-1"></a>tg<span class="w"> </span>promote<span class="w"> </span><span class="m">987654321</span><span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">987654321</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5126,10 +5225,10 @@
 <h2 id="tg-react"><code>tg react</code><a class="headerlink" href="#tg-react" title="Permanent link">&para;</a></h2>
 <p>Send a reaction to a message</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-106-1"><a id="__codelineno-106-1" name="__codelineno-106-1" href="#__codelineno-106-1"></a>tg react &lt;chat&gt; &lt;message-id&gt; &lt;emoji&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-108-1"><a id="__codelineno-108-1" name="__codelineno-108-1" href="#__codelineno-108-1"></a>tg react &lt;chat&gt; &lt;message-id&gt; &lt;emoji&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-107-1"><a id="__codelineno-107-1" name="__codelineno-107-1" href="#__codelineno-107-1"></a>tg<span class="w"> </span>react<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="s2">"👍"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-109-1"><a id="__codelineno-109-1" name="__codelineno-109-1" href="#__codelineno-109-1"></a>tg<span class="w"> </span>react<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="s2">"👍"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5181,10 +5280,10 @@
 <h2 id="tg-replies"><code>tg replies</code><a class="headerlink" href="#tg-replies" title="Permanent link">&para;</a></h2>
 <p>Retrieve a bounded server page of replies to a message</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-108-1"><a id="__codelineno-108-1" name="__codelineno-108-1" href="#__codelineno-108-1"></a>tg replies &lt;chat&gt; &lt;message-id&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-110-1"><a id="__codelineno-110-1" name="__codelineno-110-1" href="#__codelineno-110-1"></a>tg replies &lt;chat&gt; &lt;message-id&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-109-1"><a id="__codelineno-109-1" name="__codelineno-109-1" href="#__codelineno-109-1"></a>tg<span class="w"> </span>replies<span class="w"> </span>&lt;chat&gt;<span class="w"> </span>&lt;message-id&gt;<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-111-1"><a id="__codelineno-111-1" name="__codelineno-111-1" href="#__codelineno-111-1"></a>tg<span class="w"> </span>replies<span class="w"> </span>&lt;chat&gt;<span class="w"> </span>&lt;message-id&gt;<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5220,10 +5319,10 @@
 <h2 id="tg-resolve"><code>tg resolve</code><a class="headerlink" href="#tg-resolve" title="Permanent link">&para;</a></h2>
 <p>Resolve a selector to a marked Telegram peer identity</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-110-1"><a id="__codelineno-110-1" name="__codelineno-110-1" href="#__codelineno-110-1"></a>tg resolve &lt;selector&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-112-1"><a id="__codelineno-112-1" name="__codelineno-112-1" href="#__codelineno-112-1"></a>tg resolve &lt;selector&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-111-1"><a id="__codelineno-111-1" name="__codelineno-111-1" href="#__codelineno-111-1"></a>tg<span class="w"> </span>resolve<span class="w"> </span>&lt;selector&gt;<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-113-1"><a id="__codelineno-113-1" name="__codelineno-113-1" href="#__codelineno-113-1"></a>tg<span class="w"> </span>resolve<span class="w"> </span>&lt;selector&gt;<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5255,10 +5354,10 @@
 <h2 id="tg-search"><code>tg search</code><a class="headerlink" href="#tg-search" title="Permanent link">&para;</a></h2>
 <p>Search cached messages in a chat</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-112-1"><a id="__codelineno-112-1" name="__codelineno-112-1" href="#__codelineno-112-1"></a>tg search &lt;chat&gt; &lt;query&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-114-1"><a id="__codelineno-114-1" name="__codelineno-114-1" href="#__codelineno-114-1"></a>tg search &lt;chat&gt; &lt;query&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-113-1"><a id="__codelineno-113-1" name="__codelineno-113-1" href="#__codelineno-113-1"></a>tg<span class="w"> </span>search<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="s2">"shipping"</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">20</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-115-1"><a id="__codelineno-115-1" name="__codelineno-115-1" href="#__codelineno-115-1"></a>tg<span class="w"> </span>search<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="s2">"shipping"</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">20</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5322,10 +5421,10 @@
 <h2 id="tg-send"><code>tg send</code><a class="headerlink" href="#tg-send" title="Permanent link">&para;</a></h2>
 <p>Send a text message</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-114-1"><a id="__codelineno-114-1" name="__codelineno-114-1" href="#__codelineno-114-1"></a>tg send &lt;chat&gt; &lt;text&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-116-1"><a id="__codelineno-116-1" name="__codelineno-116-1" href="#__codelineno-116-1"></a>tg send &lt;chat&gt; &lt;text&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-115-1"><a id="__codelineno-115-1" name="__codelineno-115-1" href="#__codelineno-115-1"></a>tg<span class="w"> </span>send<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="s2">"hello"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-117-1"><a id="__codelineno-117-1" name="__codelineno-117-1" href="#__codelineno-117-1"></a>tg<span class="w"> </span>send<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="s2">"hello"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5389,10 +5488,10 @@
 <h2 id="tg-send-by-username"><code>tg send-by-username</code><a class="headerlink" href="#tg-send-by-username" title="Permanent link">&para;</a></h2>
 <p>Send a text message by resolving an @username (no entity cache required)</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-116-1"><a id="__codelineno-116-1" name="__codelineno-116-1" href="#__codelineno-116-1"></a>tg send-by-username &lt;@user|@channel&gt; &lt;text&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-118-1"><a id="__codelineno-118-1" name="__codelineno-118-1" href="#__codelineno-118-1"></a>tg send-by-username &lt;@user|@channel&gt; &lt;text&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-117-1"><a id="__codelineno-117-1" name="__codelineno-117-1" href="#__codelineno-117-1"></a>tg<span class="w"> </span>send-by-username<span class="w"> </span>@username<span class="w"> </span><span class="s2">"hello"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-119-1"><a id="__codelineno-119-1" name="__codelineno-119-1" href="#__codelineno-119-1"></a>tg<span class="w"> </span>send-by-username<span class="w"> </span>@username<span class="w"> </span><span class="s2">"hello"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5452,10 +5551,10 @@
 <h2 id="tg-set-permissions"><code>tg set-permissions</code><a class="headerlink" href="#tg-set-permissions" title="Permanent link">&para;</a></h2>
 <p>Set default chat permissions</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-118-1"><a id="__codelineno-118-1" name="__codelineno-118-1" href="#__codelineno-118-1"></a>tg set-permissions &lt;chat&gt; [permissions] [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-120-1"><a id="__codelineno-120-1" name="__codelineno-120-1" href="#__codelineno-120-1"></a>tg set-permissions &lt;chat&gt; [permissions] [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-119-1"><a id="__codelineno-119-1" name="__codelineno-119-1" href="#__codelineno-119-1"></a>tg<span class="w"> </span>set-permissions<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span>--send-messages<span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-121-1"><a id="__codelineno-121-1" name="__codelineno-121-1" href="#__codelineno-121-1"></a>tg<span class="w"> </span>set-permissions<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span>--send-messages<span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5507,10 +5606,10 @@
 <h2 id="tg-setup"><code>tg setup</code><a class="headerlink" href="#tg-setup" title="Permanent link">&para;</a></h2>
 <p>Create or update a private .env with Telegram app credentials</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-120-1"><a id="__codelineno-120-1" name="__codelineno-120-1" href="#__codelineno-120-1"></a>tg setup [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-122-1"><a id="__codelineno-122-1" name="__codelineno-122-1" href="#__codelineno-122-1"></a>tg setup [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-121-1"><a id="__codelineno-121-1" name="__codelineno-121-1" href="#__codelineno-121-1"></a>tg<span class="w"> </span>setup<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-123-1"><a id="__codelineno-123-1" name="__codelineno-123-1" href="#__codelineno-123-1"></a>tg<span class="w"> </span>setup<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5550,10 +5649,10 @@
 <h2 id="tg-show"><code>tg show</code><a class="headerlink" href="#tg-show" title="Permanent link">&para;</a></h2>
 <p>Show recent cached messages in a chat</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-122-1"><a id="__codelineno-122-1" name="__codelineno-122-1" href="#__codelineno-122-1"></a>tg show &lt;chat&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-124-1"><a id="__codelineno-124-1" name="__codelineno-124-1" href="#__codelineno-124-1"></a>tg show &lt;chat&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-123-1"><a id="__codelineno-123-1" name="__codelineno-123-1" href="#__codelineno-123-1"></a>tg<span class="w"> </span>show<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">5</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-125-1"><a id="__codelineno-125-1" name="__codelineno-125-1" href="#__codelineno-125-1"></a>tg<span class="w"> </span>show<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">5</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5601,10 +5700,10 @@
 <h2 id="tg-stats"><code>tg stats</code><a class="headerlink" href="#tg-stats" title="Permanent link">&para;</a></h2>
 <p>Show local cache statistics</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-124-1"><a id="__codelineno-124-1" name="__codelineno-124-1" href="#__codelineno-124-1"></a>tg stats [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-126-1"><a id="__codelineno-126-1" name="__codelineno-126-1" href="#__codelineno-126-1"></a>tg stats [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-125-1"><a id="__codelineno-125-1" name="__codelineno-125-1" href="#__codelineno-125-1"></a>tg<span class="w"> </span>stats<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-127-1"><a id="__codelineno-127-1" name="__codelineno-127-1" href="#__codelineno-127-1"></a>tg<span class="w"> </span>stats<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5632,10 +5731,10 @@
 <h2 id="tg-sync"><code>tg sync</code><a class="headerlink" href="#tg-sync" title="Permanent link">&para;</a></h2>
 <p>Synchronize cached messages and optionally follow updates</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-126-1"><a id="__codelineno-126-1" name="__codelineno-126-1" href="#__codelineno-126-1"></a>tg sync &lt;chat&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-128-1"><a id="__codelineno-128-1" name="__codelineno-128-1" href="#__codelineno-128-1"></a>tg sync &lt;chat&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-127-1"><a id="__codelineno-127-1" name="__codelineno-127-1" href="#__codelineno-127-1"></a>tg<span class="w"> </span>sync<span class="w"> </span>&lt;chat&gt;<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-129-1"><a id="__codelineno-129-1" name="__codelineno-129-1" href="#__codelineno-129-1"></a>tg<span class="w"> </span>sync<span class="w"> </span>&lt;chat&gt;<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5695,10 +5794,10 @@
 <h2 id="tg-sync-contacts"><code>tg sync-contacts</code><a class="headerlink" href="#tg-sync-contacts" title="Permanent link">&para;</a></h2>
 <p>Sync Telegram contacts into the local DB</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-128-1"><a id="__codelineno-128-1" name="__codelineno-128-1" href="#__codelineno-128-1"></a>tg sync-contacts [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-130-1"><a id="__codelineno-130-1" name="__codelineno-130-1" href="#__codelineno-130-1"></a>tg sync-contacts [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-129-1"><a id="__codelineno-129-1" name="__codelineno-129-1" href="#__codelineno-129-1"></a>tg<span class="w"> </span>sync-contacts<span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-131-1"><a id="__codelineno-131-1" name="__codelineno-131-1" href="#__codelineno-131-1"></a>tg<span class="w"> </span>sync-contacts<span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5730,10 +5829,10 @@
 <h2 id="tg-terminate-session"><code>tg terminate-session</code><a class="headerlink" href="#tg-terminate-session" title="Permanent link">&para;</a></h2>
 <p>Terminate one of your authorized Telegram sessions</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-130-1"><a id="__codelineno-130-1" name="__codelineno-130-1" href="#__codelineno-130-1"></a>tg terminate-session &lt;session-hash&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-132-1"><a id="__codelineno-132-1" name="__codelineno-132-1" href="#__codelineno-132-1"></a>tg terminate-session &lt;session-hash&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-131-1"><a id="__codelineno-131-1" name="__codelineno-131-1" href="#__codelineno-131-1"></a>tg<span class="w"> </span>terminate-session<span class="w"> </span>&lt;session-hash&gt;<span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span>&lt;session-hash&gt;<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-133-1"><a id="__codelineno-133-1" name="__codelineno-133-1" href="#__codelineno-133-1"></a>tg<span class="w"> </span>terminate-session<span class="w"> </span>&lt;session-hash&gt;<span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span>&lt;session-hash&gt;<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5781,10 +5880,10 @@
 <h2 id="tg-topic-create"><code>tg topic-create</code><a class="headerlink" href="#tg-topic-create" title="Permanent link">&para;</a></h2>
 <p>Create a forum topic</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-132-1"><a id="__codelineno-132-1" name="__codelineno-132-1" href="#__codelineno-132-1"></a>tg topic-create &lt;chat&gt; &lt;title&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-134-1"><a id="__codelineno-134-1" name="__codelineno-134-1" href="#__codelineno-134-1"></a>tg topic-create &lt;chat&gt; &lt;title&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-133-1"><a id="__codelineno-133-1" name="__codelineno-133-1" href="#__codelineno-133-1"></a>tg<span class="w"> </span>topic-create<span class="w"> </span>&lt;forum-chat-id&gt;<span class="w"> </span><span class="s2">"Support"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-135-1"><a id="__codelineno-135-1" name="__codelineno-135-1" href="#__codelineno-135-1"></a>tg<span class="w"> </span>topic-create<span class="w"> </span>&lt;forum-chat-id&gt;<span class="w"> </span><span class="s2">"Support"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5840,10 +5939,10 @@
 <h2 id="tg-topic-edit"><code>tg topic-edit</code><a class="headerlink" href="#tg-topic-edit" title="Permanent link">&para;</a></h2>
 <p>Edit a forum topic</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-134-1"><a id="__codelineno-134-1" name="__codelineno-134-1" href="#__codelineno-134-1"></a>tg topic-edit &lt;chat&gt; &lt;topic-id&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-136-1"><a id="__codelineno-136-1" name="__codelineno-136-1" href="#__codelineno-136-1"></a>tg topic-edit &lt;chat&gt; &lt;topic-id&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-135-1"><a id="__codelineno-135-1" name="__codelineno-135-1" href="#__codelineno-135-1"></a>tg<span class="w"> </span>topic-edit<span class="w"> </span>&lt;forum-chat-id&gt;<span class="w"> </span><span class="m">1</span><span class="w"> </span>--title<span class="w"> </span><span class="s2">"Renamed"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-137-1"><a id="__codelineno-137-1" name="__codelineno-137-1" href="#__codelineno-137-1"></a>tg<span class="w"> </span>topic-edit<span class="w"> </span>&lt;forum-chat-id&gt;<span class="w"> </span><span class="m">1</span><span class="w"> </span>--title<span class="w"> </span><span class="s2">"Renamed"</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5899,10 +5998,10 @@
 <h2 id="tg-topic-history"><code>tg topic-history</code><a class="headerlink" href="#tg-topic-history" title="Permanent link">&para;</a></h2>
 <p>Retrieve a bounded server page from a forum topic</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-136-1"><a id="__codelineno-136-1" name="__codelineno-136-1" href="#__codelineno-136-1"></a>tg topic-history &lt;chat&gt; &lt;topic-id&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-138-1"><a id="__codelineno-138-1" name="__codelineno-138-1" href="#__codelineno-138-1"></a>tg topic-history &lt;chat&gt; &lt;topic-id&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-137-1"><a id="__codelineno-137-1" name="__codelineno-137-1" href="#__codelineno-137-1"></a>tg<span class="w"> </span>topic-history<span class="w"> </span>&lt;chat&gt;<span class="w"> </span>&lt;topic-id&gt;<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-139-1"><a id="__codelineno-139-1" name="__codelineno-139-1" href="#__codelineno-139-1"></a>tg<span class="w"> </span>topic-history<span class="w"> </span>&lt;chat&gt;<span class="w"> </span>&lt;topic-id&gt;<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5938,10 +6037,10 @@
 <h2 id="tg-topic-pin"><code>tg topic-pin</code><a class="headerlink" href="#tg-topic-pin" title="Permanent link">&para;</a></h2>
 <p>Pin a forum topic</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-138-1"><a id="__codelineno-138-1" name="__codelineno-138-1" href="#__codelineno-138-1"></a>tg topic-pin &lt;chat&gt; &lt;topic-id&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-140-1"><a id="__codelineno-140-1" name="__codelineno-140-1" href="#__codelineno-140-1"></a>tg topic-pin &lt;chat&gt; &lt;topic-id&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-139-1"><a id="__codelineno-139-1" name="__codelineno-139-1" href="#__codelineno-139-1"></a>tg<span class="w"> </span>topic-pin<span class="w"> </span>&lt;forum-chat-id&gt;<span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-141-1"><a id="__codelineno-141-1" name="__codelineno-141-1" href="#__codelineno-141-1"></a>tg<span class="w"> </span>topic-pin<span class="w"> </span>&lt;forum-chat-id&gt;<span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -5989,10 +6088,10 @@
 <h2 id="tg-topic-unpin"><code>tg topic-unpin</code><a class="headerlink" href="#tg-topic-unpin" title="Permanent link">&para;</a></h2>
 <p>Unpin a forum topic</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-140-1"><a id="__codelineno-140-1" name="__codelineno-140-1" href="#__codelineno-140-1"></a>tg topic-unpin &lt;chat&gt; &lt;topic-id&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-142-1"><a id="__codelineno-142-1" name="__codelineno-142-1" href="#__codelineno-142-1"></a>tg topic-unpin &lt;chat&gt; &lt;topic-id&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-141-1"><a id="__codelineno-141-1" name="__codelineno-141-1" href="#__codelineno-141-1"></a>tg<span class="w"> </span>topic-unpin<span class="w"> </span>&lt;forum-chat-id&gt;<span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-143-1"><a id="__codelineno-143-1" name="__codelineno-143-1" href="#__codelineno-143-1"></a>tg<span class="w"> </span>topic-unpin<span class="w"> </span>&lt;forum-chat-id&gt;<span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -6040,10 +6139,10 @@
 <h2 id="tg-topics-list"><code>tg topics-list</code><a class="headerlink" href="#tg-topics-list" title="Permanent link">&para;</a></h2>
 <p>List forum topics</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-142-1"><a id="__codelineno-142-1" name="__codelineno-142-1" href="#__codelineno-142-1"></a>tg topics-list &lt;chat&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-144-1"><a id="__codelineno-144-1" name="__codelineno-144-1" href="#__codelineno-144-1"></a>tg topics-list &lt;chat&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-143-1"><a id="__codelineno-143-1" name="__codelineno-143-1" href="#__codelineno-143-1"></a>tg<span class="w"> </span>topics-list<span class="w"> </span>&lt;forum-chat-id&gt;<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-145-1"><a id="__codelineno-145-1" name="__codelineno-145-1" href="#__codelineno-145-1"></a>tg<span class="w"> </span>topics-list<span class="w"> </span>&lt;forum-chat-id&gt;<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -6076,13 +6175,60 @@
 </tr>
 </tbody>
 </table>
+<h2 id="tg-unarchive"><code>tg unarchive</code><a class="headerlink" href="#tg-unarchive" title="Permanent link">&para;</a></h2>
+<p>Move one chat to the inbox</p>
+<p><strong>Use</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-146-1"><a id="__codelineno-146-1" name="__codelineno-146-1" href="#__codelineno-146-1"></a>tg unarchive &lt;chat&gt; [flags]
+</span></code></pre></div>
+<p><strong>Example</strong></p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-147-1"><a id="__codelineno-147-1" name="__codelineno-147-1" href="#__codelineno-147-1"></a>tg<span class="w"> </span>unarchive<span class="w"> </span>&lt;chat&gt;<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
+</span></code></pre></div>
+<p><strong>Flags</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--allow-write</code></td>
+<td>Required for any Telegram-side write</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Print payload preview without contacting Telegram</td>
+</tr>
+<tr>
+<td><code>--fuzzy</code></td>
+<td>Allow title-based selectors for write commands</td>
+</tr>
+<tr>
+<td><code>-h, --help</code></td>
+<td>help for unarchive</td>
+</tr>
+<tr>
+<td><code>--human</code></td>
+<td>Force human-readable output (default on a TTY)</td>
+</tr>
+<tr>
+<td><code>--idempotency-key string</code></td>
+<td>Per-account replay-safe key</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Force JSON envelope output (default when stdout is not a TTY)</td>
+</tr>
+</tbody>
+</table>
 <h2 id="tg-unban-from-chat"><code>tg unban-from-chat</code><a class="headerlink" href="#tg-unban-from-chat" title="Permanent link">&para;</a></h2>
 <p>unban-from-chat user in chat</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-144-1"><a id="__codelineno-144-1" name="__codelineno-144-1" href="#__codelineno-144-1"></a>tg unban-from-chat &lt;chat&gt; &lt;user-id&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-148-1"><a id="__codelineno-148-1" name="__codelineno-148-1" href="#__codelineno-148-1"></a>tg unban-from-chat &lt;chat&gt; &lt;user-id&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-145-1"><a id="__codelineno-145-1" name="__codelineno-145-1" href="#__codelineno-145-1"></a>tg<span class="w"> </span>unban-from-chat<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-149-1"><a id="__codelineno-149-1" name="__codelineno-149-1" href="#__codelineno-149-1"></a>tg<span class="w"> </span>unban-from-chat<span class="w"> </span>&lt;group-chat-id&gt;<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -6130,10 +6276,10 @@
 <h2 id="tg-unblock-user"><code>tg unblock-user</code><a class="headerlink" href="#tg-unblock-user" title="Permanent link">&para;</a></h2>
 <p>Unblock a previously blocked user</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-146-1"><a id="__codelineno-146-1" name="__codelineno-146-1" href="#__codelineno-146-1"></a>tg unblock-user &lt;user&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-150-1"><a id="__codelineno-150-1" name="__codelineno-150-1" href="#__codelineno-150-1"></a>tg unblock-user &lt;user&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-147-1"><a id="__codelineno-147-1" name="__codelineno-147-1" href="#__codelineno-147-1"></a>tg<span class="w"> </span>unblock-user<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-151-1"><a id="__codelineno-151-1" name="__codelineno-151-1" href="#__codelineno-151-1"></a>tg<span class="w"> </span>unblock-user<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--allow-write<span class="w"> </span>--confirm<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -6181,10 +6327,10 @@
 <h2 id="tg-unpin-msg"><code>tg unpin-msg</code><a class="headerlink" href="#tg-unpin-msg" title="Permanent link">&para;</a></h2>
 <p>Unpin a previously pinned message</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-148-1"><a id="__codelineno-148-1" name="__codelineno-148-1" href="#__codelineno-148-1"></a>tg unpin-msg &lt;chat&gt; &lt;message-id&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-152-1"><a id="__codelineno-152-1" name="__codelineno-152-1" href="#__codelineno-152-1"></a>tg unpin-msg &lt;chat&gt; &lt;message-id&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-149-1"><a id="__codelineno-149-1" name="__codelineno-149-1" href="#__codelineno-149-1"></a>tg<span class="w"> </span>unpin-msg<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-153-1"><a id="__codelineno-153-1" name="__codelineno-153-1" href="#__codelineno-153-1"></a>tg<span class="w"> </span>unpin-msg<span class="w"> </span><span class="m">123456789</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -6236,10 +6382,10 @@
 <h2 id="tg-unread"><code>tg unread</code><a class="headerlink" href="#tg-unread" title="Permanent link">&para;</a></h2>
 <p>List cached incoming messages beyond known Telegram read markers</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-150-1"><a id="__codelineno-150-1" name="__codelineno-150-1" href="#__codelineno-150-1"></a>tg unread [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-154-1"><a id="__codelineno-154-1" name="__codelineno-154-1" href="#__codelineno-154-1"></a>tg unread [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-151-1"><a id="__codelineno-151-1" name="__codelineno-151-1" href="#__codelineno-151-1"></a>tg<span class="w"> </span>unread<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-155-1"><a id="__codelineno-155-1" name="__codelineno-155-1" href="#__codelineno-155-1"></a>tg<span class="w"> </span>unread<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -6271,10 +6417,10 @@
 <h2 id="tg-upload-album"><code>tg upload-album</code><a class="headerlink" href="#tg-upload-album" title="Permanent link">&para;</a></h2>
 <p>Upload a 2–10 item media album</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-152-1"><a id="__codelineno-152-1" name="__codelineno-152-1" href="#__codelineno-152-1"></a>tg upload-album &lt;chat&gt; &lt;file&gt;... [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-156-1"><a id="__codelineno-156-1" name="__codelineno-156-1" href="#__codelineno-156-1"></a>tg upload-album &lt;chat&gt; &lt;file&gt;... [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-153-1"><a id="__codelineno-153-1" name="__codelineno-153-1" href="#__codelineno-153-1"></a>tg<span class="w"> </span>upload-album<span class="w"> </span>&lt;chat&gt;<span class="w"> </span>&lt;file&gt;...<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-157-1"><a id="__codelineno-157-1" name="__codelineno-157-1" href="#__codelineno-157-1"></a>tg<span class="w"> </span>upload-album<span class="w"> </span>&lt;chat&gt;<span class="w"> </span>&lt;file&gt;...<span class="w"> </span><span class="o">[</span>flags<span class="o">]</span><span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -6342,10 +6488,10 @@
 <h2 id="tg-upload-document"><code>tg upload-document</code><a class="headerlink" href="#tg-upload-document" title="Permanent link">&para;</a></h2>
 <p>Upload a document</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-154-1"><a id="__codelineno-154-1" name="__codelineno-154-1" href="#__codelineno-154-1"></a>tg upload-document &lt;chat&gt; &lt;file&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-158-1"><a id="__codelineno-158-1" name="__codelineno-158-1" href="#__codelineno-158-1"></a>tg upload-document &lt;chat&gt; &lt;file&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-155-1"><a id="__codelineno-155-1" name="__codelineno-155-1" href="#__codelineno-155-1"></a>tg<span class="w"> </span>upload-document<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>./file.txt<span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-159-1"><a id="__codelineno-159-1" name="__codelineno-159-1" href="#__codelineno-159-1"></a>tg<span class="w"> </span>upload-document<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>./file.txt<span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -6413,10 +6559,10 @@
 <h2 id="tg-upload-photo"><code>tg upload-photo</code><a class="headerlink" href="#tg-upload-photo" title="Permanent link">&para;</a></h2>
 <p>Upload a photo</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-156-1"><a id="__codelineno-156-1" name="__codelineno-156-1" href="#__codelineno-156-1"></a>tg upload-photo &lt;chat&gt; &lt;file&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-160-1"><a id="__codelineno-160-1" name="__codelineno-160-1" href="#__codelineno-160-1"></a>tg upload-photo &lt;chat&gt; &lt;file&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-157-1"><a id="__codelineno-157-1" name="__codelineno-157-1" href="#__codelineno-157-1"></a>tg<span class="w"> </span>upload-photo<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>./photo.png<span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-161-1"><a id="__codelineno-161-1" name="__codelineno-161-1" href="#__codelineno-161-1"></a>tg<span class="w"> </span>upload-photo<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>./photo.png<span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -6480,10 +6626,10 @@
 <h2 id="tg-upload-video"><code>tg upload-video</code><a class="headerlink" href="#tg-upload-video" title="Permanent link">&para;</a></h2>
 <p>Upload a video</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-158-1"><a id="__codelineno-158-1" name="__codelineno-158-1" href="#__codelineno-158-1"></a>tg upload-video &lt;chat&gt; &lt;file&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-162-1"><a id="__codelineno-162-1" name="__codelineno-162-1" href="#__codelineno-162-1"></a>tg upload-video &lt;chat&gt; &lt;file&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-159-1"><a id="__codelineno-159-1" name="__codelineno-159-1" href="#__codelineno-159-1"></a>tg<span class="w"> </span>upload-video<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>./video.mp4<span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-163-1"><a id="__codelineno-163-1" name="__codelineno-163-1" href="#__codelineno-163-1"></a>tg<span class="w"> </span>upload-video<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>./video.mp4<span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -6551,10 +6697,10 @@
 <h2 id="tg-upload-voice"><code>tg upload-voice</code><a class="headerlink" href="#tg-upload-voice" title="Permanent link">&para;</a></h2>
 <p>Upload an OGG/Opus voice message</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-160-1"><a id="__codelineno-160-1" name="__codelineno-160-1" href="#__codelineno-160-1"></a>tg upload-voice &lt;chat&gt; &lt;file&gt; [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-164-1"><a id="__codelineno-164-1" name="__codelineno-164-1" href="#__codelineno-164-1"></a>tg upload-voice &lt;chat&gt; &lt;file&gt; [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-161-1"><a id="__codelineno-161-1" name="__codelineno-161-1" href="#__codelineno-161-1"></a>tg<span class="w"> </span>upload-voice<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>./voice.ogg<span class="w"> </span>--allow-write<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-165-1"><a id="__codelineno-165-1" name="__codelineno-165-1" href="#__codelineno-165-1"></a>tg<span class="w"> </span>upload-voice<span class="w"> </span><span class="m">123456789</span><span class="w"> </span>./voice.ogg<span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>
@@ -6618,10 +6764,10 @@
 <h2 id="tg-version"><code>tg version</code><a class="headerlink" href="#tg-version" title="Permanent link">&para;</a></h2>
 <p>Print build version</p>
 <p><strong>Use</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-162-1"><a id="__codelineno-162-1" name="__codelineno-162-1" href="#__codelineno-162-1"></a>tg version [flags]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-166-1"><a id="__codelineno-166-1" name="__codelineno-166-1" href="#__codelineno-166-1"></a>tg version [flags]
 </span></code></pre></div>
 <p><strong>Example</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-163-1"><a id="__codelineno-163-1" name="__codelineno-163-1" href="#__codelineno-163-1"></a>tg<span class="w"> </span>version<span class="w"> </span>--json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-167-1"><a id="__codelineno-167-1" name="__codelineno-167-1" href="#__codelineno-167-1"></a>tg<span class="w"> </span>version<span class="w"> </span>--json
 </span></code></pre></div>
 <p><strong>Flags</strong></p>
 <table>

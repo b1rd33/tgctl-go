@@ -610,10 +610,10 @@ acceptance.</p>
 </tr>
 <tr>
 <td>5. Add everyday account management</td>
-<td>not started (outside current handoff)</td>
-<td>Original plan's independent bounded additions: logout, archive/unarchive, mute/unmute, contact add/remove, and formatted text/captions</td>
-<td>—</td>
-<td>Separate authorization and tests for each addition</td>
+<td>implemented (offline first increment)</td>
+<td>Archive/unarchive via typed <code>folders.editPeerFolders</code> peer requests; folder IDs 1/0, one-target selection, account isolation, write/read-only/fuzzy/dry-run gates, durable idempotency, cancellation and committed-persistence failure handling, no custom-folder/pin/read-marker side effects</td>
+<td><code>e39fbd4</code></td>
+<td>Live archive/unarchive acceptance remains unauthorized; mute/unmute, contact add/remove, formatted text/captions, and logout remain separate increments</td>
 </tr>
 <tr>
 <td>6. Optional Premium and convenience features</td>
@@ -632,8 +632,8 @@ acceptance.</p>
 </tbody>
 </table>
 <p>No Telegram mutation was run, and no live acceptance gate is claimed as
-passed. Phases 5–6 remain separate future work and are not implied by this
-phase 1–4 handoff. This worktree does not
+passed. The archive/unarchive increment is offline-only and does not include
+the remaining phase 5 operations. Phase 6 remains separate future work. This worktree does not
 install binaries, create tags, publish artifacts, or push branches.</p>
 
 

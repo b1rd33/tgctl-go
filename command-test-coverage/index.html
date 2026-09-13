@@ -643,6 +643,12 @@ no private Telegram transcript is stored in this repository.</p>
 <td>Selection precedence covered</td>
 </tr>
 <tr>
+<td><code>archive</code></td>
+<td><code>internal/commands/peer_folder_test.go:TestArchiveUnarchiveRouteOnePeerAndReplayByRequest</code>, <code>TestArchiveDryRunReadOnlyAndFuzzyGates</code>, <code>TestArchiveUsesSelectedAccountAndPreservesIsolation</code>, <code>TestArchiveCancellationBeforeCommitIsReportedWithoutSuccess</code>, <code>TestArchivePersistenceFailureReportsCommittedOutcome</code>; <code>internal/client/peer_folder_test.go:TestSetPeerFolderRoutesTypedPeersAndArchiveIDs</code></td>
+<td>unverified</td>
+<td>Typed user/group/channel payloads, folder ID 1, durable/idempotent gates and committed-unknown handling; no live mutation</td>
+</tr>
+<tr>
 <td><code>backfill</code></td>
 <td><code>internal/commands/localdb_test.go</code> backfill cap, rollback, media, recovery, and schema tests</td>
 <td>unverified</td>
@@ -1043,6 +1049,12 @@ no private Telegram transcript is stored in this repository.</p>
 <td><code>internal/commands/destructive_test.go:TestUnblockUserExecutes</code></td>
 <td>unverified</td>
 <td>Offline fake-backed execution</td>
+</tr>
+<tr>
+<td><code>unarchive</code></td>
+<td><code>internal/commands/peer_folder_test.go:TestArchiveUnarchiveRouteOnePeerAndReplayByRequest</code>; <code>internal/client/peer_folder_test.go:TestSetPeerFolderRoutesTypedPeersAndArchiveIDs</code></td>
+<td>unverified</td>
+<td>Typed group/user/channel payloads, folder ID 0, same single-peer durable pipeline; no live mutation</td>
 </tr>
 <tr>
 <td><code>unpin-msg</code></td>
