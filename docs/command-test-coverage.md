@@ -50,11 +50,11 @@ no private Telegram transcript is stored in this repository.
 | `folders-list` | `internal/commands/topics_folders_test.go:TestFoldersListAndShowUseClient` | unverified | Fake-backed read |
 | `folders-reorder` | folder patch preservation tests | unverified | No live folder mutation |
 | `forward` | `internal/commands/messages_write_test.go:TestForwardInvokesClient` | unverified | No live forward |
-| `get-msg` | `internal/commands/messages_read_test.go` get and deleted-row tests; remote runner tests | unverified | Defaults to cache; Telegram source is bounded and unverified live |
+| `get-msg` | `internal/commands/messages_read_test.go` get and deleted-row tests; `internal/client/remote_read_test.go:TestRemoteGetAdapterPreservesDeletedPlaceholder` | unverified | Defaults to cache; bounded Telegram deleted-message retrieval is TL-tested, live source remains unverified |
 | `help` | Cobra help generation used by docs generator | unverified | Rendering, not command semantics |
 | `kick` | `internal/client/destructive_rpc_test.go:TestKickReportsPartialCommitAndDoesNotClearExistingRestrictions` | unverified | Offline fake/TL behavior only |
 | `leave-chat` | `internal/commands/destructive_test.go` user rejection and group execution | unverified | No live leave |
-| `list-msgs` | `internal/commands/messages_read_test.go` date/filter tests; `internal/store/cursor_test.go` timestamp cursor test | unverified | Cache-only at baseline |
+| `list-msgs` | `internal/commands/messages_read_test.go` date/filter tests, `TestRemoteHistoryUsesBoundedPageAndTypedCursor`, `TestRemoteRowsBoundPagesAndTerminateContinuation`; `internal/store/cursor_test.go` timestamp/remote cursor tests | unverified | Cache and bounded Telegram pagination are offline-tested; live source remains unverified |
 | `listen` | `internal/commands/live_test.go` event, filters, output failure; update storage tests | unverified | Controlled live event not run |
 | `login` | `internal/commands/login_test.go` QR secret-output test and read-only guards | unverified | No auth mutation/live login |
 | `mark-read` | `internal/commands/messages_write_test.go:TestMarkReadInvokesClient` | unverified | No live read marker |
@@ -65,12 +65,12 @@ no private Telegram transcript is stored in this repository.
 | `react` | `internal/commands/messages_write_test.go:TestReactRejectsEmptyEmoji`, `TestReactBigFlagDoesNotClaimPremiumEligibility` | unverified | Offline animation/Premium-label semantics; no live reaction |
 | `replies` | `internal/commands/phase24_test.go:TestRepliesRunnerBindsCursorToRootAndChat`; `internal/client/remote_read_test.go:TestRepliesAndDiscussionAdaptersPreservePeerRouting` | unverified | Cursor binding/continuation and fake/TL request routing; no live thread fixture |
 | `resolve` | `internal/commands/phase24_test.go:TestResolveAndAccountLimitsExposeExplicitSources` | unverified | Fake-backed typed identity; no live username evidence |
-| `search` | `internal/commands/messages_read_test.go` empty/case tests; remote runner tests | unverified | Defaults to cache; Telegram source is bounded and unverified live |
+| `search` | `internal/commands/messages_read_test.go` empty/case tests, `TestRemoteSearchUsesExplicitServerClient`, `TestRemoteRowsBoundPagesAndTerminateContinuation`; `internal/client/remote_read_test.go:TestRemoteReadsDoNotWriteCacheOrReadStateOnFailure` | unverified | Defaults to cache; bounded Telegram filters, failure, and pagination behavior are offline-tested, live source remains unverified |
 | `send` | `internal/commands/messages_write_test.go` gate, dry-run, fuzzy, idempotency, topic tests | unverified | No live send |
 | `send-by-username` | send username tests and selector pipeline | unverified | No live send |
 | `set-permissions` | `internal/commands/admin_test.go:TestSetPermissionsAcceptsSendMessagesFlag`; `internal/client/permissions_test.go` patch tests | unverified | No live admin fixture |
 | `setup` | `internal/commands/setup_test.go` credential, preservation, read-only, stable-root tests | unverified | Explicit and default destinations covered offline |
-| `show` | `internal/commands/messages_read_test.go:TestShowRunnerResolverIntegration`, deleted/envelope, remote tests | unverified | Defaults to cache; Telegram source is bounded and unverified live |
+| `show` | `internal/commands/messages_read_test.go:TestShowRunnerResolverIntegration`, deleted/envelope, `TestRemoteHistoryUsesBoundedPageAndTypedCursor`, `TestRemoteRowsBoundPagesAndTerminateContinuation` | unverified | Defaults to cache; bounded Telegram history is offline-tested, live source remains unverified |
 | `stats` | `internal/commands/read_extra_test.go:TestStatsContactsUnreadReadFromCache` | unverified | Cache-only |
 | `sync` | `internal/commands/sync_test.go` checkpoint, follow, reconnect tests | unverified | No live update stream |
 | `sync-contacts` | `internal/commands/localdb_test.go:TestSyncContactsUpsertsContacts` | unverified | Fake-backed cache write |

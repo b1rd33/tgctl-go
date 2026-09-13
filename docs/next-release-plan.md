@@ -137,4 +137,3 @@ The user authorized execution of this plan using GPT-5.6 Luna with high reasonin
 ### Live-test boundaries
 
 This coding handoff authorizes code changes, offline fixtures, and bounded live account reads/local cache operations already used in the parent task. It does not enlarge earlier permission to mutate Telegram. The parent task encountered an explicit automatic-review block on live writes; do not infer authorization to bypass it from earlier task summaries. Prepare tests that create/edit/delete Saved Messages probes, temporary folders or disposable groups, but run their Telegram mutations only after explicit approval in this task. Never touch unrelated messages, folders, contacts, permissions or sessions. No credential or private content belongs in a commit or report.
-
