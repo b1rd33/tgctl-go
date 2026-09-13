@@ -52,7 +52,8 @@ the same Cobra help used to build `docs/commands.md`.
   `unblock-user`.
 - **Forum topics:** `topic-create`, `topic-edit`, `topic-pin`, `topic-unpin`.
 - **Permissions:** `chat-permissions` inspects current or selected-member
-  rights as advisory state; server authorization is still authoritative.
+  rights and available slow-mode metadata as advisory state; server
+  authorization is still authoritative.
 - **Shell utilities:** `completion`, `help`, `version`.
 
 ### Universal CLI contract

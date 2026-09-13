@@ -68,6 +68,11 @@ type TopicHistoryReq struct {
 	Limit    int
 }
 
+type TopicHistoryResult struct {
+	Topic TopicInfo
+	Page  RemotePage
+}
+
 // SendMessageReq mirrors the input to messages.SendMessage.
 type SendMessageReq struct {
 	ChatID    int64
@@ -301,20 +306,23 @@ type SessionRef struct {
 }
 
 type ChatInfo struct {
-	Source              string               `json:"source,omitempty"`
-	ReadInboxMaxID      int                  `json:"read_inbox_max_id"`
-	ReadStateKnown      bool                 `json:"read_state_known"`
-	UnreadCount         int                  `json:"unread_count"`
-	FolderID            int                  `json:"folder_id"`
-	TopMessageID        int                  `json:"top_message_id"`
-	Creator             bool                 `json:"creator,omitempty"`
-	Forum               bool                 `json:"forum,omitempty"`
-	DefaultBannedRights *tg.ChatBannedRights `json:"default_banned_rights,omitempty"`
-	AdminRights         *tg.ChatAdminRights  `json:"admin_rights,omitempty"`
-	ID                  int64                `json:"chat_id"`
-	Type                string               `json:"type"`
-	Title               string               `json:"title"`
-	Username            string               `json:"username"`
+	Source               string               `json:"source,omitempty"`
+	ReadInboxMaxID       int                  `json:"read_inbox_max_id"`
+	ReadStateKnown       bool                 `json:"read_state_known"`
+	UnreadCount          int                  `json:"unread_count"`
+	FolderID             int                  `json:"folder_id"`
+	TopMessageID         int                  `json:"top_message_id"`
+	Creator              bool                 `json:"creator,omitempty"`
+	Forum                bool                 `json:"forum,omitempty"`
+	SlowmodeSeconds      int                  `json:"slowmode_seconds,omitempty"`
+	SlowmodeNextSendDate int64                `json:"slowmode_next_send_date,omitempty"`
+	SlowmodeKnown        bool                 `json:"slowmode_known,omitempty"`
+	DefaultBannedRights  *tg.ChatBannedRights `json:"default_banned_rights,omitempty"`
+	AdminRights          *tg.ChatAdminRights  `json:"admin_rights,omitempty"`
+	ID                   int64                `json:"chat_id"`
+	Type                 string               `json:"type"`
+	Title                string               `json:"title"`
+	Username             string               `json:"username"`
 }
 
 type ContactInfo struct {
@@ -553,7 +561,7 @@ type Client interface {
 	RemoteGetMessage(ctx context.Context, chatID, messageID int64) (*BackfillMessage, error)
 	GetChatPermissions(ctx context.Context, chatID, userID int64) (PermissionInfo, error)
 	GetReplies(ctx context.Context, req RepliesReq) (RemotePage, error)
-	TopicHistory(ctx context.Context, req TopicHistoryReq) (RemotePage, error)
+	TopicHistory(ctx context.Context, req TopicHistoryReq) (TopicHistoryResult, error)
 	GetDiscussionMessage(ctx context.Context, chatID, messageID int64) (DiscussionInfo, error)
 	SendMessage(ctx context.Context, req SendMessageReq) (SendMessageResp, error)
 	UploadFile(ctx context.Context, req UploadFileReq) (UploadFileResp, error)

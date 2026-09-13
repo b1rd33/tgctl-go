@@ -163,8 +163,8 @@ func TestRepliesAndDiscussionAdaptersPreservePeerRouting(t *testing.T) {
 	}
 }
 
-func TestTopicHistoryAdapterValidatesForumRootAndRoutesReplies(t *testing.T) {
-	newClient := func(forum bool, root tg.MessageClass) *GotdClient {
+func TestTopicHistoryAdapterValidatesForumTopicAndRoutesReplies(t *testing.T) {
+	newClient := func(forum bool, topic tg.ForumTopicClass, replyRoot, offset int) *GotdClient {
 		db := updateTestDB(t)
 		if err := store.UpsertEntity(db, 7, store.EntityChannel, 70); err != nil {
 			t.Fatal(err)
@@ -174,15 +174,15 @@ func TestTopicHistoryAdapterValidatesForumRootAndRoutesReplies(t *testing.T) {
 			case *tg.MessagesGetPeerDialogsRequest:
 				out.(*tg.MessagesPeerDialogs).Chats = []tg.ChatClass{&tg.Channel{ID: 7, AccessHash: 70, Megagroup: true, Forum: forum, Title: "Forum"}}
 				out.(*tg.MessagesPeerDialogs).Dialogs = []tg.DialogClass{&tg.Dialog{Peer: &tg.PeerChannel{ChannelID: 7}}}
-			case *tg.ChannelsGetMessagesRequest:
-				peer, ok := req.Channel.(*tg.InputChannel)
-				if !ok || peer.ChannelID != 7 || peer.AccessHash != 70 || len(req.ID) != 1 {
-					t.Fatalf("topic root request = %+v", req)
+			case *tg.MessagesGetForumTopicsByIDRequest:
+				peer, ok := req.Peer.(*tg.InputPeerChannel)
+				if !ok || peer.ChannelID != 7 || peer.AccessHash != 70 || len(req.Topics) != 1 || req.Topics[0] != replyRoot {
+					t.Fatalf("forum topic request = %+v", req)
 				}
-				out.(*tg.MessagesMessagesBox).Messages = &tg.MessagesChannelMessages{Messages: []tg.MessageClass{root}}
+				out.(*tg.MessagesForumTopics).Topics = []tg.ForumTopicClass{topic}
 			case *tg.MessagesGetRepliesRequest:
 				peer, ok := req.Peer.(*tg.InputPeerChannel)
-				if !ok || peer.ChannelID != 7 || peer.AccessHash != 70 || req.MsgID != 11 || req.OffsetID != 5 || req.Limit != 3 {
+				if !ok || peer.ChannelID != 7 || peer.AccessHash != 70 || req.MsgID != replyRoot || req.OffsetID != offset || req.Limit != 3 {
 					t.Fatalf("topic replies request = %+v", req)
 				}
 				out.(*tg.MessagesMessagesBox).Messages = &tg.MessagesChannelMessages{Messages: []tg.MessageClass{
@@ -195,17 +195,55 @@ func TestTopicHistoryAdapterValidatesForumRootAndRoutesReplies(t *testing.T) {
 		}))}
 	}
 
-	page, err := newClient(true, &tg.Message{ID: 11, PeerID: &tg.PeerChannel{ChannelID: 7}, Date: 99, Message: "topic root"}).TopicHistory(context.Background(), TopicHistoryReq{ChatID: peerid.Channel(7), TopicID: 11, OffsetID: 5, Limit: 3})
-	if err != nil || len(page.Messages) != 1 || page.Messages[0].ChatID != peerid.Channel(7) {
-		t.Fatalf("topic history page = %+v err=%v", page, err)
+	result, err := newClient(true, &tg.ForumTopic{ID: 11, Title: "Support", TopMessage: 20}, 11, 5).TopicHistory(context.Background(), TopicHistoryReq{ChatID: peerid.Channel(7), TopicID: 11, OffsetID: 5, Limit: 3})
+	if err != nil || result.Topic.ID != 11 || result.Topic.TopMessageID != 20 || len(result.Page.Messages) != 1 || result.Page.Messages[0].ChatID != peerid.Channel(7) {
+		t.Fatalf("topic history result = %+v err=%v", result, err)
 	}
 
-	if _, err := newClient(false, &tg.Message{ID: 11}).TopicHistory(context.Background(), TopicHistoryReq{ChatID: peerid.Channel(7), TopicID: 11, Limit: 3}); err == nil {
+	if _, err := newClient(false, &tg.ForumTopic{ID: 11}, 11, 0).TopicHistory(context.Background(), TopicHistoryReq{ChatID: peerid.Channel(7), TopicID: 11, Limit: 3}); err == nil {
 		t.Fatal("non-forum peer was accepted")
 	}
-	_, err = newClient(true, &tg.MessageEmpty{ID: 11}).TopicHistory(context.Background(), TopicHistoryReq{ChatID: peerid.Channel(7), TopicID: 11, Limit: 3})
+	if _, err := newClient(true, &tg.ForumTopic{ID: 12}, 11, 0).TopicHistory(context.Background(), TopicHistoryReq{ChatID: peerid.Channel(7), TopicID: 11, Limit: 3}); err == nil {
+		t.Fatal("ordinary message ID was accepted as a topic")
+	}
+	_, err = newClient(true, &tg.ForumTopicDeleted{ID: 11}, 11, 0).TopicHistory(context.Background(), TopicHistoryReq{ChatID: peerid.Channel(7), TopicID: 11, Limit: 3})
 	var notFound *resolve.NotFound
 	if !errors.As(err, &notFound) {
-		t.Fatalf("deleted topic root error = %T %v", err, err)
+		t.Fatalf("deleted topic error = %T %v", err, err)
+	}
+	general, err := newClient(true, &tg.ForumTopic{ID: 1, Title: "General", Hidden: true}, 1, 0).TopicHistory(context.Background(), TopicHistoryReq{ChatID: peerid.Channel(7), TopicID: 1, Limit: 3})
+	if err != nil || general.Topic.ID != 1 || !general.Topic.Hidden {
+		t.Fatalf("general topic result = %+v err=%v", general, err)
+	}
+}
+
+func TestChatPermissionsAdapterIncludesSlowmode(t *testing.T) {
+	db := updateTestDB(t)
+	if err := store.UpsertEntity(db, 7, store.EntityChannel, 70); err != nil {
+		t.Fatal(err)
+	}
+	g := &GotdClient{db: db, resolvedPeers: map[int64]tg.InputPeerClass{}, api: tg.NewClient(invokeFunc(func(_ context.Context, in bin.Encoder, out bin.Decoder) error {
+		switch req := in.(type) {
+		case *tg.MessagesGetPeerDialogsRequest:
+			out.(*tg.MessagesPeerDialogs).Chats = []tg.ChatClass{&tg.Channel{ID: 7, AccessHash: 70, Megagroup: true, Forum: true, Title: "Forum"}}
+			out.(*tg.MessagesPeerDialogs).Dialogs = []tg.DialogClass{&tg.Dialog{Peer: &tg.PeerChannel{ChannelID: 7}}}
+		case *tg.ChannelsGetFullChannelRequest:
+			channel, ok := req.Channel.(*tg.InputChannel)
+			if !ok || channel.ChannelID != 7 || channel.AccessHash != 70 {
+				t.Fatalf("full channel request = %+v", req)
+			}
+			out.(*tg.MessagesChatFull).FullChat = &tg.ChannelFull{SlowmodeSeconds: 30, SlowmodeNextSendDate: 123}
+		default:
+			t.Fatalf("unexpected permissions request %T", in)
+		}
+		return nil
+	}))}
+
+	info, err := g.GetChatPermissions(context.Background(), peerid.Channel(7), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.Chat.SlowmodeKnown || info.Chat.SlowmodeSeconds != 30 || info.Chat.SlowmodeNextSendDate != 123 {
+		t.Fatalf("permissions slowmode = %+v", info.Chat)
 	}
 }

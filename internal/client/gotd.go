@@ -666,31 +666,59 @@ func (g *GotdClient) GetReplies(ctx context.Context, req RepliesReq) (RemotePage
 	return remotePageFromResp(req.ChatID, resp), nil
 }
 
-func (g *GotdClient) TopicHistory(ctx context.Context, req TopicHistoryReq) (RemotePage, error) {
+func (g *GotdClient) TopicHistory(ctx context.Context, req TopicHistoryReq) (TopicHistoryResult, error) {
 	if req.Limit < 1 || req.Limit > 100 {
-		return RemotePage{}, safety.NewBadArgs("topic history limit must be between 1 and 100")
+		return TopicHistoryResult{}, safety.NewBadArgs("topic history limit must be between 1 and 100")
 	}
 	if err := validatePositiveTelegramInt32(req.TopicID, "topic-id"); err != nil {
-		return RemotePage{}, err
+		return TopicHistoryResult{}, err
 	}
 	chats, err := g.GetChatsInfo(ctx, []int64{req.ChatID})
 	if err != nil {
-		return RemotePage{}, err
+		return TopicHistoryResult{}, err
 	}
 	if len(chats) != 1 || chats[0].Type != "supergroup" || !chats[0].Forum {
-		return RemotePage{}, safety.NewBadArgs("topic history target must be a forum supergroup")
+		return TopicHistoryResult{}, safety.NewBadArgs("topic history target must be a forum supergroup")
 	}
-	root, err := g.RemoteGetMessage(ctx, req.ChatID, req.TopicID)
+	peer, err := g.peerFromChatID(ctx, req.ChatID)
 	if err != nil {
-		return RemotePage{}, err
+		return TopicHistoryResult{}, err
 	}
-	if root == nil || root.Deleted {
-		return RemotePage{}, resolve.NewNotFound("topic %d root message was not found", req.TopicID)
+	resp, err := g.api.MessagesGetForumTopicsByID(ctx, &tg.MessagesGetForumTopicsByIDRequest{Peer: peer, Topics: []int{int(req.TopicID)}})
+	if err != nil {
+		return TopicHistoryResult{}, mapRPCErr(err)
 	}
-	if root.ChatID != 0 && root.ChatID != req.ChatID {
-		return RemotePage{}, safety.NewBadArgs("topic root belongs to a different peer")
+	if resp == nil {
+		return TopicHistoryResult{}, resolve.NewNotFound("forum topic %d was not found", req.TopicID)
 	}
-	return g.GetReplies(ctx, RepliesReq{ChatID: req.ChatID, RootID: req.TopicID, OffsetID: req.OffsetID, Limit: req.Limit})
+	topic, found, deleted := forumTopicInfo(resp.Topics, req.TopicID)
+	if deleted {
+		return TopicHistoryResult{}, resolve.NewNotFound("forum topic %d was deleted", req.TopicID)
+	}
+	if !found {
+		return TopicHistoryResult{}, resolve.NewNotFound("forum topic %d was not found", req.TopicID)
+	}
+	page, err := g.GetReplies(ctx, RepliesReq{ChatID: req.ChatID, RootID: req.TopicID, OffsetID: req.OffsetID, Limit: req.Limit})
+	if err != nil {
+		return TopicHistoryResult{}, err
+	}
+	return TopicHistoryResult{Topic: topic, Page: page}, nil
+}
+
+func forumTopicInfo(topics []tg.ForumTopicClass, topicID int64) (TopicInfo, bool, bool) {
+	for _, raw := range topics {
+		switch topic := raw.(type) {
+		case *tg.ForumTopic:
+			if topic != nil && int64(topic.ID) == topicID {
+				return TopicInfo{ID: topicID, Title: topic.Title, Closed: topic.Closed, Hidden: topic.Hidden, TopMessageID: int64(topic.TopMessage), UnreadCount: topic.UnreadCount}, true, false
+			}
+		case *tg.ForumTopicDeleted:
+			if topic != nil && int64(topic.ID) == topicID {
+				return TopicInfo{ID: topicID}, false, true
+			}
+		}
+	}
+	return TopicInfo{}, false, false
 }
 
 func (g *GotdClient) GetDiscussionMessage(ctx context.Context, chatID, messageID int64) (DiscussionInfo, error) {
@@ -2322,15 +2350,26 @@ func (g *GotdClient) GetChatPermissions(ctx context.Context, chatID, userID int6
 	} else {
 		info.Role = "member"
 	}
-	if userID == 0 || chats[0].Type != "supergroup" && chats[0].Type != "channel" {
-		return info, nil
-	}
 	peer, err := g.peerFromChatID(ctx, chatID)
 	if err != nil {
 		return PermissionInfo{}, err
 	}
 	channel, ok := peer.(*tg.InputPeerChannel)
 	if !ok {
+		return info, nil
+	}
+	full, err := g.api.ChannelsGetFullChannel(ctx, &tg.InputChannel{ChannelID: channel.ChannelID, AccessHash: channel.AccessHash})
+	if err != nil {
+		return PermissionInfo{}, mapRPCErr(err)
+	}
+	if full != nil {
+		if channelFull, ok := full.FullChat.(*tg.ChannelFull); ok {
+			info.Chat.SlowmodeSeconds = channelFull.SlowmodeSeconds
+			info.Chat.SlowmodeNextSendDate = int64(channelFull.SlowmodeNextSendDate)
+			info.Chat.SlowmodeKnown = true
+		}
+	}
+	if userID == 0 || chats[0].Type != "supergroup" && chats[0].Type != "channel" {
 		return info, nil
 	}
 	var target tg.InputPeerClass

@@ -23,7 +23,7 @@ no private Telegram transcript is stored in this repository.
 | `chat-description` | admin tests cover shared invocation path | unverified | Exact client assertion not yet present |
 | `chat-invite-link` | admin tests cover shared invocation path | unverified | Exact client assertion not yet present |
 | `chat-members` | `internal/commands/admin_test.go:TestChatsInfoAndMembersReadCommands` | unverified | Read client invocation asserted |
-| `chat-permissions` | `internal/commands/phase24_test.go:TestChatPermissionsReadUsesFakeAndMarksAdvisory` | unverified | Advisory rights only; no live forum fixture |
+| `chat-permissions` | `internal/commands/phase24_test.go:TestChatPermissionsReadUsesFakeAndMarksAdvisory`; `internal/client/remote_read_test.go:TestChatPermissionsAdapterIncludesSlowmode` | unverified | Advisory rights and slow-mode metadata coverage; no live forum fixture |
 | `chat-photo` | admin tests cover shared invocation path | unverified | Exact client assertion not yet present |
 | `chat-pinned-list` | `internal/commands/admin_test.go:TestChatsInfoAndMembersReadCommands` | unverified | Read client invocation asserted |
 | `chat-title` | `internal/commands/admin_test.go:TestChatTitleInvokesClient` | unverified | Offline fake invocation asserted |
@@ -77,7 +77,7 @@ no private Telegram transcript is stored in this repository.
 | `terminate-session` | `internal/commands/destructive_test.go:TestTerminateSessionTypedConfirm` | unverified | No live session revocation |
 | `topic-create` | `internal/commands/topics_folders_test.go:TestTopicCreateCallsClientAndReplaysIdempotency` | unverified | No live forum fixture |
 | `topic-edit` | `internal/commands/topics_folders_test.go:TestTopicEditRequiresMutation` | unverified | No live forum fixture |
-| `topic-history` | `internal/commands/phase24_test.go:TestTopicHistoryRunnerBindsCursorToTopicAndChat`; `internal/client/remote_read_test.go:TestTopicHistoryAdapterValidatesForumRootAndRoutesReplies` | unverified | Topic/root-bound cursor, forum/root validation, deleted-root and TL routing coverage; no live forum fixture |
+| `topic-history` | `internal/commands/phase24_test.go:TestTopicHistoryRunnerBindsCursorToTopicAndChat`; `internal/client/remote_read_test.go:TestTopicHistoryAdapterValidatesForumTopicAndRoutesReplies` | unverified | Topic/root-bound cursor, forum/topic validation, deleted-topic and TL routing coverage; no live forum fixture |
 | `topic-pin` | topic command tests | unverified | No live forum fixture |
 | `topic-unpin` | topic command tests | unverified | No live forum fixture |
 | `topics-list` | topic command tests | unverified | No live forum fixture |

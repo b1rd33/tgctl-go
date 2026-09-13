@@ -60,7 +60,7 @@ func TestRepliesRunnerBindsCursorToRootAndChat(t *testing.T) {
 func TestTopicHistoryRunnerBindsCursorToTopicAndChat(t *testing.T) {
 	cfg, fc, _ := setupWriteEnv(t)
 	fc.Resolved = map[string]client.ResolvedPeer{"1": {ChatID: 1, Kind: "supergroup", Title: "Forum"}}
-	fc.TopicHistoryPage = client.RemotePage{Messages: []client.BackfillMessage{{ChatID: 1, MessageID: 30, Date: "2026-05-01T00:00:00Z", Text: "topic reply"}}, NextOffsetID: 30}
+	fc.TopicHistoryPage = client.TopicHistoryResult{Topic: client.TopicInfo{ID: 7, Title: "Support"}, Page: client.RemotePage{Messages: []client.BackfillMessage{{ChatID: 1, MessageID: 30, Date: "2026-05-01T00:00:00Z", Text: "topic reply"}}, NextOffsetID: 30}}
 	cfg.ReadOnlyClientFactory = func(context.Context, string) (client.Client, error) { return fc, nil }
 	root := NewRootCommand()
 	registerThreadReadCommands(root, cfg)

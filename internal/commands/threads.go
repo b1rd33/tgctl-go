@@ -84,11 +84,11 @@ func topicHistoryCommand(cfg CommandsConfig) *cobra.Command {
 				if err != nil {
 					return nil, err
 				}
-				page, err := c.TopicHistory(ctx, client.TopicHistoryReq{ChatID: peer.ChatID, TopicID: int64(topicID), OffsetID: decoded.OffsetID, Limit: limit})
+				result, err := c.TopicHistory(ctx, client.TopicHistoryReq{ChatID: peer.ChatID, TopicID: int64(topicID), OffsetID: decoded.OffsetID, Limit: limit})
 				if err != nil {
 					return nil, err
 				}
-				rows, nextID := remoteRows(page, decoded.OffsetID, limit)
+				rows, nextID := remoteRows(result.Page, decoded.OffsetID, limit)
 				var next string
 				if nextID != 0 {
 					next = store.EncodeRemoteCursor(store.RemoteCursor{Account: p.account, Operation: "topic-history", Chat: peer.ChatID, Topic: int64(topicID), OffsetID: nextID})
@@ -97,7 +97,7 @@ func topicHistoryCommand(cfg CommandsConfig) *cobra.Command {
 				for i, row := range rows {
 					messages[i] = remoteSummaryDTO(row)
 				}
-				return map[string]any{"source": "telegram", "coverage": "one bounded server page; not a frozen snapshot", "chat": ChatRef{ChatID: peer.ChatID, Title: peer.Title}, "topic_id": topicID, "topic_root_message_id": topicID, "next_cursor": next, "messages": messages}, nil
+				return map[string]any{"source": "telegram", "coverage": "one bounded server page; not a frozen snapshot", "chat": ChatRef{ChatID: peer.ChatID, Title: peer.Title}, "topic_id": topicID, "topic_root_message_id": topicID, "topic": map[string]any{"title": result.Topic.Title, "closed": result.Topic.Closed, "hidden": result.Topic.Hidden, "top_message_id": result.Topic.TopMessageID}, "next_cursor": next, "messages": messages}, nil
 			})
 		},
 	}

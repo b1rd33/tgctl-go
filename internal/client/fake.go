@@ -34,7 +34,7 @@ type FakeClient struct {
 	RepliesPage       RemotePage
 	RepliesErr        error
 	RepliesReqs       []RepliesReq
-	TopicHistoryPage  RemotePage
+	TopicHistoryPage  TopicHistoryResult
 	TopicHistoryErr   error
 	TopicHistoryReqs  []TopicHistoryReq
 	Discussion        DiscussionInfo
@@ -207,11 +207,11 @@ func (f *FakeClient) GetReplies(_ context.Context, req RepliesReq) (RemotePage, 
 	return f.RepliesPage, f.RepliesErr
 }
 
-func (f *FakeClient) TopicHistory(_ context.Context, req TopicHistoryReq) (RemotePage, error) {
+func (f *FakeClient) TopicHistory(_ context.Context, req TopicHistoryReq) (TopicHistoryResult, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if err := f.record("TopicHistory"); err != nil {
-		return RemotePage{}, err
+		return TopicHistoryResult{}, err
 	}
 	f.TopicHistoryReqs = append(f.TopicHistoryReqs, req)
 	return f.TopicHistoryPage, f.TopicHistoryErr
