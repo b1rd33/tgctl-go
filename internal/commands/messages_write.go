@@ -292,7 +292,7 @@ func runWriteResolvedTargetOptions(cmd *cobra.Command, name, rpcMethod, selector
 					return nil, actionErr
 				}
 				if closeErr != nil && durableAudit && !wargs.DryRun {
-					return nil, safety.NewCommittedWriteWithExtras("album sent but Telegram client finalization failed; do not retry blindly", errors.New("Telegram client finalization failed"), committedExtras)
+					return nil, safety.NewCommittedWriteWithExtras("Telegram operation committed but client finalization failed; do not retry blindly", errors.New("Telegram client finalization failed"), committedExtras)
 				}
 				return data, nil
 			},
@@ -302,7 +302,7 @@ func runWriteResolvedTargetOptions(cmd *cobra.Command, name, rpcMethod, selector
 			return nil, runErr
 		}
 		if closeErr != nil && durableAudit && !wargs.DryRun {
-			return nil, safety.NewCommittedWriteWithExtras("album sent but local cache finalization failed; do not retry blindly", errors.New("local cache finalization failed"), committedExtras)
+			return nil, safety.NewCommittedWriteWithExtras("Telegram operation committed but local cache finalization failed; do not retry blindly", errors.New("local cache finalization failed"), committedExtras)
 		}
 		return result, nil
 	})

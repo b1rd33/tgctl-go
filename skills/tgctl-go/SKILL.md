@@ -45,7 +45,7 @@ the same Cobra help used to build `docs/commands.md`.
 - **Synchronization and archives:** `export`, `listen`, `sync`, `operations-list`, `db-backup`, `db-restore`.
 - **Dialog folders:** `folder-add-chat`, `folder-create`, `folder-delete`,
   `folder-edit`, `folder-remove-chat`, `folder-show`, `folders-list`,
-  `folders-reorder`.
+  `folders-reorder`, `archive`, `unarchive`.
 - **Chat administration:** `ban-from-chat`, `block-user`, `chat-description`,
   `chat-invite-link`, `chat-photo`, `chat-title`, `demote`, `kick`,
   `leave-chat`, `promote`, `set-permissions`, `unban-from-chat`,
@@ -124,7 +124,13 @@ stdout defaults to JSON; use `--human` only for a person at a terminal.
   chat metadata, membership, permissions, moderation, and forum topics.
   They require explicit targets, write gates, and typed confirmations where
   the command exposes `--confirm`; never run them against a real group for a
-  smoke test.
+  smoke test. `archive <chat>` and `unarchive <chat>` move exactly one
+  selected peer through `folders.editPeerFolders` using Telegram folder IDs
+  1 (archive) and 0 (inbox). They preserve custom-folder membership, mute
+  settings, membership, and read state; Telegram may move pinned dialogs as
+  part of server-controlled archive behavior, so the CLI does not promise
+  pin preservation. A successful operation reports that the local dialog
+  cache requires refresh rather than fabricating local folder state.
 - **`listen` and `sync`** are long-running/event workflows. `sync` persists
   checkpoints and can use `--follow --once`; `listen` streams update envelopes
   and should be bounded with `--once` in deterministic tests.

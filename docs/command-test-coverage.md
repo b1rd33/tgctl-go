@@ -16,6 +16,7 @@ no private Telegram transcript is stored in this repository.
 | `accounts-remove` | `internal/commands/accounts_command_test.go:TestAccountsRemoveUsesTypedConfirmationContract` | unverified | Destructive path prepared offline only |
 | `accounts-show` | `internal/commands/read_only_global_test.go:TestAccountsShowReadOnlyDoesNotCreatePaths` | unverified | Read-only path covered |
 | `accounts-use` | account selection tests | unverified | Selection precedence covered |
+| `archive` | `internal/commands/peer_folder_test.go:TestArchiveUnarchiveRouteOnePeerAndReplayByRequest`, `TestArchiveDryRunReadOnlyAndFuzzyGates`, `TestArchiveUsesSelectedAccountAndPreservesIsolation`, `TestArchiveCancellationBeforeCommitIsReportedWithoutSuccess`, `TestArchivePersistenceFailureReportsCommittedOutcome`; `internal/client/peer_folder_test.go:TestSetPeerFolderRoutesTypedPeersAndArchiveIDs` | unverified | Typed user/group/channel payloads, folder ID 1, durable/idempotent gates and committed-unknown handling; no live mutation |
 | `backfill` | `internal/commands/localdb_test.go` backfill cap, rollback, media, recovery, and schema tests | unverified | No live mutation/read fixture in repo |
 | `backfill-entities` | `internal/commands/backfill_entities_test.go:TestRunBackfillEntitiesRejectsNumericBoundsBeforeArtifacts` | unverified | Numeric preflight covered |
 | `ban-from-chat` | `internal/commands/admin_test.go:TestBanFromChatRequiresTypedUserConfirm` | unverified | Live admin fixture unavailable and mutation not authorized |
@@ -83,6 +84,7 @@ no private Telegram transcript is stored in this repository.
 | `topics-list` | topic command tests | unverified | No live forum fixture |
 | `unban-from-chat` | admin tests cover shared confirmation path | unverified | Exact live denial/success absent |
 | `unblock-user` | `internal/commands/destructive_test.go:TestUnblockUserExecutes` | unverified | Offline fake-backed execution |
+| `unarchive` | `internal/commands/peer_folder_test.go:TestArchiveUnarchiveRouteOnePeerAndReplayByRequest`; `internal/client/peer_folder_test.go:TestSetPeerFolderRoutesTypedPeersAndArchiveIDs` | unverified | Typed group/user/channel payloads, folder ID 0, same single-peer durable pipeline; no live mutation |
 | `unpin-msg` | `internal/commands/messages_write_test.go:TestPinUnpinInvokesClient` | unverified | No live unpin |
 | `unread` | `internal/commands/read_extra_test.go:TestStatsContactsUnreadReadFromCache` | unverified | Cache-only |
 | `upload-album` | `internal/commands/upload_album_test.go` extensive dry-run, order, mapping, idempotency, failure tests; `internal/client/upload_album_test.go` TL-shape tests | unverified | No live album mutation |

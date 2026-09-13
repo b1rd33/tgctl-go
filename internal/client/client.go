@@ -508,6 +508,14 @@ type FolderUpdateReq struct {
 	ExcludeChatIDs []int64
 }
 
+// PeerFolderReq moves one explicitly resolved peer between Telegram's inbox
+// (folder 0) and archive (folder 1). It is separate from custom DialogFilter
+// folders, which use FolderUpdateReq.
+type PeerFolderReq struct {
+	ChatID   int64
+	FolderID int
+}
+
 type AdminActionReq struct {
 	Action string
 	ChatID int64
@@ -589,6 +597,7 @@ type Client interface {
 	UpdateFolder(ctx context.Context, req FolderUpdateReq) error
 	DeleteFolder(ctx context.Context, id int64) error
 	ReorderFolders(ctx context.Context, ids []int64) error
+	SetPeerFolder(ctx context.Context, req PeerFolderReq) error
 	ListPinnedMessages(ctx context.Context, chatID int64) ([]PinnedMessage, error)
 	AdminAction(ctx context.Context, req AdminActionReq) (InviteLinkResp, error)
 	ListChatMembers(ctx context.Context, chatID int64, limit int) ([]MemberInfo, error)

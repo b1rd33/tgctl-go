@@ -1,6 +1,6 @@
 # Commands
 
-`tg --help` shows 82 commands. This page is generated from Cobra help output.
+`tg --help` shows 84 commands. This page is generated from Cobra help output.
 
 Every command supports the global flags shown by `tg --help`: `--account`, `--full`, `--json`, `--human`, `--lock-wait`, `--read-only`, and `--version` where applicable.
 
@@ -15,6 +15,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg accounts-remove`](#tg-accounts-remove) | Delete an account directory |
 | [`tg accounts-show`](#tg-accounts-show) | Show the currently selected account and its paths |
 | [`tg accounts-use`](#tg-accounts-use) | Select an existing account |
+| [`tg archive`](#tg-archive) | Archive one chat |
 | [`tg backfill`](#tg-backfill) | Backfill cached messages for a chat |
 | [`tg backfill-entities`](#tg-backfill-entities) | Populate the local entity cache so chat_id-keyed sends work |
 | [`tg ban-from-chat`](#tg-ban-from-chat) | ban-from-chat user in chat |
@@ -80,6 +81,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg topic-pin`](#tg-topic-pin) | Pin a forum topic |
 | [`tg topic-unpin`](#tg-topic-unpin) | Unpin a forum topic |
 | [`tg topics-list`](#tg-topics-list) | List forum topics |
+| [`tg unarchive`](#tg-unarchive) | Move one chat to the inbox |
 | [`tg unban-from-chat`](#tg-unban-from-chat) | unban-from-chat user in chat |
 | [`tg unblock-user`](#tg-unblock-user) | Unblock a previously blocked user |
 | [`tg unpin-msg`](#tg-unpin-msg) | Unpin a previously pinned message |
@@ -258,6 +260,34 @@ tg accounts-use work --json
 |---|---|
 | `-h, --help` | help for accounts-use |
 | `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+
+## `tg archive`
+
+Archive one chat
+
+**Use**
+
+```text
+tg archive <chat> [flags]
+```
+
+**Example**
+
+```bash
+tg archive <chat> [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--allow-write` | Required for any Telegram-side write |
+| `--dry-run` | Print payload preview without contacting Telegram |
+| `--fuzzy` | Allow title-based selectors for write commands |
+| `-h, --help` | help for archive |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--idempotency-key string` | Per-account replay-safe key |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 
 ## `tg backfill`
@@ -2082,6 +2112,34 @@ tg topics-list <forum-chat-id> --json
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 | `--limit int` | Maximum topics (default 50) |
 | `--query string` | Filter query |
+
+## `tg unarchive`
+
+Move one chat to the inbox
+
+**Use**
+
+```text
+tg unarchive <chat> [flags]
+```
+
+**Example**
+
+```bash
+tg unarchive <chat> [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--allow-write` | Required for any Telegram-side write |
+| `--dry-run` | Print payload preview without contacting Telegram |
+| `--fuzzy` | Allow title-based selectors for write commands |
+| `-h, --help` | help for unarchive |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--idempotency-key string` | Per-account replay-safe key |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 
 ## `tg unban-from-chat`
 

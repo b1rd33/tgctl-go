@@ -83,19 +83,21 @@ type FakeClient struct {
 	NextTopicID    int64
 	Folders        []FolderInfo
 
-	TopicCreates   []CreateTopicReq
-	TopicEdits     []EditTopicReq
-	TopicPins      []PinTopicReq
-	FolderUpdates  []FolderUpdateReq
-	FolderDeletes  []int64
-	FolderReorders [][]int64
-	PinnedLists    []int64
-	PinnedMessages []PinnedMessage
-	AdminActions   []AdminActionReq
-	Members        []MemberInfo
-	ChatInfos      []ChatInfo
-	ListenEvents   []ListenEvent
-	ListenCalls    []bool
+	TopicCreates      []CreateTopicReq
+	TopicEdits        []EditTopicReq
+	TopicPins         []PinTopicReq
+	FolderUpdates     []FolderUpdateReq
+	FolderDeletes     []int64
+	FolderReorders    [][]int64
+	PeerFolderUpdates []PeerFolderReq
+	PeerFolderErr     error
+	PinnedLists       []int64
+	PinnedMessages    []PinnedMessage
+	AdminActions      []AdminActionReq
+	Members           []MemberInfo
+	ChatInfos         []ChatInfo
+	ListenEvents      []ListenEvent
+	ListenCalls       []bool
 
 	// LastMessageID is the next id returned by SendMessage. Tests override this.
 	NextMessageID int64
@@ -526,6 +528,16 @@ func (f *FakeClient) ReorderFolders(_ context.Context, ids []int64) error {
 	cp := append([]int64(nil), ids...)
 	f.FolderReorders = append(f.FolderReorders, cp)
 	return nil
+}
+
+func (f *FakeClient) SetPeerFolder(_ context.Context, req PeerFolderReq) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.record("SetPeerFolder"); err != nil {
+		return err
+	}
+	f.PeerFolderUpdates = append(f.PeerFolderUpdates, req)
+	return f.PeerFolderErr
 }
 
 func (f *FakeClient) ListPinnedMessages(_ context.Context, chatID int64) ([]PinnedMessage, error) {

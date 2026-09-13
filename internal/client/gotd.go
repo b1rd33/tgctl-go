@@ -2127,6 +2127,18 @@ func (g *GotdClient) ReorderFolders(ctx context.Context, ids []int64) error {
 	return mapRPCErr(err)
 }
 
+func (g *GotdClient) SetPeerFolder(ctx context.Context, req PeerFolderReq) error {
+	if req.FolderID != 0 && req.FolderID != 1 {
+		return safety.NewBadArgs("peer folder id must be 0 (inbox) or 1 (archive)")
+	}
+	peer, err := g.peerFromChatID(ctx, req.ChatID)
+	if err != nil {
+		return err
+	}
+	_, err = g.api.FoldersEditPeerFolders(ctx, []tg.InputFolderPeer{{Peer: peer, FolderID: req.FolderID}})
+	return mapRPCErr(err)
+}
+
 func (g *GotdClient) AdminAction(ctx context.Context, req AdminActionReq) (InviteLinkResp, error) {
 	peer, err := g.peerFromChatID(ctx, req.ChatID)
 	if err != nil {

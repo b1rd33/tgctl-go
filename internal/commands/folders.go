@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -13,6 +14,7 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/resolve"
 	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
+	"github.com/b1rd33/tgctl-go/internal/writes"
 )
 
 const maxFolderTitleRunes = 12
@@ -26,7 +28,89 @@ func registerFolderCommands(root *cobra.Command, cfg CommandsConfig) {
 	root.AddCommand(folderMembershipCommand(cfg, true))
 	root.AddCommand(folderMembershipCommand(cfg, false))
 	root.AddCommand(foldersReorderCommand(cfg))
+	root.AddCommand(peerFolderCommand(cfg, true))
+	root.AddCommand(peerFolderCommand(cfg, false))
 	root.AddCommand(chatPinnedListCommand(cfg))
+}
+
+func peerFolderCommand(cfg CommandsConfig, archive bool) *cobra.Command {
+	name := "unarchive"
+	folderID := 0
+	if archive {
+		name = "archive"
+		folderID = 1
+	}
+	cmd := &cobra.Command{
+		Use:          name + " <chat>",
+		Short:        map[bool]string{true: "Archive one chat", false: "Move one chat to the inbox"}[archive],
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			selector := args[0]
+			paths, target, account, err := prepareResolvedPeerFolderTarget(cmd, cfg.Paths, selector)
+			if err != nil {
+				return emitDispatchedFailure(cmd, name, err)
+			}
+			payload := map[string]any{
+				"account":   account,
+				"chat_id":   target.ChatID,
+				"folder_id": folderID,
+				"archived":  archive,
+			}
+			return runWriteResolvedTargetDurable(cmd, name, "folders.EditPeerFolders", selector, cfg, paths, payload, &target,
+				map[string]any{"chat_id": target.ChatID, "folder_id": folderID, "archived": archive},
+				func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error) {
+					if err := c.SetPeerFolder(ctx, client.PeerFolderReq{ChatID: chatID, FolderID: folderID}); err != nil {
+						return nil, err
+					}
+					return map[string]any{
+						"chat":          ChatRef{ChatID: chatID, Title: chatTitle},
+						"folder_id":     folderID,
+						"archived":      archive,
+						"cache_refresh": "required",
+					}, nil
+				})
+		},
+	}
+	cmd.Flags().Bool("allow-write", false, "Required for any Telegram-side write")
+	cmd.Flags().Bool("dry-run", false, "Print payload preview without contacting Telegram")
+	cmd.Flags().Bool("fuzzy", false, "Allow title-based selectors for write commands")
+	cmd.Flags().String("idempotency-key", "", "Per-account replay-safe key")
+	AddOutputFlags(cmd)
+	return cmd
+}
+
+func prepareResolvedPeerFolderTarget(cmd *cobra.Command, paths AccountPathProvider, selector string) (resolvedWritePaths, writes.ConfirmedTarget, string, error) {
+	if err := safety.RequireWriteAllowed(writeArgsFrom(cmd).Args); err != nil {
+		return resolvedWritePaths{}, writes.ConfirmedTarget{}, "", err
+	}
+	if err := safety.RequireExplicitOrFuzzy(writeArgsFrom(cmd).Args, selector); err != nil {
+		return resolvedWritePaths{}, writes.ConfirmedTarget{}, "", err
+	}
+	account, err := selectedAccount(cmd, paths)
+	if err != nil {
+		return resolvedWritePaths{}, writes.ConfirmedTarget{}, "", err
+	}
+	dbPath, sessionPath, auditPath, err := accountPathsForMode(paths, account, true)
+	if err != nil {
+		return resolvedWritePaths{}, writes.ConfirmedTarget{}, "", err
+	}
+	resolved := resolvedWritePaths{dbPath: dbPath, sessionPath: sessionPath, auditPath: auditPath}
+	db, err := store.ConnectReadonly(dbPath)
+	if err != nil {
+		return resolvedWritePaths{}, writes.ConfirmedTarget{}, "", err
+	}
+	defer db.Close()
+	chatID, title, err := resolveWriteTarget(paths, db, selector)
+	if err != nil {
+		return resolvedWritePaths{}, writes.ConfirmedTarget{}, "", err
+	}
+	return resolved, writes.ConfirmedTarget{
+		ChatID:            chatID,
+		ChatTitle:         title,
+		ConfirmationSlot:  "chat_id",
+		ConfirmationValue: strconv.FormatInt(chatID, 10),
+	}, account, nil
 }
 
 func foldersListCommand(cfg CommandsConfig) *cobra.Command {
