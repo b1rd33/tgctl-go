@@ -26,6 +26,8 @@ A send with missing or mismatched response IDs reports an accepted-but-unresolve
 
 The 20-write/60-second guard and Telegram FLOOD_WAIT/SLOWMODE_WAIT cooldowns persist across writable clients. Server waits take precedence. This local ceiling is not a Telegram-approved safe rate. Read-only clients cannot persist newly observed cooldowns; callers must honor the returned wait.
 
+Channel access hashes may be cached before Telegram supplies an update `pts` checkpoint. Those zero-valued placeholders are excluded from update-gap recovery because Telegram rejects them with `PERSISTENT_TIMESTAMP_EMPTY`. A background update-recovery failure remains visible to `listen`, but it does not cancel an unrelated foreground read or write RPC.
+
 ## Moderation and deletion
 
 Permission input is exact (`read-only`, `restrict`, or `send-messages`); unknown strings fail. Changes preserve unrelated restrictions, including encoded flag bits. `set-permissions` requires typed confirmation. Promotion defaults to the minimal `other` right and exposes explicit `--rights`.

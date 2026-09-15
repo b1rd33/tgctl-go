@@ -78,3 +78,33 @@ func TestListenObservesTerminationAndCloseIsRepeatable(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdateFailureDoesNotStopTelegramTransport(t *testing.T) {
+	runCtx, cancelRun := context.WithCancel(context.Background())
+	updatesCtx, cancelUpdates := context.WithCancel(runCtx)
+	stopped := make(chan error, 1)
+	go func() {
+		<-updatesCtx.Done()
+		stopped <- updatesCtx.Err()
+	}()
+	storage := newUpdateStorage(updateTestDB(t))
+	done := make(chan error, 1)
+	go func() {
+		done <- keepTransportAliveAfterUpdateFailure(runCtx, cancelUpdates, stopped, storage)
+	}()
+	storage.fail(errors.New("recovery failed"))
+	select {
+	case err := <-done:
+		t.Fatalf("transport stopped with background recovery: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	cancelRun()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("error=%v, want context.Canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("transport did not stop after command cancellation")
+	}
+}
