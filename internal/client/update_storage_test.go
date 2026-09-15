@@ -159,6 +159,33 @@ func TestCheckpointUpdateRequiresExistingState(t *testing.T) {
 	}
 }
 
+func TestForEachChannelsSkipsAccessHashWithoutCheckpoint(t *testing.T) {
+	db := updateTestDB(t)
+	s := newUpdateStorage(db)
+	if err := s.SetChannelAccessHash(context.Background(), 7, 11, 99); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetChannelAccessHash(context.Background(), 7, 12, 100); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetChannelPts(context.Background(), 7, 12, 42); err != nil {
+		t.Fatal(err)
+	}
+	var channels []int64
+	if err := s.ForEachChannels(context.Background(), 7, func(_ context.Context, channelID int64, pts int) error {
+		channels = append(channels, channelID)
+		if pts != 42 {
+			t.Fatalf("pts=%d, want 42", pts)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(channels) != 1 || channels[0] != 12 {
+		t.Fatalf("channels=%v, want [12]", channels)
+	}
+}
+
 type gapAPI struct{ calls int }
 
 func (*gapAPI) UpdatesGetState(context.Context) (*tg.UpdatesState, error) {

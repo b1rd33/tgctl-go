@@ -368,7 +368,15 @@ func newClient(ctx context.Context, apiID int, apiHash, sessionPath, dbPath stri
 			}
 			ledger := &writeLedgerInvoker{next: tgc.API().Invoker(), db: db, owner: output.NewRequestID()}
 			if manager != nil {
-				ledger.apply = manager.Handle
+				ledger.apply = func(ctx context.Context, updates tg.UpdatesClass) error {
+					// A previously failed background recovery must not turn a
+					// successful foreground RPC into a committed-write error.
+					// ListenOnce still reports the durable recovery failure.
+					if updateStore.err() != nil {
+						return nil
+					}
+					return manager.Handle(ctx, updates)
+				}
 			}
 			api = tg.NewClient(ledger)
 			if manager == nil {
@@ -382,18 +390,7 @@ func newClient(ctx context.Context, apiID int, apiHash, sessionPath, dbPath stri
 			go func() {
 				stopped <- manager.Run(recoveryCtx, recoveryAPI{Client: api, storage: updateStore}, status.User.ID, updates.AuthOptions{OnStart: func(context.Context) { ready <- nil }})
 			}()
-			select {
-			case err := <-stopped:
-				return err
-			case <-updateStore.failed:
-				cancel()
-				<-stopped
-				return updateStore.err()
-			case <-rctx.Done():
-				cancel()
-				<-stopped
-				return rctx.Err()
-			}
+			return keepTransportAliveAfterUpdateFailure(rctx, cancel, stopped, updateStore)
 
 		})
 	})
@@ -412,6 +409,24 @@ func newClient(ctx context.Context, apiID int, apiHash, sessionPath, dbPath stri
 	}
 	gc.db = db
 	return gc, nil
+}
+
+func keepTransportAliveAfterUpdateFailure(rctx context.Context, stopUpdates context.CancelFunc, stopped <-chan error, storage *updateStorage) error {
+	select {
+	case err := <-stopped:
+		return err
+	case <-storage.failed:
+		stopUpdates()
+		<-stopped
+		// Live-update consumers observe storage.failed directly. Keep the
+		// Telegram transport alive so reads and writes can finish normally.
+		<-rctx.Done()
+		return rctx.Err()
+	case <-rctx.Done():
+		stopUpdates()
+		<-stopped
+		return rctx.Err()
+	}
 }
 
 // Close cancels the underlying client.Run and waits for it to drain.

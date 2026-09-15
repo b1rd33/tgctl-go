@@ -103,7 +103,11 @@ func (s *updateStorage) SetChannelPts(ctx context.Context, user, channel int64, 
 	return s.exec(ctx, `INSERT INTO tg_channel_state(user_id,channel_id,pts) VALUES(?,?,?) ON CONFLICT(user_id,channel_id) DO UPDATE SET pts=excluded.pts`, user, channel, pts)
 }
 func (s *updateStorage) ForEachChannels(ctx context.Context, user int64, f func(context.Context, int64, int) error) error {
-	rows, err := s.db.QueryContext(ctx, "SELECT channel_id,pts FROM tg_channel_state WHERE user_id=?", user)
+	// Access hashes can be learned before an update checkpoint exists. A zero
+	// pts is only a placeholder and must not be passed to
+	// updates.getChannelDifference: Telegram rejects it with
+	// PERSISTENT_TIMESTAMP_EMPTY.
+	rows, err := s.db.QueryContext(ctx, "SELECT channel_id,pts FROM tg_channel_state WHERE user_id=? AND pts>0", user)
 	if err != nil {
 		return err
 	}
@@ -240,7 +244,7 @@ func (a recoveryAPI) UpdatesGetDifference(ctx context.Context, r *tg.UpdatesGetD
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		return nil, a.storage.fail(err)
+		return nil, a.storage.fail(fmt.Errorf("global update recovery: %w", err))
 	}
 	if _, tooLong := v.(*tg.UpdatesDifferenceTooLong); tooLong {
 		return nil, a.storage.fail(errors.New("server cannot supply the complete global update gap"))
@@ -253,7 +257,7 @@ func (a recoveryAPI) UpdatesGetChannelDifference(ctx context.Context, r *tg.Upda
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		return nil, a.storage.fail(err)
+		return nil, a.storage.fail(fmt.Errorf("channel update recovery at pts %d: %w", r.Pts, err))
 	}
 	if _, tooLong := v.(*tg.UpdatesChannelDifferenceTooLong); tooLong {
 		return nil, a.storage.fail(errors.New("server cannot supply the complete channel update gap"))

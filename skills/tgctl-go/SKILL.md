@@ -80,8 +80,10 @@ stdout defaults to JSON; use `--human` only for a person at a terminal.
   confirmation gates, but must make zero Telegram/network calls. Never assume
   every command has a dry-run mode.
 - `--idempotency-key` is per account and command. Reuse it only for an
-  identical request; a definitive rejection can be reported, but an unknown
-  transport result must not be retried blindly.
+  identical request. For media uploads, cancellation during peer lookup or
+  file transfer happens before `messages.SendMedia`; no message was sent and
+  retrying is safe. Cancellation during the final send RPC has an unknown
+  outcome and must not be retried blindly.
 - JSON is a stable envelope with `ok`, `command`, and `request_id`; success
   puts command data in `data`, and failure puts a structured
   `error.code` and `error.message` in the envelope. Preserve the envelope in
