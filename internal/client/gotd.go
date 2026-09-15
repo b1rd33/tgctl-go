@@ -1068,11 +1068,11 @@ func (g *GotdClient) UploadFile(ctx context.Context, req UploadFileReq) (UploadF
 	}
 	peer, err := g.peerFromChatID(ctx, req.ChatID)
 	if err != nil {
-		return UploadFileResp{}, err
+		return UploadFileResp{}, noMessageSent(err)
 	}
 	file, err := uploadSnapshot(ctx, g.api, req.Path)
 	if err != nil {
-		return UploadFileResp{}, err
+		return UploadFileResp{}, noMessageSent(err)
 	}
 	var media tg.InputMediaClass
 	if req.Kind == "photo" {
@@ -1111,6 +1111,20 @@ func (g *GotdClient) UploadFile(ctx context.Context, req UploadFileReq) (UploadF
 	}
 	id, err := sentMessageID(updates, r.RandomID)
 	return UploadFileResp{MessageID: id}, err
+}
+
+// noMessageSent marks failures that occur before messages.SendMedia starts.
+// Uploading file parts only creates temporary Telegram-side upload state; it
+// cannot publish a chat message, so retrying after this error is safe.
+func noMessageSent(err error) error {
+	if err == nil {
+		return nil
+	}
+	var rejected *safety.DefinitiveRejection
+	if errors.As(err, &rejected) {
+		return err
+	}
+	return &safety.DefinitiveRejection{Err: err}
 }
 
 func mimeForUpload(kind, path string) string {
