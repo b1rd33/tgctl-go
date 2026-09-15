@@ -59,32 +59,23 @@ func TestGeneratorRejectsWhitespaceBinarySelection(t *testing.T) {
 	}
 }
 
-func TestGeneratorFallsBackToLocalBinaryWhenSelectionIsUnset(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fallback executable is named ./tg")
-	}
-	binary := buildFakeTG(t)
-	fallback := filepath.Join(filepath.Dir(binary), "tg")
-	if err := os.Rename(binary, fallback); err != nil {
-		t.Fatal(err)
-	}
+func TestGeneratorRejectsUnsetBinarySelection(t *testing.T) {
 	mainFile, err := filepath.Abs("main.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command("go", "run", mainFile)
-	cmd.Dir = filepath.Dir(fallback)
 	for _, entry := range os.Environ() {
 		if !strings.HasPrefix(entry, "TGCTL_DOCS_BINARY=") {
 			cmd.Env = append(cmd.Env, entry)
 		}
 	}
 	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("generator fallback: %v\n%s", err, output)
+	if err == nil {
+		t.Fatalf("generator succeeded without TGCTL_DOCS_BINARY:\n%s", output)
 	}
-	if !strings.Contains(string(output), "`tg --help` shows 4 commands.") {
-		t.Fatalf("generator did not use ./tg fallback:\n%s", output)
+	if !strings.Contains(string(output), "TGCTL_DOCS_BINARY is required") {
+		t.Fatalf("error is not actionable:\n%s", output)
 	}
 }
 
