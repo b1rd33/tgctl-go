@@ -29,6 +29,31 @@ func TestOrdinaryWriteUnknownOutcomeCannotResend(t *testing.T) {
 		t.Fatalf("resent %d times", calls)
 	}
 }
+
+func TestCanceledUploadBeforeSendCanRetry(t *testing.T) {
+	db, err := store.Connect(filepath.Join(t.TempDir(), "db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	calls := 0
+	in := PipelineInput{Cmd: "upload-photo", Args: Args{Args: safety.Args{AllowWrite: true}, IdempotencyKey: "key"}, ConfirmedTarget: &ConfirmedTarget{ChatID: 1}, PayloadPreview: map[string]any{"media_type": "photo"}, Run: func(context.Context, int64, string) (map[string]any, error) {
+		calls++
+		if calls == 1 {
+			return nil, &safety.DefinitiveRejection{Err: context.Canceled}
+		}
+		return map[string]any{"message_id": 7}, nil
+	}}
+	if _, err := Run(context.Background(), db, in); !errors.Is(err, context.Canceled) {
+		t.Fatalf("first error = %v, want context.Canceled", err)
+	}
+	if _, err := Run(context.Background(), db, in); err != nil {
+		t.Fatalf("safe retry failed: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("calls=%d, want 2", calls)
+	}
+}
 func TestOrdinaryWriteChangedPayloadIsRejected(t *testing.T) {
 	db, err := store.Connect(filepath.Join(t.TempDir(), "db"))
 	if err != nil {
