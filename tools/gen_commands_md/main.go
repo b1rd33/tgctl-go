@@ -94,11 +94,11 @@ func main() {
 func docsBinary() (string, error) {
 	binary, set := os.LookupEnv("TGCTL_DOCS_BINARY")
 	if !set {
-		return "./tg", nil
+		return "", fmt.Errorf("TGCTL_DOCS_BINARY is required; set it to a freshly built tg executable path")
 	}
 	binary = strings.TrimSpace(binary)
 	if binary == "" {
-		return "", fmt.Errorf("TGCTL_DOCS_BINARY is set but empty; unset it to use ./tg or set it to a tg executable path")
+		return "", fmt.Errorf("TGCTL_DOCS_BINARY is set but empty; set it to a freshly built tg executable path")
 	}
 	return binary, nil
 }
