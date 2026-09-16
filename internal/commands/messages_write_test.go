@@ -50,6 +50,7 @@ func runRoot(t *testing.T, cfg CommandsConfig, args ...string) (string, int) {
 	registerMediaCommands(root, cfg)
 	registerTopicCommands(root, cfg)
 	registerFolderCommands(root, cfg)
+	registerNotificationCommands(root, cfg)
 	registerReadCommands(root, cfg.Paths)
 	registerAuth(root, cfg.Paths)
 	registerDestructiveCommands(root, cfg)

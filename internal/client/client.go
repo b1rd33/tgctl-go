@@ -516,6 +516,13 @@ type PeerFolderReq struct {
 	FolderID int
 }
 
+// PeerNotifySettingsReq changes only the per-peer mute deadline. MuteUntil is
+// a Unix timestamp; zero explicitly removes the peer-specific mute.
+type PeerNotifySettingsReq struct {
+	ChatID    int64
+	MuteUntil int
+}
+
 type AdminActionReq struct {
 	Action string
 	ChatID int64
@@ -598,6 +605,7 @@ type Client interface {
 	DeleteFolder(ctx context.Context, id int64) error
 	ReorderFolders(ctx context.Context, ids []int64) error
 	SetPeerFolder(ctx context.Context, req PeerFolderReq) error
+	SetPeerNotifySettings(ctx context.Context, req PeerNotifySettingsReq) error
 	ListPinnedMessages(ctx context.Context, chatID int64) ([]PinnedMessage, error)
 	AdminAction(ctx context.Context, req AdminActionReq) (InviteLinkResp, error)
 	ListChatMembers(ctx context.Context, chatID int64, limit int) ([]MemberInfo, error)

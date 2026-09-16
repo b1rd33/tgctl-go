@@ -2168,6 +2168,29 @@ func (g *GotdClient) SetPeerFolder(ctx context.Context, req PeerFolderReq) error
 	return mapRPCErr(err)
 }
 
+func (g *GotdClient) SetPeerNotifySettings(ctx context.Context, req PeerNotifySettingsReq) error {
+	if req.MuteUntil < 0 {
+		return safety.NewBadArgs("mute deadline must be zero or a positive Unix timestamp")
+	}
+	peer, err := g.peerFromChatID(ctx, req.ChatID)
+	if err != nil {
+		return err
+	}
+	settings := tg.InputPeerNotifySettings{}
+	settings.SetMuteUntil(req.MuteUntil)
+	ok, err := g.api.AccountUpdateNotifySettings(ctx, &tg.AccountUpdateNotifySettingsRequest{
+		Peer:     &tg.InputNotifyPeer{Peer: peer},
+		Settings: settings,
+	})
+	if err != nil {
+		return mapRPCErr(err)
+	}
+	if !ok {
+		return &safety.DefinitiveRejection{Err: errors.New("Telegram rejected notification settings update")}
+	}
+	return nil
+}
+
 func (g *GotdClient) AdminAction(ctx context.Context, req AdminActionReq) (InviteLinkResp, error) {
 	peer, err := g.peerFromChatID(ctx, req.ChatID)
 	if err != nil {

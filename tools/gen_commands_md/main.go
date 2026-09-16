@@ -239,6 +239,10 @@ func exampleFor(name, use string) string {
 		return "tg unpin-msg 123456789 1 --allow-write --json"
 	case "mark-read":
 		return "tg mark-read 123456789 --up-to 1 --allow-write --json"
+	case "mute":
+		return "tg mute 123456789 --for 8h --allow-write --json"
+	case "unmute":
+		return "tg unmute 123456789 --allow-write --json"
 	case "react":
 		return "tg react 123456789 1 \"👍\" --allow-write --json"
 	case "upload-photo":
