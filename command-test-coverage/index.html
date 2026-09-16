@@ -907,6 +907,12 @@ no private Telegram transcript is stored in this repository.</p>
 <td>Cached/live fetch seams asserted; no live identity evidence</td>
 </tr>
 <tr>
+<td><code>mute</code></td>
+<td><code>internal/commands/notifications_test.go</code> parsing, gates, replay, isolation, cancellation and committed-outcome tests; <code>internal/client/notifications_test.go</code> typed-peer and optional-field request tests</td>
+<td>unverified</td>
+<td>Changes only per-peer <code>mute_until</code>; no live notification mutation</td>
+</tr>
+<tr>
 <td><code>operations-list</code></td>
 <td><code>internal/commands/recovery.go</code> plus write ledger tests</td>
 <td>unverified</td>
@@ -1037,6 +1043,12 @@ no private Telegram transcript is stored in this repository.</p>
 <td>topic command tests</td>
 <td>unverified</td>
 <td>No live forum fixture</td>
+</tr>
+<tr>
+<td><code>unmute</code></td>
+<td><code>internal/commands/notifications_test.go:TestMuteUnmuteRouteOnePeerAndReplay</code>; <code>internal/client/notifications_test.go:TestSetPeerNotifySettingsExplicitlyUnmutesAndRejectsInvalidInput</code></td>
+<td>unverified</td>
+<td>Explicitly sends a present zero <code>mute_until</code>; no live notification mutation</td>
 </tr>
 <tr>
 <td><code>unban-from-chat</code></td>

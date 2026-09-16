@@ -610,10 +610,10 @@ acceptance.</p>
 </tr>
 <tr>
 <td>5. Add everyday account management</td>
-<td>implemented (offline first increment)</td>
-<td>Archive/unarchive via typed <code>folders.editPeerFolders</code> peer requests; folder IDs 1/0, one-target selection, account isolation, write/read-only/fuzzy/dry-run gates, durable idempotency, cancellation and committed-persistence failure handling, no custom-folder/pin/read-marker side effects</td>
-<td><code>e39fbd4</code></td>
-<td>Live archive/unarchive acceptance remains unauthorized; mute/unmute, contact add/remove, formatted text/captions, and logout remain separate increments</td>
+<td>implemented (offline second increment)</td>
+<td>Archive/unarchive via typed <code>folders.editPeerFolders</code>; mute/unmute via per-peer <code>account.updateNotifySettings</code> with only <code>mute_until</code> present; explicit duration/deadline/forever parsing, account isolation, write/read-only/fuzzy/dry-run gates, durable idempotency, cancellation and committed-persistence failure handling</td>
+<td><code>e39fbd4</code>, pending mute commit</td>
+<td>Live archive and notification acceptance remain unrun; contact add/remove, formatted text/captions, and logout remain separate increments</td>
 </tr>
 <tr>
 <td>6. Optional Premium and convenience features</td>
@@ -631,8 +631,8 @@ acceptance.</p>
 </tr>
 </tbody>
 </table>
-<p>No Telegram mutation was run, and no live acceptance gate is claimed as
-passed. The archive/unarchive increment is offline-only and does not include
+<p>No Telegram notification or archive mutation was run, and no live acceptance gate is claimed as
+passed. The archive/unarchive and mute/unmute increments are offline-tested and do not include
 the remaining phase 5 operations. Phase 6 remains separate future work. This worktree does not
 install binaries, create tags, publish artifacts, or push branches.</p>
 
