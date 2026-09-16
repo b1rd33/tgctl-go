@@ -47,7 +47,7 @@ func peerFolderCommand(cfg CommandsConfig, archive bool) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selector := args[0]
-			paths, target, account, err := prepareResolvedPeerFolderTarget(cmd, cfg.Paths, selector)
+			paths, target, account, err := prepareResolvedPeerWriteTarget(cmd, cfg.Paths, selector)
 			if err != nil {
 				return emitDispatchedFailure(cmd, name, err)
 			}
@@ -80,7 +80,7 @@ func peerFolderCommand(cfg CommandsConfig, archive bool) *cobra.Command {
 	return cmd
 }
 
-func prepareResolvedPeerFolderTarget(cmd *cobra.Command, paths AccountPathProvider, selector string) (resolvedWritePaths, writes.ConfirmedTarget, string, error) {
+func prepareResolvedPeerWriteTarget(cmd *cobra.Command, paths AccountPathProvider, selector string) (resolvedWritePaths, writes.ConfirmedTarget, string, error) {
 	if err := safety.RequireWriteAllowed(writeArgsFrom(cmd).Args); err != nil {
 		return resolvedWritePaths{}, writes.ConfirmedTarget{}, "", err
 	}

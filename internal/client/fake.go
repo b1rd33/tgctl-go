@@ -91,6 +91,8 @@ type FakeClient struct {
 	FolderReorders    [][]int64
 	PeerFolderUpdates []PeerFolderReq
 	PeerFolderErr     error
+	PeerNotifyUpdates []PeerNotifySettingsReq
+	PeerNotifyErr     error
 	PinnedLists       []int64
 	PinnedMessages    []PinnedMessage
 	AdminActions      []AdminActionReq
@@ -538,6 +540,16 @@ func (f *FakeClient) SetPeerFolder(_ context.Context, req PeerFolderReq) error {
 	}
 	f.PeerFolderUpdates = append(f.PeerFolderUpdates, req)
 	return f.PeerFolderErr
+}
+
+func (f *FakeClient) SetPeerNotifySettings(_ context.Context, req PeerNotifySettingsReq) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.record("SetPeerNotifySettings"); err != nil {
+		return err
+	}
+	f.PeerNotifyUpdates = append(f.PeerNotifyUpdates, req)
+	return f.PeerNotifyErr
 }
 
 func (f *FakeClient) ListPinnedMessages(_ context.Context, chatID int64) ([]PinnedMessage, error) {

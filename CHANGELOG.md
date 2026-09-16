@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add `mute <chat>` with explicit duration, RFC3339 deadline, or indefinite modes, plus `unmute <chat>`.
+- Preserve unrelated notification preferences by sending only Telegram's optional `mute_until` field.
+- Apply account isolation, zero-network dry-run, fuzzy-selection, durable idempotency, cancellation, and committed-outcome protections to notification changes.
+
 ## v0.5.1 — 2026-09-13
 
 - Accept reserved `self` and `me` account selectors in write commands without `--fuzzy`. Ordinary chat titles still require explicit fuzzy-selection permission.

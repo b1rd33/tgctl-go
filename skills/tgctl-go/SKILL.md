@@ -46,6 +46,7 @@ the same Cobra help used to build `docs/commands.md`.
 - **Dialog folders:** `folder-add-chat`, `folder-create`, `folder-delete`,
   `folder-edit`, `folder-remove-chat`, `folder-show`, `folders-list`,
   `folders-reorder`, `archive`, `unarchive`.
+- **Notifications:** `mute`, `unmute`.
 - **Chat administration:** `ban-from-chat`, `block-user`, `chat-description`,
   `chat-invite-link`, `chat-photo`, `chat-title`, `demote`, `kick`,
   `leave-chat`, `promote`, `set-permissions`, `unban-from-chat`,
@@ -133,6 +134,11 @@ stdout defaults to JSON; use `--human` only for a person at a terminal.
   part of server-controlled archive behavior, so the CLI does not promise
   pin preservation. A successful operation reports that the local dialog
   cache requires refresh rather than fabricating local folder state.
+- **`mute <chat>` and `unmute <chat>`** change only the selected peer's
+  `mute_until` notification field. `mute` requires exactly one of `--for`,
+  `--until` (RFC3339 with timezone), or `--forever`; `unmute` explicitly
+  clears the mute. Both use the normal write, dry-run, target-selection, and
+  idempotency gates and preserve preview, sound, silent, and story settings.
 - **`listen` and `sync`** are long-running/event workflows. `sync` persists
   checkpoints and can use `--follow --once`; `listen` streams update envelopes
   and should be bounded with `--once` in deterministic tests.

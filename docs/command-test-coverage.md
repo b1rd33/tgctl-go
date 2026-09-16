@@ -60,6 +60,7 @@ no private Telegram transcript is stored in this repository.
 | `login` | `internal/commands/login_test.go` QR secret-output test and read-only guards | unverified | No auth mutation/live login |
 | `mark-read` | `internal/commands/messages_write_test.go:TestMarkReadInvokesClient` | unverified | No live read marker |
 | `me` | `internal/commands/auth_test.go` offline and envelope tests; read-only tests | unverified | Cached/live fetch seams asserted; no live identity evidence |
+| `mute` | `internal/commands/notifications_test.go` parsing, gates, replay, isolation, cancellation and committed-outcome tests; `internal/client/notifications_test.go` typed-peer and optional-field request tests | unverified | Changes only per-peer `mute_until`; no live notification mutation |
 | `operations-list` | `internal/commands/recovery.go` plus write ledger tests | unverified | Durable outcome inspection covered through store/client tests |
 | `pin-msg` | `internal/commands/messages_write_test.go:TestPinUnpinInvokesClient` | unverified | No live pin |
 | `promote` | `internal/commands/admin_test.go:TestPromoteRequiresResolvedChatConfirmation` | unverified | Offline confirmation only |
@@ -82,6 +83,7 @@ no private Telegram transcript is stored in this repository.
 | `topic-pin` | topic command tests | unverified | No live forum fixture |
 | `topic-unpin` | topic command tests | unverified | No live forum fixture |
 | `topics-list` | topic command tests | unverified | No live forum fixture |
+| `unmute` | `internal/commands/notifications_test.go:TestMuteUnmuteRouteOnePeerAndReplay`; `internal/client/notifications_test.go:TestSetPeerNotifySettingsExplicitlyUnmutesAndRejectsInvalidInput` | unverified | Explicitly sends a present zero `mute_until`; no live notification mutation |
 | `unban-from-chat` | admin tests cover shared confirmation path | unverified | Exact live denial/success absent |
 | `unblock-user` | `internal/commands/destructive_test.go:TestUnblockUserExecutes` | unverified | Offline fake-backed execution |
 | `unarchive` | `internal/commands/peer_folder_test.go:TestArchiveUnarchiveRouteOnePeerAndReplayByRequest`; `internal/client/peer_folder_test.go:TestSetPeerFolderRoutesTypedPeersAndArchiveIDs` | unverified | Typed group/user/channel payloads, folder ID 0, same single-peer durable pipeline; no live mutation |

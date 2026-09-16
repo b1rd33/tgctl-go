@@ -1,6 +1,6 @@
 # Commands
 
-`tg --help` shows 84 commands. This page is generated from Cobra help output.
+`tg --help` shows 86 commands. This page is generated from Cobra help output.
 
 Every command supports the global flags shown by `tg --help`: `--account`, `--full`, `--json`, `--human`, `--lock-wait`, `--read-only`, and `--version` where applicable.
 
@@ -59,6 +59,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg login`](#tg-login) | Interactively authorize this account against Telegram |
 | [`tg mark-read`](#tg-mark-read) | Mark history read up to and including --up-to |
 | [`tg me`](#tg-me) | Print authenticated user info |
+| [`tg mute`](#tg-mute) | Mute notifications from one chat |
 | [`tg operations-list`](#tg-operations-list) | Inspect durable write outcomes without exposing request payloads |
 | [`tg pin-msg`](#tg-pin-msg) | Pin a message in a chat |
 | [`tg promote`](#tg-promote) | promote user in chat |
@@ -84,6 +85,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg unarchive`](#tg-unarchive) | Move one chat to the inbox |
 | [`tg unban-from-chat`](#tg-unban-from-chat) | unban-from-chat user in chat |
 | [`tg unblock-user`](#tg-unblock-user) | Unblock a previously blocked user |
+| [`tg unmute`](#tg-unmute) | Unmute notifications from one chat |
 | [`tg unpin-msg`](#tg-unpin-msg) | Unpin a previously pinned message |
 | [`tg unread`](#tg-unread) | List cached incoming messages beyond known Telegram read markers |
 | [`tg upload-album`](#tg-upload-album) | Upload a 2–10 item media album |
@@ -1481,6 +1483,37 @@ tg me --json
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 | `--offline` | Read cached self user info without connecting to Telegram |
 
+## `tg mute`
+
+Mute notifications from one chat
+
+**Use**
+
+```text
+tg mute <chat> [flags]
+```
+
+**Example**
+
+```bash
+tg mute 123456789 --for 8h --allow-write --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--allow-write` | Required for any Telegram-side write |
+| `--dry-run` | Print payload preview without contacting Telegram |
+| `--for duration` | Mute duration, for example 30m or 8h |
+| `--forever` | Mute indefinitely |
+| `--fuzzy` | Allow title-based selectors for write commands |
+| `-h, --help` | help for mute |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--idempotency-key string` | Per-account replay-safe key |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--until string` | Mute until an RFC3339 timestamp with timezone |
+
 ## `tg operations-list`
 
 Inspect durable write outcomes without exposing request payloads
@@ -2195,6 +2228,34 @@ tg unblock-user 123456789 --allow-write --confirm 123456789 --json
 | `--dry-run` | Print payload preview without contacting Telegram |
 | `--fuzzy` | Allow title-based selectors for write commands |
 | `-h, --help` | help for unblock-user |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--idempotency-key string` | Per-account replay-safe key |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+
+## `tg unmute`
+
+Unmute notifications from one chat
+
+**Use**
+
+```text
+tg unmute <chat> [flags]
+```
+
+**Example**
+
+```bash
+tg unmute 123456789 --allow-write --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--allow-write` | Required for any Telegram-side write |
+| `--dry-run` | Print payload preview without contacting Telegram |
+| `--fuzzy` | Allow title-based selectors for write commands |
+| `-h, --help` | help for unmute |
 | `--human` | Force human-readable output (default on a TTY) |
 | `--idempotency-key string` | Per-account replay-safe key |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
