@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.6.0 — 2026-09-16
 
 - Add `mute <chat>` with explicit duration, RFC3339 deadline, or indefinite modes, plus `unmute <chat>`.
 - Preserve unrelated notification preferences by sending only Telegram's optional `mute_until` field.
