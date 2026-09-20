@@ -43,6 +43,7 @@ type downloadAlbumResult struct {
 	Failed          int                 `json:"failed"`
 	Partial         bool                `json:"partial"`
 	DryRun          bool                `json:"dry_run,omitempty"`
+	Warnings        []string            `json:"warnings,omitempty"`
 	Items           []downloadAlbumItem `json:"items"`
 }
 
@@ -261,6 +262,20 @@ func downloadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 						result.Failed++
 						result.Partial = true
 						continue
+					}
+					if !resp.Skipped {
+						expectedMediaIdentity := ""
+						if row.MediaIdentity != nil {
+							expectedMediaIdentity = *row.MediaIdentity
+						}
+						indexIdentity, bindErr := bindDownloadedMediaIdentity(cacheDB, chatID, row.MessageID, artifact.Path, expectedMediaIdentity, resp.MediaIdentity)
+						hashErr := bindErr
+						if hashErr == nil {
+							hashErr = indexDownloadedMediaHash(ctx, cacheDB, chatID, row.MessageID, artifact, indexIdentity, resp.ArtifactIdentity)
+						}
+						if hashErr != nil {
+							result.Warnings = append(result.Warnings, downloadedMediaHashWarning)
+						}
 					}
 					result.Items[i].Status = "downloaded"
 					result.Items[i].Bytes = artifact.Size

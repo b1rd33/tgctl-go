@@ -40,7 +40,7 @@ the same Cobra help used to build `docs/commands.md`.
   `search`, `show`, `stats`, `sync-contacts`, `topic-history`, `topics-list`, `unread`.
 - **Messages:** `delete-msg`, `edit-msg`, `forward`, `mark-read`, `pin-msg`,
   `react`, `send`, `send-by-username`, `unpin-msg`.
-- **Media:** `download-album`, `download-media`, `upload-album`,
+- **Media:** `media-hash`, `media-index`, `media-find`, `media-similar`, `download-album`, `download-media`, `upload-album`,
   `upload-document`, `upload-photo`, `upload-video`, `upload-voice`.
 - **Synchronization and archives:** `export`, `listen`, `sync`, `operations-list`, `db-backup`, `db-restore`.
 - **Dialog folders:** `folder-add-chat`, `folder-create`, `folder-delete`,
@@ -219,6 +219,43 @@ intentionally omits captions and local artifact paths.
 Dry-run reads local metadata only. The supported retry for interrupted media
 is a new atomic full download: gotd v0.144.0 exposes no safe CDN-offset resume
 primitive, so there is intentionally no `--resume` flag.
+
+## Exact media lookup
+
+`media-hash <file>` computes SHA-256 locally. `media-index <chat> --allow-write`
+indexes up to `--limit` downloaded cached message files (default 100, maximum
+1000). Continue with `--after-id` using the returned `next_after_id` while
+`has_more` is true. Failures list message IDs; repair missing/oversized files
+and rerun the affected page. The default per-file cap is 100 MiB; use
+`--max-size-mb` to change it. Indexing never downloads or contacts Telegram.
+Use existing bounded `backfill --download-media` or `download-media` first.
+
+`media-find <sha256>` reads the selected account's index and returns chat and
+message IDs, last indexed file path, media type and byte count. Lookup still
+works after removing the local file; the path is historical, not a promise
+that a file exists. Results describe the current local cache, not verified
+live Telegram availability. Cached deletions and media identity/path changes
+suppress stale entries. Refresh the cache when current server state matters.
+
+All three commands accept explicit `--account` and JSON output. Hash and lookup
+are read-only and require no Telegram session. Index writes require
+`--allow-write`; `--read-only` overrides it. Digests are exact bytes only:
+recompressed photos do not necessarily match their original upload. Confirmed single/album uploads automatically index the immutable uploaded bytes
+as `upload_original`. Fresh single/album/backfill downloads index as `downloaded`;
+skipped existing files are not automatically indexed as verified downloads.
+Manual `media-index` records `cached_file` bytes. `media-find` labels each
+representation; an original upload and its recompressed download can have
+different digests. Index failures produce warnings without asking for a resend.
+Indexing never retries an ambiguous upload. Visual candidate lookup is opt-in: use `media-index <chat> --visual --allow-write`
+to index JPEG/PNG files and `media-hash <file> --visual` to obtain a `dhash`.
+`media-similar <dhash> --distance 6` returns ranked candidates with Hamming distance,
+not exact identities. Visual processing caps files at 20 MiB and 24 million
+pixels (minimum 9x8). It uses versioned `dhash64-v1` grayscale cell averages;
+EXIF orientation, cropping, rotation, animation and other formats are not
+normalized. Similar shapes or colors can collide, so inspect candidates before
+acting on them. Visual lookup scans at most 10,000 indexed representations and
+reports `scan_incomplete` separately from result `truncated`. Visual indexing is
+explicit; automatic transfers only index SHA-256. No network is used.
 
 ## Local archives and manifests
 

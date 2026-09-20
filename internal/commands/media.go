@@ -11,6 +11,7 @@ import (
 )
 
 func registerMediaCommands(root *cobra.Command, cfg CommandsConfig) {
+	registerMediaHashCommands(root, cfg)
 	root.AddCommand(downloadMediaCommand(cfg))
 	root.AddCommand(downloadAlbumCommand(cfg))
 	root.AddCommand(uploadAlbumCommand(cfg))
@@ -75,16 +76,33 @@ func uploadCommand(cfg CommandsConfig, name, kind, short string) *cobra.Command 
 					if err != nil {
 						return nil, err
 					}
-					if db, err := store.Connect(resolvedPaths.dbPath); err == nil {
-						_ = store.RecordUploadedMedia(db, chatID, resp.MessageID, caption, mediaType, path)
-						_ = db.Close()
+					hashIndexed := false
+					warnings := []string{}
+					if db, openErr := store.Connect(resolvedPaths.dbPath); openErr == nil {
+						recordErr := store.RecordUploadedMedia(db, chatID, resp.MessageID, caption, mediaType, path)
+						if recordErr == nil {
+							hashIndexed = recordUploadHash(ctx, db, chatID, resp.MessageID, path, resp.SHA256, resp.Bytes, resp.MediaIdentity) == nil
+						}
+						closeErr := db.Close()
+						if recordErr != nil || closeErr != nil {
+							warnings = append(warnings, "upload confirmed; local cache finalization failed; do not resend")
+						}
+					} else {
+						warnings = append(warnings, "upload confirmed; local cache unavailable; do not resend")
 					}
+					if !hashIndexed {
+						warnings = append(warnings, "upload confirmed; original hash was not indexed; do not resend")
+					}
+
 					return map[string]any{
-						"chat":       map[string]any{"chat_id": chatID, "title": chatTitle},
-						"message_id": resp.MessageID,
-						"media_type": mediaType,
-						"media_path": path,
-						"caption":    caption,
+						"chat":                map[string]any{"chat_id": chatID, "title": chatTitle},
+						"message_id":          resp.MessageID,
+						"hash_indexed":        hashIndexed,
+						"hash_representation": "upload_original",
+						"warnings":            warnings,
+						"media_type":          mediaType,
+						"media_path":          path,
+						"caption":             caption,
 					}, nil
 				})
 		},

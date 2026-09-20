@@ -19,3 +19,25 @@ No Telegram notification or archive mutation was run, and no live acceptance gat
 passed. The archive/unarchive and mute/unmute increments are offline-tested and do not include
 the remaining phase 5 operations. Phase 6 remains separate future work. This worktree does not
 install binaries, create tags, publish artifacts, or push branches.
+
+## Media hash lookup (v0.7.0)
+
+Implemented local `media-hash`, bounded `media-index` and `media-find`.
+SHA-256 records live in an optional account-local index and preserve lookup
+when a downloaded file is removed. Cached deleted/replaced media is excluded.
+The command tests cover pagination, account separation, read-only/write gates,
+missing files, truncation and lookup after file removal. Store tests cover
+stale snapshots and media identities; hash tests cover known digests, size caps,
+symlink/directory rejection and cancellation. No live Telegram calls were made.
+
+Automatic indexing now covers confirmed uploads and fresh downloads, albums
+and bounded media backfill. Upload hashes come from the private snapshot used
+by the uploader. Representations distinguish original upload, downloaded media
+and manually indexed cached files. Skipped files are not treated as verified
+fresh downloads. Optional index failures preserve successful transfer outcomes.
+Explicit visual indexing and candidate search use bounded JPEG/PNG decoding
+and dhash64-v1, with Hamming-distance ranking and truthful scan limits.
+Tests cover resize/recompression, invalid inputs, account separation, deleted
+media, and lookup after file removal. Automatic transfers continue to use exact
+SHA-256 only. No live transfer tests were run for this release.
+No legacy conversions or cache version changes were added.

@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -352,6 +353,15 @@ func TestUploadAlbumUploadsInOrderAndMapsUpdates(t *testing.T) {
 	}})
 	if err != nil {
 		t.Fatal(err)
+	}
+	for i, path := range paths {
+		data, e := os.ReadFile(path)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if resp.Items[i].SHA256 != fmt.Sprintf("%x", sha256.Sum256(data)) || resp.Items[i].Bytes != int64(len(data)) {
+			t.Fatalf("snapshot metadata: %+v", resp.Items[i])
+		}
 	}
 	if got, want := resp.MessageIDs, []int64{501, 502}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("message ids=%v want %v", got, want)

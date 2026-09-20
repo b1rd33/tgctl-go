@@ -250,6 +250,7 @@ func documentHasAudioAttribute(doc *tg.Document) bool {
 }
 
 type albumUpdateData struct {
+	identities   map[int64]string
 	mapping      map[int64]int64
 	grouped      map[int64]int64
 	messageIDs   map[int64]struct{}
@@ -257,7 +258,7 @@ type albumUpdateData struct {
 }
 
 func collectAlbumUpdates(u tg.UpdatesClass) (albumUpdateData, error) {
-	d := albumUpdateData{mapping: make(map[int64]int64), grouped: make(map[int64]int64), messageIDs: make(map[int64]struct{}), messageOrder: make([]int64, 0)}
+	d := albumUpdateData{identities: make(map[int64]string), mapping: make(map[int64]int64), grouped: make(map[int64]int64), messageIDs: make(map[int64]struct{}), messageOrder: make([]int64, 0)}
 	var updates []tg.UpdateClass
 	switch v := u.(type) {
 	case *tg.Updates:
@@ -270,6 +271,7 @@ func collectAlbumUpdates(u tg.UpdatesClass) (albumUpdateData, error) {
 		}
 	case *tg.UpdateShortSentMessage:
 		if v != nil {
+			d.identities[int64(v.ID)] = messageMediaIdentity(v.Media)
 			d.messageIDs[int64(v.ID)] = struct{}{}
 			d.messageOrder = append(d.messageOrder, int64(v.ID))
 		}
@@ -324,6 +326,7 @@ func collectAlbumMessage(d *albumUpdateData, class tg.MessageClass) {
 	if _, exists := d.messageIDs[id]; exists {
 		return
 	}
+	d.identities[id] = messageMediaIdentity(msg.Media)
 	d.messageIDs[id] = struct{}{}
 	d.messageOrder = append(d.messageOrder, id)
 	if msg.GroupedID != 0 {
@@ -364,7 +367,7 @@ func extractAlbumResponse(u tg.UpdatesClass, randomIDs []int64, items []validate
 			return UploadAlbumResp{}, errors.New("response is missing album message ID mapping")
 		}
 		resp.MessageIDs[i] = id
-		item := UploadAlbumItemResp{Position: i, MessageID: id, MediaType: items[i].kind, SourcePath: items[i].sourcePath, CaptionPlaced: items[i].Caption != ""}
+		item := UploadAlbumItemResp{MediaIdentity: d.identities[id], Position: i, MessageID: id, MediaType: items[i].kind, SourcePath: items[i].sourcePath, CaptionPlaced: items[i].Caption != ""}
 		if item.CaptionPlaced {
 			item.CaptionPosition = i
 		}
@@ -408,6 +411,7 @@ func (g *GotdClient) UploadAlbum(ctx context.Context, req UploadAlbumReq) (Uploa
 	if err != nil {
 		return UploadAlbumResp{}, albumFailure("validation", -1, err)
 	}
+	snapshots := make([]uploadedSnapshot, len(items))
 	multi := make([]tg.InputSingleMedia, 0, len(items))
 	randomIDs := make([]int64, 0, len(items))
 	usedRandom := make(map[int64]struct{}, len(items))
@@ -423,7 +427,8 @@ func (g *GotdClient) UploadAlbum(ctx context.Context, req UploadAlbumReq) (Uploa
 			}
 			return UploadAlbumResp{}, albumFailure(stage, i, err)
 		}
-		uploaded := albumUploadedMedia(item, file)
+		snapshots[i] = file
+		uploaded := albumUploadedMedia(item, file.File)
 		if req.SupportsStreaming {
 			if doc, ok := uploaded.(*tg.InputMediaUploadedDocument); ok {
 				for _, attr := range doc.Attributes {
@@ -494,6 +499,10 @@ func (g *GotdClient) UploadAlbum(ctx context.Context, req UploadAlbumReq) (Uploa
 	resp, err := extractAlbumResponse(updates, randomIDs, items)
 	if err != nil {
 		return UploadAlbumResp{}, albumFailureUnknown("final-send", -1, err)
+	}
+	for i := range resp.Items {
+		resp.Items[i].SHA256 = snapshots[i].SHA256
+		resp.Items[i].Bytes = snapshots[i].Bytes
 	}
 	resp.ChatID = req.ChatID
 	return resp, nil

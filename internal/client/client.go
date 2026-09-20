@@ -102,8 +102,11 @@ type UploadFileReq struct {
 }
 
 type UploadFileResp struct {
-	MessageID int64
-	Date      string
+	SHA256        string
+	Bytes         int64
+	MediaIdentity string
+	MessageID     int64
+	Date          string
 }
 
 // UploadAlbumItem is one ordered local media file in an album. Telegram
@@ -139,6 +142,9 @@ type UploadAlbumReq struct {
 type UploadAlbumRequest = UploadAlbumReq
 
 type UploadAlbumItemResp struct {
+	SHA256          string `json:"-"`
+	Bytes           int64  `json:"-"`
+	MediaIdentity   string `json:"-"`
 	Position        int    `json:"position"`
 	MessageID       int64  `json:"message_id"`
 	MediaType       string `json:"media_type"`
@@ -198,15 +204,16 @@ type DownloadMediaReq struct {
 }
 
 type DownloadMediaResp struct {
-	ChatID      int64     `json:"chat_id"`
-	MessageID   int64     `json:"message_id"`
-	MediaType   string    `json:"media_type"`
-	MIMEType    string    `json:"mime_type"`
-	Filename    string    `json:"filename"`
-	Path        string    `json:"media_path"`
-	Bytes       int64     `json:"bytes"`
-	Skipped     bool      `json:"skipped"`
-	MessageDate time.Time `json:"-"`
+	MediaIdentity string    `json:"-"`
+	ChatID        int64     `json:"chat_id"`
+	MessageID     int64     `json:"message_id"`
+	MediaType     string    `json:"media_type"`
+	MIMEType      string    `json:"mime_type"`
+	Filename      string    `json:"filename"`
+	Path          string    `json:"media_path"`
+	Bytes         int64     `json:"bytes"`
+	Skipped       bool      `json:"skipped"`
+	MessageDate   time.Time `json:"-"`
 	// ArtifactIdentity binds Path to the directory entry committed or safely
 	// inspected by the producer. It is intentionally omitted from external JSON.
 	ArtifactIdentity media.ArtifactIdentity `json:"-"`

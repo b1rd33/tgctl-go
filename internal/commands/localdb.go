@@ -161,6 +161,7 @@ func backfillCommand(cfg CommandsConfig) *cobra.Command {
 					capOnlyWarnings = append(capOnlyWarnings, capSkippedMediaWarning(capSkippedMedia))
 				}
 				warnings := append([]string{}, result.Warnings...)
+				warnings = append(warnings, indexBackfillDownloadedHashes(ctx, paths.dbPath, chatID, result.Messages)...)
 				warnings = append(warnings, capOnlyWarnings...)
 				auditArgs["warning_count"] = len(warnings)
 				auditArgs["warnings"] = boundedBackfillWarnings(warnings, 20)

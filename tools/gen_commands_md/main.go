@@ -239,6 +239,14 @@ func exampleFor(name, use string) string {
 		return "tg unpin-msg 123456789 1 --allow-write --json"
 	case "mark-read":
 		return "tg mark-read 123456789 --up-to 1 --allow-write --json"
+	case "media-similar":
+		return "tg --account work media-similar 0123456789abcdef --distance 6 --json"
+	case "media-hash":
+		return "tg --account work media-hash ./photo.jpg --json"
+	case "media-index":
+		return "tg --account work media-index 123456789 --allow-write --limit 100 --json"
+	case "media-find":
+		return "tg --account work media-find <sha256> --json"
 	case "mute":
 		return "tg mute 123456789 --for 8h --allow-write --json"
 	case "unmute":

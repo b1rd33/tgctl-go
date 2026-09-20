@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"math"
@@ -24,6 +25,13 @@ const bytesPerMiB int64 = 1024 * 1024
 
 type downloadMediaPaths struct {
 	dbPath, sessionPath, auditPath, mediaDir string
+}
+
+// downloadMediaResult preserves the client response fields while exposing
+// post-download local indexing warnings to JSON callers.
+type downloadMediaResult struct {
+	client.DownloadMediaResp
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 type accountPathsSnapshotProvider interface {
@@ -96,6 +104,17 @@ func downloadMediaCommand(cfg CommandsConfig) *cobra.Command {
 					return nil, err
 				}
 				chatID, _, resolveErr := resolveWriteTarget(cfg.Paths, db, args[0])
+				// Capture the cache media identity before the transfer. The hash
+				// index checks this snapshot after persisting the downloaded path,
+				// preventing a concurrent message replacement from being indexed.
+				expectedMediaIdentity := ""
+				if row, rowErr := store.GetOne(db, chatID, messageID, true); rowErr == nil {
+					if row.MediaIdentity != nil {
+						expectedMediaIdentity = *row.MediaIdentity
+					}
+				} else if !errors.Is(rowErr, sql.ErrNoRows) {
+					resolveErr = errors.Join(resolveErr, rowErr)
+				}
 				resolveCloseErr := db.Close()
 				if resolveErr != nil || resolveCloseErr != nil {
 					return nil, errors.Join(resolveErr, resolveCloseErr)
@@ -177,18 +196,29 @@ func downloadMediaCommand(cfg CommandsConfig) *cobra.Command {
 					return nil, persistOpenErr
 				}
 				persistErr := store.StoreMessageMediaPath(persistDB, chatID, messageID, resp.MessageDate, resp.MediaType, artifact.Path)
-				persistCloseErr := persistDB.Close()
 				if persistErr != nil {
-					joined := errors.Join(persistErr, persistCloseErr)
+					joined := errors.Join(persistErr, persistDB.Close())
 					if !resp.Skipped {
 						return nil, safety.NewCommittedWriteWithExtras("media download committed but cache persistence failed; do not retry blindly", joined, recoveryExtras)
 					}
 					return nil, fmt.Errorf("persist skipped media cache entry: %w", joined)
 				}
+				hashWarnings := []string{}
+				if !resp.Skipped {
+					indexIdentity, bindErr := bindDownloadedMediaIdentity(persistDB, chatID, messageID, artifact.Path, expectedMediaIdentity, resp.MediaIdentity)
+					hashErr := bindErr
+					if hashErr == nil {
+						hashErr = indexDownloadedMediaHash(ctx, persistDB, chatID, messageID, artifact, indexIdentity, resp.ArtifactIdentity)
+					}
+					if hashErr != nil {
+						hashWarnings = append(hashWarnings, downloadedMediaHashWarning)
+					}
+				}
+				persistCloseErr := persistDB.Close()
 				if persistCloseErr != nil {
 					return nil, safety.NewCommittedWriteWithExtras("media artifact and cache committed but database finalization failed; do not retry blindly", persistCloseErr, recoveryExtras)
 				}
-				return resp, nil
+				return downloadMediaResult{DownloadMediaResp: resp, Warnings: hashWarnings}, nil
 			})
 			storeExitCode(cmd, code)
 			return nil
