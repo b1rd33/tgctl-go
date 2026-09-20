@@ -1,6 +1,6 @@
 # Commands
 
-`tg --help` shows 86 commands. This page is generated from Cobra help output.
+`tg --help` shows 90 commands. This page is generated from Cobra help output.
 
 Every command supports the global flags shown by `tg --help`: `--account`, `--full`, `--json`, `--human`, `--lock-wait`, `--read-only`, and `--version` where applicable.
 
@@ -59,6 +59,10 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg login`](#tg-login) | Interactively authorize this account against Telegram |
 | [`tg mark-read`](#tg-mark-read) | Mark history read up to and including --up-to |
 | [`tg me`](#tg-me) | Print authenticated user info |
+| [`tg media-find`](#tg-media-find) | Find cached Telegram media by exact SHA-256 |
+| [`tg media-hash`](#tg-media-hash) | Compute a local file's exact SHA-256 |
+| [`tg media-index`](#tg-media-index) | Index a bounded page of downloaded cached media by SHA-256 |
+| [`tg media-similar`](#tg-media-similar) | Find approximate visual matches in the local index |
 | [`tg mute`](#tg-mute) | Mute notifications from one chat |
 | [`tg operations-list`](#tg-operations-list) | Inspect durable write outcomes without exposing request payloads |
 | [`tg pin-msg`](#tg-pin-msg) | Pin a message in a chat |
@@ -1482,6 +1486,113 @@ tg me --json
 | `--human` | Force human-readable output (default on a TTY) |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 | `--offline` | Read cached self user info without connecting to Telegram |
+
+## `tg media-find`
+
+Find cached Telegram media by exact SHA-256
+
+**Use**
+
+```text
+tg media-find <sha256> [flags]
+```
+
+**Example**
+
+```bash
+tg --account work media-find <sha256> --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `-h, --help` | help for media-find |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--limit int` | Maximum records (1–1000) (default 100) |
+
+## `tg media-hash`
+
+Compute a local file's exact SHA-256
+
+**Use**
+
+```text
+tg media-hash <file> [flags]
+```
+
+**Example**
+
+```bash
+tg --account work media-hash ./photo.jpg --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `-h, --help` | help for media-hash |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--max-size-mb int` | Maximum file size in MiB (0 = unlimited) (default 100) |
+| `--visual` | Also compute JPEG/PNG visual hashes (20 MiB / 24 MP cap) |
+
+## `tg media-index`
+
+Index a bounded page of downloaded cached media by SHA-256
+
+**Use**
+
+```text
+tg media-index <chat> [flags]
+```
+
+**Example**
+
+```bash
+tg --account work media-index 123456789 --allow-write --limit 100 --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--after-id int` | Continue after this message ID |
+| `--allow-write` | Allow local hash index updates |
+| `--fuzzy` | Allow title-based chat selectors |
+| `-h, --help` | help for media-index |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--limit int` | Maximum records (1–1000) (default 100) |
+| `--max-size-mb int` | Maximum file size in MiB (0 = unlimited) (default 100) |
+| `--visual` | Also compute JPEG/PNG visual hashes (20 MiB / 24 MP cap) |
+
+## `tg media-similar`
+
+Find approximate visual matches in the local index
+
+**Use**
+
+```text
+tg media-similar <dhash> [flags]
+```
+
+**Example**
+
+```bash
+tg --account work media-similar 0123456789abcdef --distance 6 --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--distance int` | Maximum differing bits (0–64); lower is stricter (default 6) |
+| `-h, --help` | help for media-similar |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--limit int` | Maximum records (1–1000) (default 100) |
 
 ## `tg mute`
 

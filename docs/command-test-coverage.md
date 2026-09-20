@@ -108,3 +108,19 @@ separate from live claims.
 The phase ledger in `docs/next-release-plan.md` is the source for release gates;
 this matrix is the command-level audit trail and should be regenerated or
 updated whenever Cobra commands change.
+
+### Exact media lookup additions
+
+| Command | Offline asserted evidence | Live execution | Status / limitation |
+| --- | --- | --- | --- |
+| `media-hash` | `TestHashFile`, `TestMediaHashWorkflowOffline` | not applicable | Exact-byte digest, file caps, symlink/directory rejection and cancellation |
+| `media-index` | `TestMediaHashWorkflowOffline`, store hash tests | not applicable | Local-only, bounded pages, write gates, missing files and stale identity guards |
+| `media-find` | `TestMediaHashWorkflowOffline`, store hash tests | not applicable | Local index remains usable after file removal; no live availability guarantee |
+
+Automatic transfer indexing is asserted by `TestUploadIndexesConfirmedSnapshotAndPreservesSuccess`,
+`TestAlbumIndexesConfirmedOriginals`, `TestUnconfirmedUploadDoesNotCreateHashIndex`,
+`TestUploadSnapshotReturnsExactDigest`, `TestHashRepresentationsCoexistAcrossDownloadPath`,
+and the download hash tests. These are offline fixtures; no live Telegram transfer
+or message mutation is claimed.
+
+Visual matching: `TestVisualHashResizeAndRecompression`, `TestVisualHashRejectsInvalidSmallAndCanceled`, `TestVisualSearchRankingIsolationAndStaleMedia`, and `TestVisualWorkflowOfflineAfterFileRemoval` cover `media-similar` and the `--visual` flags. Results are approximate candidates, not content identity. No live Telegram calls.

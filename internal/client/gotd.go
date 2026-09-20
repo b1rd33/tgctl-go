@@ -1091,7 +1091,7 @@ func (g *GotdClient) UploadFile(ctx context.Context, req UploadFileReq) (UploadF
 	}
 	var media tg.InputMediaClass
 	if req.Kind == "photo" {
-		media = &tg.InputMediaUploadedPhoto{File: file}
+		media = &tg.InputMediaUploadedPhoto{File: file.File}
 	} else {
 		attrs := []tg.DocumentAttributeClass{}
 		if req.Filename != "" {
@@ -1104,7 +1104,7 @@ func (g *GotdClient) UploadFile(ctx context.Context, req UploadFileReq) (UploadF
 			attrs = append(attrs, &tg.DocumentAttributeVideo{SupportsStreaming: req.SupportsStreaming})
 		}
 		media = &tg.InputMediaUploadedDocument{
-			File:       file,
+			File:       file.File,
 			MimeType:   mimeForUpload(req.Kind, req.Path),
 			Attributes: attrs,
 			ForceFile:  req.Kind == "document",
@@ -1125,7 +1125,8 @@ func (g *GotdClient) UploadFile(ctx context.Context, req UploadFileReq) (UploadF
 		return UploadFileResp{}, mapRPCErr(err)
 	}
 	id, err := sentMessageID(updates, r.RandomID)
-	return UploadFileResp{MessageID: id}, err
+	data, _ := collectAlbumUpdates(updates)
+	return UploadFileResp{MessageID: id, SHA256: file.SHA256, Bytes: file.Bytes, MediaIdentity: data.identities[id]}, err
 }
 
 // noMessageSent marks failures that occur before messages.SendMedia starts.
@@ -2215,7 +2216,7 @@ func (g *GotdClient) AdminAction(ctx context.Context, req AdminActionReq) (Invit
 		if err != nil {
 			return InviteLinkResp{}, err
 		}
-		photo := &tg.InputChatUploadedPhoto{File: file}
+		photo := &tg.InputChatUploadedPhoto{File: file.File}
 		switch p := peer.(type) {
 		case *tg.InputPeerChannel:
 			_, err = g.api.ChannelsEditPhoto(ctx, &tg.ChannelsEditPhotoRequest{

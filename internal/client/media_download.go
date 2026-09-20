@@ -143,7 +143,8 @@ func (g *GotdClient) downloadMessageMedia(ctx context.Context, req DownloadMedia
 func (g *GotdClient) downloadExtractedMessageMedia(ctx context.Context, req DownloadMediaReq, message *tg.Message, extracted extractedDownloadMedia, destinationName string) (DownloadMediaResp, error) {
 	safeName := media.SanitizeDownloadName(destinationName)
 	resp := DownloadMediaResp{
-		ChatID: req.ChatID, MessageID: req.MessageID,
+		MediaIdentity: extracted.Identity,
+		ChatID:        req.ChatID, MessageID: req.MessageID,
 		MediaType: extracted.MediaType, MIMEType: extracted.MIMEType, Filename: safeName,
 	}
 	if message.Date > 0 {

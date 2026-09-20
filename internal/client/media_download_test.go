@@ -713,7 +713,8 @@ func TestGotdDownloadMediaStreamsAtomicallyAndReturnsSafeMetadata(t *testing.T) 
 	}
 	wantPath := filepath.Join(outputDir, "telegram-name.mp4")
 	want := DownloadMediaResp{
-		ChatID: -1000000000000 - 321, MessageID: 77, MediaType: "video", MIMEType: "video/mp4", Filename: "telegram-name.mp4",
+		MediaIdentity: "document:44",
+		ChatID:        -1000000000000 - 321, MessageID: 77, MediaType: "video", MIMEType: "video/mp4", Filename: "telegram-name.mp4",
 		Path: wantPath, Bytes: int64(len(data)), MessageDate: time.Unix(1_700_000_123, 0).UTC(),
 	}
 	identity := got.ArtifactIdentity

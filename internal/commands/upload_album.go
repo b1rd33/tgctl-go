@@ -148,6 +148,18 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 						return nil, safety.NewCommittedWriteWithExtras("album sent but local cache finalization failed; do not retry blindly", errors.New("local cache finalization failed"), recoveryExtras)
 					}
 					recordErr := store.RecordUploadedAlbum(db, chatID, rows)
+					hashesIndexed := 0
+					if recordErr == nil {
+						for i, item := range items {
+							if i >= len(resp.Items) || resp.Items[i].MessageID != resp.MessageIDs[i] {
+								continue
+							}
+							meta := resp.Items[i]
+							if recordUploadHash(ctx, db, chatID, resp.MessageIDs[i], item.Path, meta.SHA256, meta.Bytes, meta.MediaIdentity) == nil {
+								hashesIndexed++
+							}
+						}
+					}
 					closeErr := db.Close()
 					if recordErr != nil {
 						return nil, safety.NewCommittedWriteWithExtras("album sent but local cache finalization failed; do not retry blindly", errors.New("local cache finalization failed"), recoveryExtras)
@@ -156,9 +168,14 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 						return nil, safety.NewCommittedWriteWithExtras("album sent but local cache finalization failed; do not retry blindly", errors.New("local cache finalization failed"), recoveryExtras)
 					}
 					out := map[string]any{
-						"chat":        map[string]any{"chat_id": chatID, "title": chatTitle},
-						"message_ids": resp.MessageIDs,
-						"item_count":  len(resp.MessageIDs),
+						"chat":                map[string]any{"chat_id": chatID, "title": chatTitle},
+						"message_ids":         resp.MessageIDs,
+						"item_count":          len(resp.MessageIDs),
+						"hashes_indexed":      hashesIndexed,
+						"hash_representation": "upload_original",
+					}
+					if hashesIndexed != len(items) {
+						out["warnings"] = []string{"album confirmed; some original hashes were not indexed; do not resend"}
 					}
 					if resp.GroupedID != 0 {
 						out["grouped_id"] = resp.GroupedID

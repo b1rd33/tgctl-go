@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.7.0 — 2026-09-20
+
+- Add explicit JPEG/PNG visual indexing with `media-hash --visual`, `media-index --visual` and bounded `media-similar` candidate lookup. Report distance, approximation and incomplete scans rather than implying exact matches.
+
+- Automatically index immutable upload snapshots and fresh downloaded media, including albums and backfill. Label original, downloaded and manually indexed representations separately.
+- Keep confirmed sends/downloads successful if optional hash indexing fails, with explicit warnings; never retry an upload to repair its index.
+
+- Add offline `media-hash`, bounded `media-index`, and `media-find` for exact SHA-256 lookup of downloaded cached media.
+- Keep per-account lookup usable after local files are removed; suppress entries for cached deleted or replaced media.
+- Index only explicit local files with size limits, cancellation and file-change checks; no Telegram calls or cache migration.
+
+
 ## v0.6.0 — 2026-09-16
 
 - Add `mute <chat>` with explicit duration, RFC3339 deadline, or indefinite modes, plus `unmute <chat>`.
