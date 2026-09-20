@@ -546,6 +546,25 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#media-hash-lookup-v070" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Media hash lookup (v0.7.0)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -635,6 +654,25 @@ acceptance.</p>
 passed. The archive/unarchive and mute/unmute increments are offline-tested and do not include
 the remaining phase 5 operations. Phase 6 remains separate future work. This worktree does not
 install binaries, create tags, publish artifacts, or push branches.</p>
+<h2 id="media-hash-lookup-v070">Media hash lookup (v0.7.0)<a class="headerlink" href="#media-hash-lookup-v070" title="Permanent link">&para;</a></h2>
+<p>Implemented local <code>media-hash</code>, bounded <code>media-index</code> and <code>media-find</code>.
+SHA-256 records live in an optional account-local index and preserve lookup
+when a downloaded file is removed. Cached deleted/replaced media is excluded.
+The command tests cover pagination, account separation, read-only/write gates,
+missing files, truncation and lookup after file removal. Store tests cover
+stale snapshots and media identities; hash tests cover known digests, size caps,
+symlink/directory rejection and cancellation. No live Telegram calls were made.</p>
+<p>Automatic indexing now covers confirmed uploads and fresh downloads, albums
+and bounded media backfill. Upload hashes come from the private snapshot used
+by the uploader. Representations distinguish original upload, downloaded media
+and manually indexed cached files. Skipped files are not treated as verified
+fresh downloads. Optional index failures preserve successful transfer outcomes.
+Explicit visual indexing and candidate search use bounded JPEG/PNG decoding
+and dhash64-v1, with Hamming-distance ranking and truthful scan limits.
+Tests cover resize/recompression, invalid inputs, account separation, deleted
+media, and lookup after file removal. Automatic transfers continue to use exact
+SHA-256 only. No live transfer tests were run for this release.
+No legacy conversions or cache version changes were added.</p>
 
 
 

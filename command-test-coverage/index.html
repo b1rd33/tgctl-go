@@ -561,6 +561,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Evidence policy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#exact-media-lookup-additions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exact media lookup additions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -1128,6 +1145,43 @@ separate from live claims.</p>
 <p>The phase ledger in <code>docs/next-release-plan.md</code> is the source for release gates;
 this matrix is the command-level audit trail and should be regenerated or
 updated whenever Cobra commands change.</p>
+<h3 id="exact-media-lookup-additions">Exact media lookup additions<a class="headerlink" href="#exact-media-lookup-additions" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Offline asserted evidence</th>
+<th>Live execution</th>
+<th>Status / limitation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>media-hash</code></td>
+<td><code>TestHashFile</code>, <code>TestMediaHashWorkflowOffline</code></td>
+<td>not applicable</td>
+<td>Exact-byte digest, file caps, symlink/directory rejection and cancellation</td>
+</tr>
+<tr>
+<td><code>media-index</code></td>
+<td><code>TestMediaHashWorkflowOffline</code>, store hash tests</td>
+<td>not applicable</td>
+<td>Local-only, bounded pages, write gates, missing files and stale identity guards</td>
+</tr>
+<tr>
+<td><code>media-find</code></td>
+<td><code>TestMediaHashWorkflowOffline</code>, store hash tests</td>
+<td>not applicable</td>
+<td>Local index remains usable after file removal; no live availability guarantee</td>
+</tr>
+</tbody>
+</table>
+<p>Automatic transfer indexing is asserted by <code>TestUploadIndexesConfirmedSnapshotAndPreservesSuccess</code>,
+<code>TestAlbumIndexesConfirmedOriginals</code>, <code>TestUnconfirmedUploadDoesNotCreateHashIndex</code>,
+<code>TestUploadSnapshotReturnsExactDigest</code>, <code>TestHashRepresentationsCoexistAcrossDownloadPath</code>,
+and the download hash tests. These are offline fixtures; no live Telegram transfer
+or message mutation is claimed.</p>
+<p>Visual matching: <code>TestVisualHashResizeAndRecompression</code>, <code>TestVisualHashRejectsInvalidSmallAndCanceled</code>, <code>TestVisualSearchRankingIsolationAndStaleMedia</code>, and <code>TestVisualWorkflowOfflineAfterFileRemoval</code> cover <code>media-similar</code> and the <code>--visual</code> flags. Results are approximate candidates, not content identity. No live Telegram calls.</p>
 
 
 
