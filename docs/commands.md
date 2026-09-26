@@ -23,7 +23,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg chat-description`](#tg-chat-description) | Edit chat description |
 | [`tg chat-invite-link`](#tg-chat-invite-link) | Export an invite link |
 | [`tg chat-members`](#tg-chat-members) | List chat members |
-| [`tg chat-permissions`](#tg-chat-permissions) | Inspect current or selected member rights for a chat |
+| [`tg chat-permissions`](#tg-chat-permissions) | Inspect advisory rights for the current account or a selected user in a group/channel. |
 | [`tg chat-photo`](#tg-chat-photo) | Edit chat photo |
 | [`tg chat-pinned-list`](#tg-chat-pinned-list) | List up to 100 pinned messages in a chat |
 | [`tg chat-title`](#tg-chat-title) | Edit chat title |
@@ -501,7 +501,7 @@ tg chat-members <group-chat-id> --limit 50 --json
 
 ## `tg chat-permissions`
 
-Inspect current or selected member rights for a chat
+Inspect advisory rights for the current account or a selected user in a group/channel.
 
 **Use**
 

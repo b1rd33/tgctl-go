@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.8.1 — 2026-09-26
+
+- Correct selected-member and current-account permission inspection: combine group defaults and personal restrictions, honor administrator and broadcast roles, expiry and boost exemptions, and preserve unavailable rights as unknown.
+- Classify video, voice, audio, animation, stickers and video notes consistently across reads, updates and downloads instead of labeling all documents alike. Existing cached rows require refresh; no migration is performed.
+- Replace obsolete live scripts with explicit-account Saved Messages acceptance, private output, bounded commands and verified cleanup. Remove scripts that copied an active session into test accounts.
+
+The bounded media/text suite and offline regressions do not close the separate
+disposable-account/forum or sponsored-display gates. See the
+[verification report](docs/verification-2026-09-26.md).
+
 ## v0.8.0 — 2026-09-26
 
 - Purge pending payloads when an expiring-message update is observed, alongside the cached content. Keep a content-free notice and prevent stale recovery updates from republishing tombstoned messages.

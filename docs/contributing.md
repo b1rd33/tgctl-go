@@ -34,34 +34,30 @@ clean.
 
 ## Running live verification
 
-Live smoke tests require a real Telegram account and credentials in
-`.env`.
+Use an already authenticated account and an absolute path to a freshly built
+binary. The default run only reads; writes must be enabled explicitly:
 
 ```bash
-scripts/live_verify.sh
-scripts/import_export_simulation.sh
-scripts/live_permissions.sh
+python3 scripts/live_verify.py --binary "$PWD/tg" --account test
+python3 scripts/live_verify.py --binary "$PWD/tg" --account test --writes --media
 ```
 
-`scripts/live_verify.sh` covers the command surface. The import/export
-simulation creates 20 synthetic self-chat inquiries, groups them into
-country queues, exercises folders, and mirrors summaries into forum
-topics when a forum test chat is available.
+`--writes` creates synthetic Saved Messages text, replies, forwards and pins.
+`--media` also requires ffmpeg and exercises single photo/video/voice/document
+transfers plus photo/video, audio and document albums. The harness verifies
+identity before writing, uses normal session ownership, captures private results
+in memory, prints labels only, and deletes every confirmed test message even on
+failure. Unknown outcomes stop without retry; inspect the local write ledger.
+It never copies sessions or consumes pending updates. Fixture files are temporary.
 
-Set the required `TGCTL_LIVE_*` variables to dedicated test targets before
-running these scripts. They fail closed when required targets are absent and
-write raw output to a private temporary workspace that is removed on exit.
-Raw-output retention variables are intentionally rejected. Never commit live
-output.
-For the permission smoke test, set `TGCTL_LIVE_PERMISSION_CHAT`,
-`TGCTL_LIVE_ALLOWED_ACCOUNT`, and `TGCTL_LIVE_DENIED_ACCOUNT` to two already
-authorized accounts and a disposable group/channel. The script sends one
-uniquely marked message from the allowed account and expects the denied account
-to return `PERMISSION_DENIED` (exit 10). It never deliberately creates a flood
-wait and never bans, promotes, deletes, or mass-messages.
-For the import/export simulation, set `TGCTL_LIVE_FORUM_CHAT` explicitly and set
-`TGCTL_LIVE_FOLDER_TARGETS` to four ordered, comma-separated dedicated test chat
-IDs. The script does not infer write targets from cached dialogs.
+For the separate `scripts/live_permissions.sh` test, provision a disposable
+group/channel and two distinct authorized accounts. Set
+`TGCTL_LIVE_PERMISSION_CHAT`, `TGCTL_LIVE_ALLOWED_ACCOUNT`, and
+`TGCTL_LIVE_DENIED_ACCOUNT` explicitly. It expects an allowed send and a denied
+send returning `PERMISSION_DENIED` (exit 10). The operator must clean up this
+fixture and its allowed probe; it never changes membership or intentionally
+triggers a flood wait. A single-account Saved Messages run does not validate
+server permission transitions, forum behavior, contact changes or logout.
 
 Redact Telegram identities, phone numbers, peer/message IDs, invite links,
 session/auth material, message contents, local paths, SQLite data, audit logs,
