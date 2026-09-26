@@ -20,7 +20,7 @@ func TestGotdClientRejectsInt32OverflowBeforeDependencies(t *testing.T) {
 		run  func() error
 	}{
 		{name: "send reply", run: func() error { _, err := g.SendMessage(ctx, SendMessageReq{ReplyTo: over}); return err }},
-		{name: "selector reply", run: func() error { _, err := g.SendMessageBySelector(ctx, "@x", "x", over, false, false); return err }},
+		{name: "selector reply", run: func() error { _, err := g.SendMessageBySelector(ctx, "@x", "x", over, false, false, nil); return err }},
 		{name: "upload reply", run: func() error { _, err := g.UploadFile(ctx, UploadFileReq{ReplyTo: over}); return err }},
 		{name: "edit message", run: func() error { return g.EditMessage(ctx, EditMessageReq{MessageID: over}) }},
 		{name: "forward message", run: func() error { _, err := g.Forward(ctx, ForwardReq{MessageIDs: []int64{over}}); return err }},

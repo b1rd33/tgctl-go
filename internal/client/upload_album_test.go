@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	textutil "github.com/b1rd33/tgctl-go/internal/text"
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 )
@@ -348,7 +349,7 @@ func TestUploadAlbumUploadsInOrderAndMapsUpdates(t *testing.T) {
 		},
 		sendResp: albumUpdates(501, 502),
 	}
-	resp, err := (&GotdClient{albumAPI: api}).UploadAlbum(context.Background(), UploadAlbumReq{ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, ReplyTo: 9, Silent: true, SupportsStreaming: true, Items: []UploadAlbumItem{
+	resp, err := (&GotdClient{albumAPI: api}).UploadAlbum(context.Background(), UploadAlbumReq{Entities: []textutil.Entity{{Type: "bold", Offset: 0, Length: 5}}, ChatID: 1, Peer: &tg.InputPeerChat{ChatID: 1}, ReplyTo: 9, Silent: true, SupportsStreaming: true, Items: []UploadAlbumItem{
 		{Path: originalFirst, Kind: "photo", Caption: "album caption"}, {Path: paths[1], Kind: "video"},
 	}})
 	if err != nil {
@@ -371,6 +372,9 @@ func TestUploadAlbumUploadsInOrderAndMapsUpdates(t *testing.T) {
 	}
 	if api.sendReq == nil || api.sendReq.ReplyTo == nil || !api.sendReq.Silent || len(api.sendReq.MultiMedia) != 2 {
 		t.Fatalf("send request=%#v", api.sendReq)
+	}
+	if len(api.sendReq.MultiMedia[0].Entities) != 1 || len(api.sendReq.MultiMedia[1].Entities) != 0 {
+		t.Fatal("caption formatting misplaced")
 	}
 	if api.sendReq.MultiMedia[0].Message != "album caption" || api.sendReq.MultiMedia[1].Message != "" {
 		t.Fatalf("captions=%q,%q", api.sendReq.MultiMedia[0].Message, api.sendReq.MultiMedia[1].Message)

@@ -30,6 +30,10 @@ func uploadCommand(cfg CommandsConfig, name, kind, short string) *cobra.Command 
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selector := args[0]
 			caption, _ := cmd.Flags().GetString("caption")
+			entities, err := commandEntities(cmd, caption, true)
+			if err != nil {
+				return emitDispatchedFailure(cmd, name, err)
+			}
 			replyTo, _ := cmd.Flags().GetInt64("reply-to")
 			if err := validateOptionalPositiveInt32(replyTo, "--reply-to"); err != nil {
 				return emitDispatchedFailure(cmd, name, err)
@@ -57,6 +61,7 @@ func uploadCommand(cfg CommandsConfig, name, kind, short string) *cobra.Command 
 				"file_path":          path,
 				"media_type":         mediaType,
 				"caption":            caption,
+				"entities":           entities,
 				"reply_to":           replyTo,
 				"silent":             silent,
 				"filename":           filename,
@@ -69,7 +74,7 @@ func uploadCommand(cfg CommandsConfig, name, kind, short string) *cobra.Command 
 			return runWriteResolved(cmd, name, "messages.SendMedia", selector, cfg, resolvedPaths, payload,
 				func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error) {
 					resp, err := c.UploadFile(ctx, client.UploadFileReq{
-						ChatID: chatID, Path: path, Kind: kind, Caption: caption,
+						ChatID: chatID, Path: path, Kind: kind, Caption: caption, Entities: entities,
 						ReplyTo: replyTo, Silent: silent, Filename: filename,
 						SupportsStreaming: supportsStreaming,
 					})
@@ -123,6 +128,7 @@ func uploadCommand(cfg CommandsConfig, name, kind, short string) *cobra.Command 
 		cmd.Flags().Bool("supports-streaming", false, "Mark video as streamable")
 		_ = cmd.Flags().MarkHidden("supports-streaming")
 	}
+	addEntityFlag(cmd)
 	addWriteFlags(cmd)
 	return cmd
 }

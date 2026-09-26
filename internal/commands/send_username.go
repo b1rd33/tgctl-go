@@ -11,6 +11,7 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/dispatch"
 	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
+	textutil "github.com/b1rd33/tgctl-go/internal/text"
 	"github.com/b1rd33/tgctl-go/internal/writes"
 	"strings"
 )
@@ -27,7 +28,14 @@ func registerSendByUsername(root *cobra.Command, mgr *accounts.Manager, cfg Comm
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selector := args[0]
-			text := args[1]
+			text, err := readTextArg(args[1], cmd.InOrStdin())
+			if err != nil {
+				return emitDispatchedFailure(cmd, "send-by-username", err)
+			}
+			entities, err := commandEntities(cmd, text, false)
+			if err != nil {
+				return emitDispatchedFailure(cmd, "send-by-username", err)
+			}
 			if strings.TrimSpace(text) == "" {
 				return emitDispatchedFailure(cmd, "send-by-username", safety.NewBadArgs("text cannot be empty"))
 			}
@@ -57,7 +65,7 @@ func registerSendByUsername(root *cobra.Command, mgr *accounts.Manager, cfg Comm
 			noWeb, _ := cmd.Flags().GetBool("no-webpage")
 
 			payload := map[string]any{
-				"selector": selector, "text": text,
+				"selector": selector, "text": text, "entities": entities,
 				"reply_to": replyTo, "silent": silent, "no_webpage": noWeb,
 			}
 
@@ -87,12 +95,12 @@ func registerSendByUsername(root *cobra.Command, mgr *accounts.Manager, cfg Comm
 						}
 						defer c.Close()
 						sender, ok := c.(interface {
-							SendMessageBySelector(context.Context, string, string, int64, bool, bool) (client.SendMessageResp, error)
+							SendMessageBySelector(context.Context, string, string, int64, bool, bool, []textutil.Entity) (client.SendMessageResp, error)
 						})
 						if !ok {
 							return nil, &safety.DefinitiveRejection{Err: safety.NewBadArgs("client does not support username sends")}
 						}
-						resp, err := sender.SendMessageBySelector(ctx, selector, text, replyTo, silent, noWeb)
+						resp, err := sender.SendMessageBySelector(ctx, selector, text, replyTo, silent, noWeb, entities)
 						if err != nil {
 							return nil, err
 						}
@@ -107,6 +115,7 @@ func registerSendByUsername(root *cobra.Command, mgr *accounts.Manager, cfg Comm
 	cmd.Flags().Int64("reply-to", 0, "Reply-to message id")
 	cmd.Flags().Bool("silent", false, "Send silently")
 	cmd.Flags().Bool("no-webpage", false, "Disable link preview")
+	addEntityFlag(cmd)
 	addWriteFlags(cmd)
 	root.AddCommand(cmd)
 }

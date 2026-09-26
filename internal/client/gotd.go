@@ -27,6 +27,7 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/resolve"
 	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
+	textutil "github.com/b1rd33/tgctl-go/internal/text"
 )
 
 // GotdClient is the production Client implementation backed by gotd/td.
@@ -44,6 +45,7 @@ type GotdClient struct {
 	destinationOpener destinationOpener
 	tgc               *telegram.Client
 	lifecycle         *clientLifecycle
+	sessionStorage    *AtomicSessionStorage
 	closeOnce         sync.Once
 	closeErr          error
 	db                *sql.DB // per-account entity cache; may be nil for ephemeral clients
@@ -336,7 +338,13 @@ func newClient(ctx context.Context, apiID int, apiHash, sessionPath, dbPath stri
 	var selfID int64
 	life, err := startClientRun(ctx, func(runCtx context.Context, ready chan<- error) error {
 		if lock, ok := ctx.Value(sessionLockKey{}).(*safety.SessionLock); ok {
-			defer lock.Release()
+			defer func() {
+				if storage, ok := storage.(*AtomicSessionStorage); ok {
+					storage.logoutMu.Lock()
+					defer storage.logoutMu.Unlock()
+				}
+				lock.Release()
+			}()
 		}
 		return tgc.Run(runCtx, func(rctx context.Context) error {
 			status, err := tgc.Auth().Status(rctx)
@@ -408,6 +416,7 @@ func newClient(ctx context.Context, apiID int, apiHash, sessionPath, dbPath stri
 		tgc:               tgc, lifecycle: life, updateStore: updateStore,
 	}
 	gc.db = db
+	gc.sessionStorage, _ = storage.(*AtomicSessionStorage)
 	return gc, nil
 }
 
@@ -794,7 +803,7 @@ func remoteMessageFromTL(chatID int64, message tg.MessageClass) (BackfillMessage
 		if m == nil {
 			return BackfillMessage{}, false
 		}
-		raw, err := json.Marshal(m)
+		raw, err := textutil.MessageJSON(m)
 		if err != nil {
 			return BackfillMessage{}, false
 		}
@@ -975,6 +984,9 @@ func (g *GotdClient) persistEntitiesFromResolved(users []tg.UserClass, chats []t
 }
 
 func (g *GotdClient) SendMessage(ctx context.Context, req SendMessageReq) (SendMessageResp, error) {
+	if err := textutil.ValidateEntities(req.Text, req.Entities, 4096); err != nil {
+		return SendMessageResp{}, safety.NewBadArgs("%s", err)
+	}
 	if err := validateOptionalTelegramInt32(req.ReplyTo, "reply_to"); err != nil {
 		return SendMessageResp{}, err
 	}
@@ -991,6 +1003,7 @@ func (g *GotdClient) SendMessage(ctx context.Context, req SendMessageReq) (SendM
 	r := &tg.MessagesSendMessageRequest{
 		Peer:     peer,
 		Message:  req.Text,
+		Entities: textutil.TelegramEntities(req.Entities),
 		RandomID: operationRandomID(ctx),
 	}
 	if req.ReplyTo != 0 || req.TopicID != 0 {
@@ -1054,7 +1067,11 @@ func (g *GotdClient) peerFromChatID(_ context.Context, chatID int64) (tg.InputPe
 
 // SendMessageBySelector resolves selector via Telegram and sends in one call.
 // Bypasses the cached-access-hash requirement so users can send today.
-func (g *GotdClient) SendMessageBySelector(ctx context.Context, selector, text string, replyTo int64, silent, noWeb bool) (SendMessageResp, error) {
+func (g *GotdClient) SendMessageBySelector(ctx context.Context, selector, text string, replyTo int64, silent, noWeb bool, entities []textutil.Entity) (SendMessageResp, error) {
+
+	if err := textutil.ValidateEntities(text, entities, 4096); err != nil {
+		return SendMessageResp{}, safety.NewBadArgs("%s", err)
+	}
 	if err := validateOptionalTelegramInt32(replyTo, "reply_to"); err != nil {
 		return SendMessageResp{}, err
 	}
@@ -1064,7 +1081,7 @@ func (g *GotdClient) SendMessageBySelector(ctx context.Context, selector, text s
 	}
 	r := &tg.MessagesSendMessageRequest{
 		Peer: peer, Message: text, RandomID: operationRandomID(ctx),
-		Silent: silent, NoWebpage: noWeb,
+		Silent: silent, NoWebpage: noWeb, Entities: textutil.TelegramEntities(entities),
 	}
 	if replyTo != 0 {
 		r.ReplyTo = &tg.InputReplyToMessage{ReplyToMsgID: int(replyTo)}
@@ -1078,6 +1095,9 @@ func (g *GotdClient) SendMessageBySelector(ctx context.Context, selector, text s
 }
 
 func (g *GotdClient) UploadFile(ctx context.Context, req UploadFileReq) (UploadFileResp, error) {
+	if err := textutil.ValidateEntities(req.Caption, req.Entities, 2048); err != nil {
+		return UploadFileResp{}, safety.NewBadArgs("%s", err)
+	}
 	if err := validateOptionalTelegramInt32(req.ReplyTo, "reply_to"); err != nil {
 		return UploadFileResp{}, err
 	}
@@ -1114,6 +1134,7 @@ func (g *GotdClient) UploadFile(ctx context.Context, req UploadFileReq) (UploadF
 		Peer:     peer,
 		Media:    media,
 		Message:  req.Caption,
+		Entities: textutil.TelegramEntities(req.Entities),
 		RandomID: operationRandomID(ctx),
 		Silent:   req.Silent,
 	}
@@ -1192,6 +1213,9 @@ func extractNewMessageID(u tg.UpdatesClass) int64 {
 // ---- write methods backed by gotd ----
 
 func (g *GotdClient) EditMessage(ctx context.Context, req EditMessageReq) error {
+	if err := textutil.ValidateEntities(req.NewText, req.Entities, 4096); err != nil {
+		return safety.NewBadArgs("%s", err)
+	}
 	if err := validatePositiveTelegramInt32(req.MessageID, "message_id"); err != nil {
 		return err
 	}
@@ -1199,9 +1223,10 @@ func (g *GotdClient) EditMessage(ctx context.Context, req EditMessageReq) error 
 	if err != nil {
 		return err
 	}
-	_, err = g.api.MessagesEditMessage(ctx, &tg.MessagesEditMessageRequest{
-		Peer: peer, ID: int(req.MessageID), Message: req.NewText,
-	})
+	r := &tg.MessagesEditMessageRequest{Peer: peer, ID: int(req.MessageID)}
+	r.SetMessage(req.NewText)
+	r.SetEntities(textutil.TelegramEntities(req.Entities))
+	_, err = g.api.MessagesEditMessage(ctx, r)
 	return mapRPCErr(err)
 }
 
@@ -1659,7 +1684,7 @@ func (g *GotdClient) paginateBackfillHistory(
 			row.SenderID = peerID(m.FromID)
 			row.EditDate = m.EditDate
 			row.ReplyToMsgID = replyMessageID(m.ReplyTo)
-			raw, rawErr := json.Marshal(m)
+			raw, rawErr := textutil.MessageJSON(m)
 			if rawErr != nil {
 				return result, rawErr
 			}
@@ -2555,7 +2580,7 @@ func listenEventsFromUpdates(updates tg.UpdatesClass) []ListenEvent {
 			out = append(out, ListenEvent{UpdateKind: "unsupported_expiring_message", ChatID: peerID(m.PeerID), MessageID: int64(m.ID)})
 			return
 		}
-		event := ListenEvent{UpdateKind: kind, ChatID: peerID(m.PeerID), MessageID: int64(m.ID), SenderID: peerID(m.FromID), Date: timeFromUnix(m.Date), Text: m.Message, MediaType: messageMediaType(m.Media), MediaIdentity: messageMediaIdentity(m.Media), GroupedID: m.GroupedID, IsOutgoing: m.Out, EditDate: m.EditDate}
+		event := ListenEvent{Entities: textutil.FromTelegram(m.Entities), UpdateKind: kind, ChatID: peerID(m.PeerID), MessageID: int64(m.ID), SenderID: peerID(m.FromID), Date: timeFromUnix(m.Date), Text: m.Message, MediaType: messageMediaType(m.Media), MediaIdentity: messageMediaIdentity(m.Media), GroupedID: m.GroupedID, IsOutgoing: m.Out, EditDate: m.EditDate}
 		if reply, ok := m.ReplyTo.(*tg.MessageReplyHeader); ok {
 			event.ReplyToMsgID = int64(reply.ReplyToMsgID)
 		}
@@ -2591,7 +2616,7 @@ func listenEventsFromUpdates(updates tg.UpdatesClass) []ListenEvent {
 		if u.TTLPeriod != 0 {
 			return []ListenEvent{{UpdateKind: "unsupported_expiring_message", ChatID: u.UserID, MessageID: int64(u.ID)}}
 		}
-		e := ListenEvent{UpdateKind: "message", ChatID: u.UserID, MessageID: int64(u.ID), Text: u.Message, Date: timeFromUnix(u.Date), IsOutgoing: u.Out, ReplyToMsgID: replyMessageID(u.ReplyTo)}
+		e := ListenEvent{Entities: textutil.FromTelegram(u.Entities), UpdateKind: "message", ChatID: u.UserID, MessageID: int64(u.ID), Text: u.Message, Date: timeFromUnix(u.Date), IsOutgoing: u.Out, ReplyToMsgID: replyMessageID(u.ReplyTo)}
 		if !u.Out {
 			e.SenderID = u.UserID
 		}
@@ -2600,7 +2625,7 @@ func listenEventsFromUpdates(updates tg.UpdatesClass) []ListenEvent {
 		if u.TTLPeriod != 0 {
 			return []ListenEvent{{UpdateKind: "unsupported_expiring_message", ChatID: peerid.Chat(u.ChatID), MessageID: int64(u.ID)}}
 		}
-		out = append(out, ListenEvent{UpdateKind: "chat_message", ChatID: peerid.Chat(u.ChatID), MessageID: int64(u.ID), SenderID: u.FromID, Text: u.Message, Date: timeFromUnix(u.Date), IsOutgoing: u.Out, ReplyToMsgID: replyMessageID(u.ReplyTo)})
+		out = append(out, ListenEvent{Entities: textutil.FromTelegram(u.Entities), UpdateKind: "chat_message", ChatID: peerid.Chat(u.ChatID), MessageID: int64(u.ID), SenderID: u.FromID, Text: u.Message, Date: timeFromUnix(u.Date), IsOutgoing: u.Out, ReplyToMsgID: replyMessageID(u.ReplyTo)})
 	}
 	return out
 }

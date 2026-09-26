@@ -16,6 +16,48 @@ import (
 
 type invokeFunc func(context.Context, bin.Encoder, bin.Decoder) error
 
+func TestAccountMutationsAreDurableBeforeRPC(t *testing.T) {
+	requests := []bin.Encoder{
+		&tg.FoldersEditPeerFoldersRequest{FolderPeers: []tg.InputFolderPeer{{Peer: &tg.InputPeerSelf{}, FolderID: 1}}},
+		&tg.AccountUpdateNotifySettingsRequest{Peer: &tg.InputNotifyPeer{Peer: &tg.InputPeerSelf{}}},
+		&tg.ContactsAddContactRequest{ID: &tg.InputUser{UserID: 7, AccessHash: 70}, FirstName: "Test"},
+		&tg.ContactsDeleteContactsRequest{ID: []tg.InputUserClass{&tg.InputUser{UserID: 7, AccessHash: 70}}},
+		&tg.AuthLogOutRequest{},
+	}
+	for _, req := range requests {
+		t.Run(fmt.Sprintf("%T", req), func(t *testing.T) {
+			db := updateTestDB(t)
+			inv := &writeLedgerInvoker{db: db, next: invokeFunc(func(_ context.Context, in bin.Encoder, _ bin.Decoder) error {
+				var state string
+				var saved []byte
+				if err := db.QueryRow("SELECT state, request FROM tg_write_calls").Scan(&state, &saved); err != nil {
+					t.Fatal(err)
+				}
+				var encoded bin.Buffer
+				if err := in.Encode(&encoded); err != nil {
+					t.Fatal(err)
+				}
+				if state != "prepared" || string(saved) != string(encoded.Buf) {
+					t.Fatal("RPC without exact durable request")
+				}
+				return errors.New("lost response")
+			})}
+			var unknown *safety.UnknownWrite
+			if err := inv.Invoke(context.Background(), req, nil); !errors.As(err, &unknown) {
+				t.Fatalf("err=%T %v", err, err)
+			}
+			var state string
+			if err := db.QueryRow("SELECT state FROM tg_write_calls").Scan(&state); err != nil || state != "unknown" {
+				t.Fatalf("state=%s err=%v", state, err)
+			}
+			inv.db = nil
+			if err := inv.Invoke(context.Background(), req, nil); err == nil {
+				t.Fatal("mutation without durable storage")
+			}
+		})
+	}
+}
+
 func (f invokeFunc) Invoke(ctx context.Context, in bin.Encoder, out bin.Decoder) error {
 	return f(ctx, in, out)
 }

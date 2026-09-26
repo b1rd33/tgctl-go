@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	textutil "github.com/b1rd33/tgctl-go/internal/text"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -75,13 +75,16 @@ func writeArgsFrom(cmd *cobra.Command) writes.Args {
 func readTextArg(value string, in io.Reader) (string, error) {
 	var raw string
 	if value == "-" {
-		buf, err := io.ReadAll(in)
+		buf, err := io.ReadAll(io.LimitReader(in, textutil.MaxInputBytes+1))
 		if err != nil {
 			return "", err
 		}
 		raw = string(buf)
 	} else {
 		raw = value
+	}
+	if len(raw) > textutil.MaxInputBytes {
+		return "", safety.NewBadArgs("text exceeds 64 KiB")
 	}
 	raw = strings.TrimRight(raw, "\n")
 	if raw == "" {
@@ -340,9 +343,13 @@ func sendCommand(cfg CommandsConfig) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			selector := args[0]
 			rawText := args[1]
-			text, err := readTextArg(rawText, os.Stdin)
+			text, err := readTextArg(rawText, cmd.InOrStdin())
 			if err != nil {
 				return err
+			}
+			entities, err := commandEntities(cmd, text, false)
+			if err != nil {
+				return emitDispatchedFailure(cmd, "send", err)
 			}
 			replyTo, _ := cmd.Flags().GetInt64("reply-to")
 			topic, _ := cmd.Flags().GetInt64("topic")
@@ -358,6 +365,7 @@ func sendCommand(cfg CommandsConfig) *cobra.Command {
 			effectiveReply, topicWarnings := topicReplyTo(replyTo, topic)
 			payload := map[string]any{
 				"text":       text,
+				"entities":   entities,
 				"reply_to":   effectiveReply,
 				"topic_id":   topic,
 				"silent":     silent,
@@ -369,6 +377,7 @@ func sendCommand(cfg CommandsConfig) *cobra.Command {
 					resp, err := c.SendMessage(ctx, client.SendMessageReq{
 						ChatID:    chatID,
 						Text:      text,
+						Entities:  entities,
 						ReplyTo:   effectiveReply,
 						TopicID:   topic,
 						Silent:    silent,
@@ -394,6 +403,7 @@ func sendCommand(cfg CommandsConfig) *cobra.Command {
 	cmd.Flags().Int64("topic", 0, "Forum topic id")
 	cmd.Flags().Bool("silent", false, "Send silently (no notification)")
 	cmd.Flags().Bool("no-webpage", false, "Disable link preview")
+	addEntityFlag(cmd)
 	addWriteFlags(cmd)
 	return cmd
 }
@@ -412,14 +422,18 @@ func editMsgCommand(cfg CommandsConfig) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			text, err := readTextArg(args[2], os.Stdin)
+			text, err := readTextArg(args[2], cmd.InOrStdin())
 			if err != nil {
 				return err
 			}
-			payload := map[string]any{"message_id": msgID, "new_text": text}
+			entities, err := commandEntities(cmd, text, false)
+			if err != nil {
+				return emitDispatchedFailure(cmd, "edit-msg", err)
+			}
+			payload := map[string]any{"message_id": msgID, "new_text": text, "entities": entities}
 			return runWrite(cmd, "edit-msg", "messages.EditMessage", selector, cfg, payload,
 				func(ctx context.Context, c client.Client, chatID int64, chatTitle string) (map[string]any, error) {
-					if err := c.EditMessage(ctx, client.EditMessageReq{ChatID: chatID, MessageID: msgID, NewText: text}); err != nil {
+					if err := c.EditMessage(ctx, client.EditMessageReq{ChatID: chatID, MessageID: msgID, NewText: text, Entities: entities}); err != nil {
 						return nil, err
 					}
 					return map[string]any{
@@ -430,6 +444,7 @@ func editMsgCommand(cfg CommandsConfig) *cobra.Command {
 			)
 		},
 	}
+	addEntityFlag(cmd)
 	addWriteFlags(cmd)
 	return cmd
 }

@@ -28,6 +28,10 @@ type writeLedgerInvoker struct {
 }
 
 func isMutation(method string) bool {
+	switch method {
+	case "FoldersEditPeerFoldersRequest", "AccountUpdateNotifySettingsRequest", "ContactsAddContactRequest", "ContactsDeleteContactsRequest", "AuthLogOutRequest":
+		return true
+	}
 	for _, prefix := range []string{"MessagesSend", "MessagesForward", "MessagesEdit", "MessagesDelete", "MessagesUpdate", "MessagesCreate", "MessagesRead", "MessagesExport", "ChannelsEdit", "ChannelsDelete", "ChannelsLeave", "ChannelsRead", "ContactsBlock", "ContactsUnblock", "AccountResetAuthorization"} {
 		if strings.HasPrefix(method, prefix) {
 			return true

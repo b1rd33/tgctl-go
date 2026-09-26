@@ -255,7 +255,21 @@ func downloadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 						result.Partial = true
 						continue
 					}
-					if persistErr := store.StoreMessageMediaPath(cacheDB, chatID, row.MessageID, rowDate(row), resp.MediaType, artifact.Path); persistErr != nil {
+					expectedMediaIdentity := ""
+					if row.MediaIdentity != nil {
+						expectedMediaIdentity = *row.MediaIdentity
+					}
+					var persistErr error
+					if resp.Skipped {
+						persistErr = store.StoreMessageMediaPath(cacheDB, chatID, row.MessageID, rowDate(row), resp.MediaType, artifact.Path)
+					} else {
+						persistErr = store.StoreVerifiedDownload(cacheDB, chatID, row.MessageID, rowDate(row), resp.MediaType, artifact.Path, expectedMediaIdentity, resp.MediaIdentity)
+					}
+					changed := errors.Is(persistErr, store.ErrDownloadedMediaChanged)
+					if changed {
+						result.Warnings = append(result.Warnings, downloadedMediaHashWarning)
+					}
+					if persistErr != nil && !changed {
 						cacheFinalizationFailed = true
 						result.Items[i].Status = "committed"
 						result.Items[i].ErrorCode = "CACHE_FINALIZATION"
@@ -263,17 +277,8 @@ func downloadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 						result.Partial = true
 						continue
 					}
-					if !resp.Skipped {
-						expectedMediaIdentity := ""
-						if row.MediaIdentity != nil {
-							expectedMediaIdentity = *row.MediaIdentity
-						}
-						indexIdentity, bindErr := bindDownloadedMediaIdentity(cacheDB, chatID, row.MessageID, artifact.Path, expectedMediaIdentity, resp.MediaIdentity)
-						hashErr := bindErr
-						if hashErr == nil {
-							hashErr = indexDownloadedMediaHash(ctx, cacheDB, chatID, row.MessageID, artifact, indexIdentity, resp.ArtifactIdentity)
-						}
-						if hashErr != nil {
+					if !resp.Skipped && !changed {
+						if err := indexDownloadedMediaHash(ctx, cacheDB, chatID, row.MessageID, artifact, resp.MediaIdentity, resp.ArtifactIdentity); err != nil {
 							result.Warnings = append(result.Warnings, downloadedMediaHashWarning)
 						}
 					}

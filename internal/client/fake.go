@@ -72,6 +72,8 @@ type FakeClient struct {
 	Terms             []TerminateSessionReq
 	Dialogs           []ChatInfo
 	Contacts          []ContactInfo
+	AddedContacts     []AddContactReq
+	RemovedContacts   []int64
 
 	Discoveries    []int
 	ContactSyncs   []bool
@@ -623,4 +625,23 @@ func (f *FakeClient) Close() error {
 	defer f.mu.Unlock()
 	f.Closed = true
 	return f.CloseErr
+}
+
+func (f *FakeClient) AddContact(_ context.Context, req AddContactReq) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.AddedContacts = append(f.AddedContacts, req)
+	return f.record("AddContact")
+}
+func (f *FakeClient) RemoveContact(_ context.Context, id int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.RemovedContacts = append(f.RemovedContacts, id)
+	return f.record("RemoveContact")
+}
+
+func (f *FakeClient) Logout(_ context.Context) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.record("Logout")
 }

@@ -195,7 +195,18 @@ func downloadMediaCommand(cfg CommandsConfig) *cobra.Command {
 					}
 					return nil, persistOpenErr
 				}
-				persistErr := store.StoreMessageMediaPath(persistDB, chatID, messageID, resp.MessageDate, resp.MediaType, artifact.Path)
+				var persistErr error
+				if resp.Skipped {
+					persistErr = store.StoreMessageMediaPath(persistDB, chatID, messageID, resp.MessageDate, resp.MediaType, artifact.Path)
+				} else {
+					persistErr = store.StoreVerifiedDownload(persistDB, chatID, messageID, resp.MessageDate, resp.MediaType, artifact.Path, expectedMediaIdentity, resp.MediaIdentity)
+				}
+				if errors.Is(persistErr, store.ErrDownloadedMediaChanged) {
+					if err := persistDB.Close(); err != nil {
+						return nil, safety.NewCommittedWrite("download committed but cache close failed", err)
+					}
+					return downloadMediaResult{DownloadMediaResp: resp, Warnings: []string{downloadedMediaHashWarning}}, nil
+				}
 				if persistErr != nil {
 					joined := errors.Join(persistErr, persistDB.Close())
 					if !resp.Skipped {
@@ -205,11 +216,7 @@ func downloadMediaCommand(cfg CommandsConfig) *cobra.Command {
 				}
 				hashWarnings := []string{}
 				if !resp.Skipped {
-					indexIdentity, bindErr := bindDownloadedMediaIdentity(persistDB, chatID, messageID, artifact.Path, expectedMediaIdentity, resp.MediaIdentity)
-					hashErr := bindErr
-					if hashErr == nil {
-						hashErr = indexDownloadedMediaHash(ctx, persistDB, chatID, messageID, artifact, indexIdentity, resp.ArtifactIdentity)
-					}
+					hashErr := indexDownloadedMediaHash(ctx, persistDB, chatID, messageID, artifact, resp.MediaIdentity, resp.ArtifactIdentity)
 					if hashErr != nil {
 						hashWarnings = append(hashWarnings, downloadedMediaHashWarning)
 					}

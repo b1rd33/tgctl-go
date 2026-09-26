@@ -19,6 +19,7 @@ func registerDestructiveCommands(root *cobra.Command, cfg CommandsConfig) {
 	root.AddCommand(blockUserCommand(cfg, false))
 	root.AddCommand(blockUserCommand(cfg, true))
 	root.AddCommand(terminateSessionCommand(cfg))
+	root.AddCommand(logoutCommand(cfg))
 }
 
 // ---- delete-msg ----
