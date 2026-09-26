@@ -590,6 +590,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#v081-acceptance-follow-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.8.1 acceptance follow-up
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -705,6 +716,40 @@ were verified with isolated synthetic databases.</p>
 formatting and diff checks passed for this follow-up. The bundled skill documents
 the new consumer contract; the installed skill remains paired with the installed
 release until a matching binary is installed.</p>
+<h2 id="v081-acceptance-follow-up">v0.8.1 acceptance follow-up<a class="headerlink" href="#v081-acceptance-follow-up" title="Permanent link">&para;</a></h2>
+<p>The committed <code>scripts/live_verify.py</code> reproduces bounded acceptance using an
+explicit account and absolute candidate-binary path. <code>--writes --media</code> was run
+in Saved Messages with small ffmpeg-generated JPEG, H.264/AAC MP4, OGG/Opus, MP3
+and text fixtures. Private responses were parsed in memory, never printed.</p>
+<p>Passed: matching cached/live identity and self resolution; account limits,
+diagnostics and bounded history; write denial/read-only override and dry-run;
+text send/replay/edit, reply root, forwarded content, remote search, pin/unpin
+state; single photo/video/voice/document type and original-hash assertions;
+non-photo downloaded bytes matching originals; mixed photo/video, audio-only
+and document-only album IDs, shared grouping and first-item-only caption.
+Every confirmed test message was deleted and checked remotely as deleted,
+including cleanup of the initial failed run. No private updates were acknowledged.</p>
+<p>The first expanded media check failed because reads classified videos as generic
+documents. The new offline regression reproduced this across video, voice, audio,
+sticker, animation and video-note inputs. Reusing the existing download classifier
+fixed it; the complete live scope above then passed. Existing cached classifications
+are not migrated and need refresh. Video duration/dimensions, full media-format
+coverage and native Telegram rendering were not asserted by this run.</p>
+<p>Permission regressions separately reproduce wrong selected-member roles, missing
+self/default restrictions and administrator posting. Tests cover basic groups,
+broadcasts, expiry, unknown participants, boost exemptions and gigagroups. These
+are synthetic adapter tests, not proof of real server-side rights transitions.
+Their semantics follow <a href="https://core.telegram.org/api/rights">Telegram rights</a>,
+<a href="https://core.telegram.org/constructor/chatBannedRights">restriction flags</a> and
+<a href="https://github.com/tdlib/td/blob/master/td/telegram/DialogParticipant.cpp">TDLib's participant logic</a>.
+Missing effective keys are unknown; other-member boost exemption can be unknown.
+Slow-mode next-send metadata describes the authenticated account.</p>
+<p>Remaining fixture and sponsored-display gates listed above are unchanged. This
+report does not claim full roadmap or whole-command live acceptance.</p>
+<p>Patch validation passed: 1,329 unit tests and the same full race suite across
+17 packages; vet, native and Windows builds, formatting, generated command
+references, dependency metadata, public repository hygiene and eight offline
+live-harness safety tests. Native platform CI remains required before publication.</p>
 
 
 

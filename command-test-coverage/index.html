@@ -676,8 +676,8 @@ no private Telegram transcript is stored in this repository.</p>
 <tr>
 <td><code>accounts-list</code></td>
 <td>account selection tests</td>
-<td>unverified</td>
-<td>Listing behavior covered indirectly</td>
+<td><a href="../verification-2026-09-26/">bounded acceptance</a></td>
+<td>Explicit-account diagnostics or controlled Saved Messages state; see verification scope</td>
 </tr>
 <tr>
 <td><code>accounts-remove</code></td>
@@ -688,8 +688,8 @@ no private Telegram transcript is stored in this repository.</p>
 <tr>
 <td><code>accounts-show</code></td>
 <td><code>internal/commands/read_only_global_test.go:TestAccountsShowReadOnlyDoesNotCreatePaths</code></td>
-<td>unverified</td>
-<td>Read-only path covered</td>
+<td><a href="../verification-2026-09-26/">bounded acceptance</a></td>
+<td>Explicit-account diagnostics or controlled Saved Messages state; see verification scope</td>
 </tr>
 <tr>
 <td><code>accounts-use</code></td>
@@ -747,9 +747,9 @@ no private Telegram transcript is stored in this repository.</p>
 </tr>
 <tr>
 <td><code>chat-permissions</code></td>
-<td><code>internal/commands/phase24_test.go:TestChatPermissionsReadUsesFakeAndMarksAdvisory</code>; <code>internal/client/remote_read_test.go:TestChatPermissionsAdapterIncludesSlowmode</code></td>
+<td><code>internal/commands/phase24_test.go:TestChatPermissionsReadUsesFakeAndMarksAdvisory</code>; <code>internal/client/remote_read_test.go:TestChatPermissionsAdapterIncludesSlowmode</code>; <code>internal/client/permission_inspection_test.go</code></td>
 <td>unverified</td>
-<td>Advisory rights and slow-mode metadata coverage; no live forum fixture</td>
+<td>Selected member/self, defaults, roles, expiry, boost uncertainty and slow mode; no live rights transitions</td>
 </tr>
 <tr>
 <td><code>chat-photo</code></td>
@@ -760,8 +760,8 @@ no private Telegram transcript is stored in this repository.</p>
 <tr>
 <td><code>chat-pinned-list</code></td>
 <td><code>internal/commands/admin_test.go:TestChatsInfoAndMembersReadCommands</code></td>
-<td>unverified</td>
-<td>Read client invocation asserted</td>
+<td><a href="../verification-2026-09-26/">bounded acceptance</a></td>
+<td>Explicit-account diagnostics or controlled Saved Messages state; see verification scope</td>
 </tr>
 <tr>
 <td><code>chat-title</code></td>
@@ -838,8 +838,8 @@ no private Telegram transcript is stored in this repository.</p>
 <tr>
 <td><code>doctor</code></td>
 <td>account selection and doctor tests</td>
-<td>unverified</td>
-<td>Diagnostics asserted; no live report</td>
+<td><a href="../verification-2026-09-26/">bounded acceptance</a></td>
+<td>Explicit-account diagnostics or controlled Saved Messages state; see verification scope</td>
 </tr>
 <tr>
 <td><code>download-album</code></td>
@@ -1000,14 +1000,14 @@ no private Telegram transcript is stored in this repository.</p>
 <tr>
 <td><code>operations-list</code></td>
 <td><code>internal/commands/recovery.go</code> plus write ledger tests</td>
-<td>unverified</td>
-<td>Durable outcome inspection covered through store/client tests</td>
+<td><a href="../verification-2026-09-26/">bounded acceptance</a></td>
+<td>Explicit-account diagnostics or controlled Saved Messages state; see verification scope</td>
 </tr>
 <tr>
 <td><code>pin-msg</code></td>
 <td><code>internal/commands/messages_write_test.go:TestPinUnpinInvokesClient</code></td>
-<td>unverified</td>
-<td>No live pin</td>
+<td><a href="../verification-2026-09-26/">bounded acceptance</a></td>
+<td>Explicit-account diagnostics or controlled Saved Messages state; see verification scope</td>
 </tr>
 <tr>
 <td><code>promote</code></td>
@@ -1072,8 +1072,8 @@ no private Telegram transcript is stored in this repository.</p>
 <tr>
 <td><code>stats</code></td>
 <td><code>internal/commands/read_extra_test.go:TestStatsContactsUnreadReadFromCache</code></td>
-<td>unverified</td>
-<td>Cache-only</td>
+<td><a href="../verification-2026-09-26/">bounded acceptance</a></td>
+<td>Explicit-account diagnostics or controlled Saved Messages state; see verification scope</td>
 </tr>
 <tr>
 <td><code>sync</code></td>
@@ -1156,8 +1156,8 @@ no private Telegram transcript is stored in this repository.</p>
 <tr>
 <td><code>unpin-msg</code></td>
 <td><code>internal/commands/messages_write_test.go:TestPinUnpinInvokesClient</code></td>
-<td>unverified</td>
-<td>No live unpin</td>
+<td><a href="../verification-2026-09-26/">bounded acceptance</a></td>
+<td>Explicit-account diagnostics or controlled Saved Messages state; see verification scope</td>
 </tr>
 <tr>
 <td><code>unread</code></td>
@@ -1186,14 +1186,14 @@ no private Telegram transcript is stored in this repository.</p>
 <tr>
 <td><code>upload-video</code></td>
 <td>media tests cover shared upload path</td>
-<td>unverified</td>
-<td>Exact video live/fixture evidence absent</td>
+<td><a href="../verification-2026-09-26/">bounded acceptance</a></td>
+<td>Explicit-account diagnostics or controlled Saved Messages state; see verification scope</td>
 </tr>
 <tr>
 <td><code>upload-voice</code></td>
 <td>media tests cover shared upload path</td>
-<td>unverified</td>
-<td>Exact voice live/fixture evidence absent</td>
+<td><a href="../verification-2026-09-26/">bounded acceptance</a></td>
+<td>Explicit-account diagnostics or controlled Saved Messages state; see verification scope</td>
 </tr>
 <tr>
 <td><code>version</code></td>

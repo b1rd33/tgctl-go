@@ -915,30 +915,26 @@ reports, PRs, doc fixes, new commands.</p>
 <p>Before a commit, keep both <code>go test ./... -count=1</code> and <code>go vet ./...</code>
 clean.</p>
 <h2 id="running-live-verification">Running live verification<a class="headerlink" href="#running-live-verification" title="Permanent link">&para;</a></h2>
-<p>Live smoke tests require a real Telegram account and credentials in
-<code>.env</code>.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>scripts/live_verify.sh
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>scripts/import_export_simulation.sh
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>scripts/live_permissions.sh
+<p>Use an already authenticated account and an absolute path to a freshly built
+binary. The default run only reads; writes must be enabled explicitly:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>python3<span class="w"> </span>scripts/live_verify.py<span class="w"> </span>--binary<span class="w"> </span><span class="s2">"</span><span class="nv">$PWD</span><span class="s2">/tg"</span><span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>python3<span class="w"> </span>scripts/live_verify.py<span class="w"> </span>--binary<span class="w"> </span><span class="s2">"</span><span class="nv">$PWD</span><span class="s2">/tg"</span><span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--writes<span class="w"> </span>--media
 </span></code></pre></div>
-<p><code>scripts/live_verify.sh</code> covers the command surface. The import/export
-simulation creates 20 synthetic self-chat inquiries, groups them into
-country queues, exercises folders, and mirrors summaries into forum
-topics when a forum test chat is available.</p>
-<p>Set the required <code>TGCTL_LIVE_*</code> variables to dedicated test targets before
-running these scripts. They fail closed when required targets are absent and
-write raw output to a private temporary workspace that is removed on exit.
-Raw-output retention variables are intentionally rejected. Never commit live
-output.
-For the permission smoke test, set <code>TGCTL_LIVE_PERMISSION_CHAT</code>,
-<code>TGCTL_LIVE_ALLOWED_ACCOUNT</code>, and <code>TGCTL_LIVE_DENIED_ACCOUNT</code> to two already
-authorized accounts and a disposable group/channel. The script sends one
-uniquely marked message from the allowed account and expects the denied account
-to return <code>PERMISSION_DENIED</code> (exit 10). It never deliberately creates a flood
-wait and never bans, promotes, deletes, or mass-messages.
-For the import/export simulation, set <code>TGCTL_LIVE_FORUM_CHAT</code> explicitly and set
-<code>TGCTL_LIVE_FOLDER_TARGETS</code> to four ordered, comma-separated dedicated test chat
-IDs. The script does not infer write targets from cached dialogs.</p>
+<p><code>--writes</code> creates synthetic Saved Messages text, replies, forwards and pins.
+<code>--media</code> also requires ffmpeg and exercises single photo/video/voice/document
+transfers plus photo/video, audio and document albums. The harness verifies
+identity before writing, uses normal session ownership, captures private results
+in memory, prints labels only, and deletes every confirmed test message even on
+failure. Unknown outcomes stop without retry; inspect the local write ledger.
+It never copies sessions or consumes pending updates. Fixture files are temporary.</p>
+<p>For the separate <code>scripts/live_permissions.sh</code> test, provision a disposable
+group/channel and two distinct authorized accounts. Set
+<code>TGCTL_LIVE_PERMISSION_CHAT</code>, <code>TGCTL_LIVE_ALLOWED_ACCOUNT</code>, and
+<code>TGCTL_LIVE_DENIED_ACCOUNT</code> explicitly. It expects an allowed send and a denied
+send returning <code>PERMISSION_DENIED</code> (exit 10). The operator must clean up this
+fixture and its allowed probe; it never changes membership or intentionally
+triggers a flood wait. A single-account Saved Messages run does not validate
+server permission transitions, forum behavior, contact changes or logout.</p>
 <p>Redact Telegram identities, phone numbers, peer/message IDs, invite links,
 session/auth material, message contents, local paths, SQLite data, audit logs,
 and downloaded media from issues and pull requests. Use synthetic placeholders.
