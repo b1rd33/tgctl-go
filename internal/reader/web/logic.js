@@ -18,6 +18,8 @@ export function linkTarget(raw) {
     /(^|\.)(telegram\.(org|me|dog)|t\.me|te\.?legra\.ph|graph\.org|fragment\.com|telesco\.pe)$/i.test(
       url.hostname,
     );
+  if (/\.(t\.me|telegram\.me|telegram\.dog)$/i.test(url.hostname))
+    throw Error("Unsupported Telegram link. Open this chat in Telegram.");
   // Only map understood Telegram links. Never silently lose a bot start payload,
   // forum topic, post ID, or turn a reserved path into a username.
   if (

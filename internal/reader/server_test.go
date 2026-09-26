@@ -206,9 +206,28 @@ func TestReaderAssetsAndReportOptions(t *testing.T) {
 	if w.Code != 200 || strings.Contains(w.Body.String(), "private-option") {
 		t.Fatal("report options exposed")
 	}
+	var menu struct {
+		Options []struct {
+			ID string `json:"id"`
+		} `json:"options"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &menu); err != nil || len(menu.Options) != 1 {
+		t.Fatal("missing report choice")
+	}
+	old := menu.Options[0].ID
+	w = actionRequest(s, "report", "event-00000000004", old)
+	if w.Code != 200 {
+		t.Fatal("nested report menu failed")
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &menu); err != nil || menu.Options[0].ID == old {
+		t.Fatal("report choice ID reused")
+	}
+	if actionRequest(s, "report", "event-00000000005", old).Code != 400 {
+		t.Fatal("stale report choice accepted")
+	}
 	b.report = client.SponsoredReport{State: "reported"}
-	w = actionRequest(s, "report", "event-00000000004", "0")
-	if w.Code != 200 || s.ad != nil || string(b.actions[1].Option) != "private-option" {
+	w = actionRequest(s, "report", "event-00000000006", menu.Options[0].ID)
+	if w.Code != 200 || s.ad != nil || len(b.actions) != 3 || string(b.actions[2].Option) != "private-option" {
 		t.Fatal("report continuation lost")
 	}
 }

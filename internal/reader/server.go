@@ -344,8 +344,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		options := []map[string]string{}
 		if in.Action == "report" {
 			s.ad.options = map[string][]byte{}
-			for i, o := range result.Options {
-				key := strconv.Itoa(i)
+			for _, o := range result.Options {
+				key, err := newToken()
+				if err != nil {
+					fail(w, err)
+					return
+				}
 				s.ad.options[key] = o.Value
 				options = append(options, map[string]string{"id": key, "text": o.Text})
 			}

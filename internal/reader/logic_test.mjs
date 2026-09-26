@@ -40,6 +40,7 @@ test("only safe explicit web links; exact official-domain matching", () => {
     /privatepost\?channel=123&thread=10&post=20/,
   );
   assert.throws(() => linkTarget("https://t.me/proxy?server=example.com"));
+  assert.throws(() => linkTarget("https://example.t.me/123"));
   assert.throws(() => linkTarget("https://t.me/example?domain=someone_else"));
 });
 test("full rectangle visibility excludes partial and empty text", () => {
