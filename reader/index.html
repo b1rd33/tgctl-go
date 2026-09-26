@@ -10,9 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://b1rd33.github.io/tgctl-go/verification-2026-09-26/">
+        <link rel="canonical" href="https://b1rd33.github.io/tgctl-go/reader/">
       
       
+        <link rel="prev" href="../update-consumers/">
+      
+      
+        <link rel="next" href="../reliability-roadmap/">
       
       
         
@@ -23,7 +27,7 @@
     
     
       
-        <title>Verification, 26 September 2026 - tgctl-go</title>
+        <title>Local reader - tgctl-go</title>
       
     
     
@@ -74,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#verification-26-september-2026" class="md-skip">
+        <a href="#local-reader" class="md-skip">
           Skip to content
         </a>
       
@@ -110,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Verification, 26 September 2026
+              Local reader
             
           </span>
         </div>
@@ -476,10 +480,37 @@
       
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../reader/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local reader
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -495,6 +526,59 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#session-and-writes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Session and writes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sponsored-message-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sponsored-message surface
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -607,10 +691,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#local-reader-follow-up" class="md-nav__link">
+  <a href="#session-and-writes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Local reader follow-up
+        Session and writes
       
     </span>
   </a>
@@ -618,10 +702,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#earlier-cli-acceptance" class="md-nav__link">
+  <a href="#sponsored-message-surface" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Earlier CLI acceptance
+        Sponsored-message surface
       
     </span>
   </a>
@@ -629,21 +713,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#durable-consumer-acknowledgement-follow-up" class="md-nav__link">
+  <a href="#verification" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Durable consumer acknowledgement follow-up
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v081-acceptance-follow-up" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v0.8.1 acceptance follow-up
+        Verification
       
     </span>
   </a>
@@ -670,166 +743,87 @@
   
 
 
-<h1 id="verification-26-september-2026">Verification, 26 September 2026<a class="headerlink" href="#verification-26-september-2026" title="Permanent link">&para;</a></h1>
-<h2 id="local-reader-follow-up">Local reader follow-up<a class="headerlink" href="#local-reader-follow-up" title="Permanent link">&para;</a></h2>
-<p>The <code>codex/local-reader</code> candidate passed 1,356 Go tests across 18 packages,
-including the full race suite, plus vet, native/Windows builds, generated
-command-reference checks, repository hygiene, four browser-policy tests and
-the skill validator. The manual browser fixture is skipped in ordinary suites.</p>
-<p>Synthetic browser acceptance exercised history and continuation, sponsor-info
-and report dialogs, cancellation of external links, report option round-trips,
-close and fetch-failure states, mobile layout without horizontal overflow,
-PNG avatar/media presentation, audible-video fullscreen behavior, and
-media/fullscreen callback flags. The separate expand control did not produce
-a link click. No callback occurred while a new ad was below the viewport;
-programmatic untrusted clicks were ignored. Bot ads appeared above history
-with a blue Recommended prefix and the avatar on the right. Literal HTML
-remained text, and browser diagnostics showed no application errors. All these
-callbacks went to a synthetic backend, never Telegram.</p>
-<p>Fetch-only live acceptance used Saved Messages and Telegram's official
-<code>SecretAdTestChannel</code>, with two-message limits. The former returned no ad and
-the latter returned one. A separate read-only identity command succeeded while
-each reader sat idle, verifying release of session ownership between requests.
-The write-operation list was unchanged before and after each fetch. No real
-view, click, report, message send, or read acknowledgement was generated.</p>
-<p>The browser plugin's bundled native module failed signature validation; the
-available in-app browser controls were used for synthetic UI verification.
-Reference and rendered screenshots were visually compared for header, reading
-column, typography, dividers, ad placement, controls and responsive layout.
-Screenshots contain only fixture data and are not committed as product assets.</p>
-<p>This acceptance does not cover every ad entity/pattern or ordinary attachment
-playback; unsupported required formats withhold the page. It does not close
-the headless-channel display scope question or the separate disposable-account,
-forum, contact/session and permission-transition live gates described below.</p>
-<h2 id="earlier-cli-acceptance">Earlier CLI acceptance<a class="headerlink" href="#earlier-cli-acceptance" title="Permanent link">&para;</a></h2>
-<p>Tests used the existing authorized account, with mutations restricted to
-synthetic messages in Saved Messages. No customers were contacted. Reports
-contain no account IDs, message IDs, captions, hashes, credentials or paths to
-private account data. The installed v0.7.0 binary established the baseline;
-the candidate was built from <code>codex/finish-cli-roadmap</code>.</p>
-<table>
-<thead>
-<tr>
-<th>Check</th>
-<th>Result and scope</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Identity and selection</td>
-<td>Cached and live <code>me</code> returned the same account; live <code>resolve self</code> matched it</td>
-</tr>
-<tr>
-<td>Limits and remote reads</td>
-<td><code>account-limits</code>, bounded Saved Messages history, get and search returned successful envelopes; this does not test all account tiers or pagination boundaries</td>
-</tr>
-<tr>
-<td>Basic writes</td>
-<td>Send, identical idempotent replay, edit, explicit reply and forwarding of synthetic self messages succeeded; test messages were deleted</td>
-</tr>
-<tr>
-<td>Formatted text</td>
-<td>Sent text with a non-BMP emoji before a bold span; remote retrieval confirmed text and UTF-16 entity offsets; an italic edit replaced formatting and a plain edit cleared it</td>
-</tr>
-<tr>
-<td>Single uploads</td>
-<td>Synthetic PNG photo and document uploads returned IDs; remote text, entities and media presence matched the request</td>
-</tr>
-<tr>
-<td>Exact hash lookup</td>
-<td>Original upload digests located their messages. Document download bytes matched the original, and lookup survived removing the downloaded file</td>
-</tr>
-<tr>
-<td>Albums</td>
-<td>Two synthetic pictures shared a Telegram grouped ID; only the first caption carried formatting. Both downloaded successfully without index warnings, and each downloaded digest still found its message after local files were removed</td>
-</tr>
-<tr>
-<td>Cleanup</td>
-<td>Every synthetic message created by these tests was deleted, including an initially overlooked forwarded copy. Temporary fixtures and album downloads were removed</td>
-</tr>
-</tbody>
-</table>
-<p>The first download lookup assertion exposed a real regression: persisting a
-download path cleared <code>media_id</code>, invalidating both original and downloaded
-hash lookup. The fix publishes verified path and identity atomically and refuses
-to overwrite a newer replacement or deletion. Store and command regressions
-cover this behavior; the document and album live checks passed afterward.</p>
-<p>The initial album formatting invocation also exposed a missing flag registration.
-<code>--entities</code> is now registered and exercised through the actual command, in
-addition to adapter tests. A clean-copy documentation test initially excluded
-untracked new source files; staging the source made the test exercise the full
-candidate, without weakening that check.</p>
-<p>Reproduction uses a freshly built binary with an explicit account and bounded
-timeouts: send uniquely labeled synthetic content to <code>self</code>, retrieve it with
-<code>get-msg --source telegram --read-only</code>, compare values programmatically, then
-delete only returned test IDs using the authenticated self confirmation. For
-hash checks, generate fresh local fixtures, compute SHA-256, inspect <code>media-find</code>,
-download with a small size cap, compare bytes, remove only the returned test
-file, and repeat lookup. On uncertain sends, inspect before attempting a retry.
-Never print raw result envelopes to a public test log.</p>
-<p>Offline acceptance passed:</p>
+<h1 id="local-reader">Local reader<a class="headerlink" href="#local-reader" title="Permanent link">&para;</a></h1>
+<p><code>reader</code> opens one explicitly selected chat in a temporary localhost web interface.
+It reads bounded history, keeps ordinary attachments in Telegram, and displays
+supported sponsored messages. It has no message composer or background inbox.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>tg<span class="w"> </span>--account<span class="w"> </span>work<span class="w"> </span>reader<span class="w"> </span>self<span class="w"> </span>--allow-write<span class="w"> </span>--human
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>tg<span class="w"> </span>--account<span class="w"> </span>work<span class="w"> </span>reader<span class="w"> </span>@example_channel<span class="w"> </span>--allow-write<span class="w"> </span>--limit<span class="w"> </span><span class="m">50</span><span class="w"> </span>--duration<span class="w"> </span>15m<span class="w"> </span>--human
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>tg<span class="w"> </span>--account<span class="w"> </span>work<span class="w"> </span>reader<span class="w"> </span>self<span class="w"> </span>--allow-write<span class="w"> </span>--dry-run<span class="w"> </span>--json
+</span></code></pre></div>
+<p>Open the printed private URL in your browser and keep the CLI running. No browser
+opens automatically. JSON mode emits <code>reader.ready</code> with the URL and expiry,
+then a final result on shutdown. The fragment is an access token: do not publish
+the URL, record stdout in shared logs, or automate a browser against real ads.
+The browser removes the fragment after loading; a full browser reload needs the
+original URL again. Use the page's <strong>Refresh</strong> button for normal refreshes.</p>
+<p><strong>Close reader</strong>, Ctrl-C, or the lifetime limit stops the server. Merely closing
+the browser tab leaves the server running until its lifetime ends. The default
+is 15 minutes, with a 1–60 minute range. Each page contains 1–100 messages and
+the server issues at most 20 continuation offsets. Refresh fetches current
+history; this is not a live-update consumer. Group authors without a resolved
+display name are labeled with their sender ID. Ordinary media is described,
+not downloaded or played inside this reader; view it in the official client.</p>
+<h2 id="session-and-writes">Session and writes<a class="headerlink" href="#session-and-writes" title="Permanent link">&para;</a></h2>
+<p>The reader binds its first successful request to the authenticated user and
+resolved peer, then checks them on subsequent requests. Telegram session
+ownership is released between requests. An idle browser does not hold the
+session lock. Another CLI operation can still cause a transient lock conflict;
+the reader never kills it or copies its session.</p>
+<p>History and advertisement retrieval use the existing read-only client and do
+not mark history read or cache its content on disk. An existing authorized
+session, ownership sidecar, and matching account cache are required. No login
+or account initialization happens in the reader. Explicit <code>--account</code> and
+<code>--allow-write</code> are required; <code>--read-only</code> rejects startup. A dry run opens no
+listener, client, or account path.</p>
+<p>The write gate authorizes genuine sponsored-message callbacks from this human
+surface. They use the normal rate guard, durable request ledger, audit and
+idempotency pipeline. The server attempts a view once for each cached ad; the
+account's durable key also suppresses a repeated view of the same Telegram ad ID.
+Uncertain clicks/reports are never retried automatically. A new deliberate click
+is a new interaction. Inspect <code>operations-list</code> when a write outcome is unclear.
+The browser requires trusted input for clicks/reports and focused, unobscured,
+fully visible ad text for views. These checks are not proof against a malicious
+process that already has the local access token.</p>
+<h2 id="sponsored-message-surface">Sponsored-message surface<a class="headerlink" href="#sponsored-message-surface" title="Permanent link">&para;</a></h2>
+<p>The implementation follows the <a href="https://core.telegram.org/api/sponsored-messages">official sponsored-message interface</a>
+and the supported <a href="https://core.telegram.org/api/links">Telegram link forms</a>:</p>
 <ul>
-<li><code>go test ./... -count=1</code></li>
-<li><code>go test -race ./internal/... -count=1</code></li>
-<li><code>go vet ./...</code></li>
-<li>Native build and <code>GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/tg</code></li>
-<li><code>make docs-commands-check public-hygiene</code>, <code>gofmt</code> and <code>git diff --check</code></li>
+<li>Cache retrieval for five minutes, including empty responses. Display the first
+  ad after the latest channel message, or above a bot chat. There is no inserted
+  multi-ad timeline, so minimum post spacing is not shortened.</li>
+<li>Show title, formatted text, required supported media/avatar, the supplied
+  button, Recommended/Sponsored labeling or a blue bot prefix, sponsor details,
+  and server-provided report choices when reporting is allowed.</li>
+<li>Send view callbacks only when the whole ad text is visible, and use the
+  media/fullscreen flags for the corresponding human interactions. Expired
+  advertisements stop the reading surface until Refresh.</li>
+<li>Confirm external destinations. Understood Telegram username, bot-start and
+  message/topic links use native <code>tg://</code> links. Other Telegram deep-link forms
+  are withheld rather than losing their parameters or opening the wrong target.</li>
 </ul>
-<p>After the final unknown-identity guard was tightened, command/store race tests
-were rerun. These checks are separate from live Telegram acceptance.</p>
-<p>Still unverified live: contact add/remove, logout/re-login, archive/mute state,
-forum and linked-discussion behavior, owner/admin/member/restricted transitions,
-real reconnect gaps, and server flood/error conditions. No destructive session
-or contact test was run against the working account. There is no claim that the
-whole command matrix or all roadmap release gates have passed.</p>
-<h2 id="durable-consumer-acknowledgement-follow-up">Durable consumer acknowledgement follow-up<a class="headerlink" href="#durable-consumer-acknowledgement-follow-up" title="Permanent link">&para;</a></h2>
-<p>The candidate on <code>codex/durable-consumer-ack</code> passed a live restart test against
-existing pending updates: two separate <code>listen --once --manual-ack</code> processes
-returned the same event ID and receipt. Offline <code>events-list --limit 1</code> matched
-that receipt; <code>events-ack --dry-run</code> reported it pending, and another list proved
-it remained queued. No real pending event was acknowledged or removed, and raw
-payloads/receipts were not printed. This verifies replay across process restarts,
-not arrival of a newly generated incoming message or recovery of a network gap.
-Actual queue deletion, repeat acknowledgement and concurrent acknowledgement
-were verified with isolated synthetic databases.</p>
-<p>Full unit and race suites, vet, native/Windows builds, command-reference checks,
-formatting and diff checks passed for this follow-up. The bundled skill documents
-the new consumer contract; the installed skill remains paired with the installed
-release until a matching binary is installed.</p>
-<h2 id="v081-acceptance-follow-up">v0.8.1 acceptance follow-up<a class="headerlink" href="#v081-acceptance-follow-up" title="Permanent link">&para;</a></h2>
-<p>The committed <code>scripts/live_verify.py</code> reproduces bounded acceptance using an
-explicit account and absolute candidate-binary path. <code>--writes --media</code> was run
-in Saved Messages with small ffmpeg-generated JPEG, H.264/AAC MP4, OGG/Opus, MP3
-and text fixtures. Private responses were parsed in memory, never printed.</p>
-<p>Passed: matching cached/live identity and self resolution; account limits,
-diagnostics and bounded history; write denial/read-only override and dry-run;
-text send/replay/edit, reply root, forwarded content, remote search, pin/unpin
-state; single photo/video/voice/document type and original-hash assertions;
-non-photo downloaded bytes matching originals; mixed photo/video, audio-only
-and document-only album IDs, shared grouping and first-item-only caption.
-Every confirmed test message was deleted and checked remotely as deleted,
-including cleanup of the initial failed run. No private updates were acknowledged.</p>
-<p>The first expanded media check failed because reads classified videos as generic
-documents. The new offline regression reproduced this across video, voice, audio,
-sticker, animation and video-note inputs. Reusing the existing download classifier
-fixed it; the complete live scope above then passed. Existing cached classifications
-are not migrated and need refresh. Video duration/dimensions, full media-format
-coverage and native Telegram rendering were not asserted by this run.</p>
-<p>Permission regressions separately reproduce wrong selected-member roles, missing
-self/default restrictions and administrator posting. Tests cover basic groups,
-broadcasts, expiry, unknown participants, boost exemptions and gigagroups. These
-are synthetic adapter tests, not proof of real server-side rights transitions.
-Their semantics follow <a href="https://core.telegram.org/api/rights">Telegram rights</a>,
-<a href="https://core.telegram.org/constructor/chatBannedRights">restriction flags</a> and
-<a href="https://github.com/tdlib/td/blob/master/td/telegram/DialogParticipant.cpp">TDLib's participant logic</a>.
-Missing effective keys are unknown; other-member boost exemption can be unknown.
-Slow-mode next-send metadata describes the authenticated account.</p>
-<p>Remaining fixture and sponsored-display gates listed above are unchanged. This
-report does not claim full roadmap or whole-command live acceptance.</p>
-<p>Patch validation passed: 1,329 unit tests and the same full race suite across
-17 packages; vet, native and Windows builds, formatting, generated command
-references, dependency metadata, public repository hygiene and eight offline
-live-harness safety tests. Native platform CI remains required before publication.</p>
+<p>Supported ad media: JPEG/PNG, MP4/WebM video and animation, bounded to 20 MiB per
+file and at most two cached assets. Basic and retrieved RGB accent palettes are
+supported. Custom emoji, collectible/background emoji patterns, unsupported
+entities/media and channel-video overlay advertisements are not supported: the
+reader withholds the page instead of silently removing required ad content.
+Ordinary channel videos have no in-reader playback or overlay-ad surface.</p>
+<p>This is a bounded additional surface, not a claim that the existing headless
+channel commands meet every Telegram display requirement. That separate release
+scope question, and disposable-account/forum live acceptance, remain open.</p>
+<h2 id="verification">Verification<a class="headerlink" href="#verification" title="Permanent link">&para;</a></h2>
+<p>Go tests cover localhost Host/Origin/token checks, JSON bounds, cancellation,
+continuations, five-minute caching, asset readiness, UTF-16 boundaries, report
+options, account/peer binding, durable callback routing and unknown outcomes.
+Run browser policy tests with <code>node --test internal/reader/logic_test.mjs</code> (Node 22).</p>
+<p>For browser development, use an explicit synthetic fixture:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nv">TGCTL_READER_BROWSER_DIR</span><span class="o">=</span>/tmp/tgctl-reader-fixture<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>go<span class="w"> </span><span class="nb">test</span><span class="w"> </span>./internal/reader<span class="w"> </span>-run<span class="w"> </span><span class="s1">'^TestBrowserFixture$'</span><span class="w"> </span>-timeout<span class="w"> </span>35m
+</span></code></pre></div>
+<p>It writes the local URL to that directory and records synthetic actions there.
+It has no Telegram client. Browser automation must use this fixture; never
+manufacture real ad views, clicks or moderator reports for a smoke test.
+The official ad test channel may be fetched separately without engagement.</p>
 
 
 
