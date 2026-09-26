@@ -580,6 +580,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#2026-09-26-additions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2026-09-26 additions
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -620,8 +631,8 @@ no private Telegram transcript is stored in this repository.</p>
 <tr>
 <td><code>account-limits</code></td>
 <td><code>internal/commands/phase24_test.go:TestResolveAndAccountLimitsExposeExplicitSources</code></td>
-<td>unverified</td>
-<td>Fake-backed shape; live app-config values remain unverified</td>
+<td><a href="../verification-2026-09-26/">bounded Saved Messages check</a></td>
+<td>Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only</td>
 </tr>
 <tr>
 <td><code>account-sessions</code></td>
@@ -744,6 +755,18 @@ no private Telegram transcript is stored in this repository.</p>
 <td>Shell output not behaviorally tested</td>
 </tr>
 <tr>
+<td><code>contact-add</code></td>
+<td><code>internal/commands/account_management_test.go</code>, <code>internal/client/account_management_test.go</code></td>
+<td>unverified</td>
+<td>Typed confirmation, isolated account, replay, opt-in phone sharing, committed close failure; no live address-book mutation</td>
+</tr>
+<tr>
+<td><code>contact-remove</code></td>
+<td>same account-management tests</td>
+<td>unverified</td>
+<td>Single typed user; conversation is retained</td>
+</tr>
+<tr>
 <td><code>contacts</code></td>
 <td><code>internal/commands/read_extra_test.go:TestStatsContactsUnreadReadFromCache</code></td>
 <td>unverified</td>
@@ -764,8 +787,8 @@ no private Telegram transcript is stored in this repository.</p>
 <tr>
 <td><code>delete-msg</code></td>
 <td><code>internal/commands/destructive_test.go</code> delete confirmation and execution tests; <code>internal/client/destructive_rpc_test.go</code> peer/count tests</td>
-<td>unverified</td>
-<td>No live deletion</td>
+<td><a href="../verification-2026-09-26/">bounded Saved Messages check</a></td>
+<td>Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only</td>
 </tr>
 <tr>
 <td><code>demote</code></td>
@@ -794,20 +817,20 @@ no private Telegram transcript is stored in this repository.</p>
 <tr>
 <td><code>download-album</code></td>
 <td><code>internal/commands/media_album_download_test.go</code> dry-run, partial, overwrite, recovery tests</td>
-<td>unverified</td>
-<td>Fake-backed local/media behavior</td>
+<td><a href="../verification-2026-09-26/">bounded Saved Messages check</a></td>
+<td>Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only</td>
 </tr>
 <tr>
 <td><code>download-media</code></td>
 <td><code>internal/commands/media_download_test.go</code> gate, selector, artifact identity, recovery tests</td>
-<td>unverified</td>
-<td>Fake-backed local/media behavior</td>
+<td><a href="../verification-2026-09-26/">bounded Saved Messages check</a></td>
+<td>Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only</td>
 </tr>
 <tr>
 <td><code>edit-msg</code></td>
 <td><code>internal/commands/messages_write_test.go:TestEditMsgInvokesClient</code></td>
-<td>unverified</td>
-<td>No live edit</td>
+<td><a href="../verification-2026-09-26/">bounded Saved Messages check</a></td>
+<td>Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only</td>
 </tr>
 <tr>
 <td><code>export</code></td>
@@ -866,14 +889,14 @@ no private Telegram transcript is stored in this repository.</p>
 <tr>
 <td><code>forward</code></td>
 <td><code>internal/commands/messages_write_test.go:TestForwardInvokesClient</code></td>
-<td>unverified</td>
-<td>No live forward</td>
+<td><a href="../verification-2026-09-26/">bounded Saved Messages check</a></td>
+<td>Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only</td>
 </tr>
 <tr>
 <td><code>get-msg</code></td>
 <td><code>internal/commands/messages_read_test.go</code> get and deleted-row tests; <code>internal/client/remote_read_test.go:TestRemoteGetAdapterPreservesDeletedPlaceholder</code></td>
-<td>unverified</td>
-<td>Defaults to cache; bounded Telegram deleted-message retrieval is TL-tested, live source remains unverified</td>
+<td><a href="../verification-2026-09-26/">bounded Saved Messages check</a></td>
+<td>Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only</td>
 </tr>
 <tr>
 <td><code>help</code></td>
@@ -896,8 +919,8 @@ no private Telegram transcript is stored in this repository.</p>
 <tr>
 <td><code>list-msgs</code></td>
 <td><code>internal/commands/messages_read_test.go</code> date/filter tests, <code>TestRemoteHistoryUsesBoundedPageAndTypedCursor</code>, <code>TestRemoteRowsBoundPagesAndTerminateContinuation</code>; <code>internal/store/cursor_test.go</code> timestamp/remote cursor tests</td>
-<td>unverified</td>
-<td>Cache and bounded Telegram pagination are offline-tested; live source remains unverified</td>
+<td><a href="../verification-2026-09-26/">bounded Saved Messages check</a></td>
+<td>Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only</td>
 </tr>
 <tr>
 <td><code>listen</code></td>
@@ -912,6 +935,12 @@ no private Telegram transcript is stored in this repository.</p>
 <td>No auth mutation/live login</td>
 </tr>
 <tr>
+<td><code>logout</code></td>
+<td>account-management tests; session storage and durable RPC ledger tests</td>
+<td>unverified</td>
+<td>Remote confirmation before local removal; unknown outcome preserves credential; late flush and cleanup failures tested</td>
+</tr>
+<tr>
 <td><code>mark-read</code></td>
 <td><code>internal/commands/messages_write_test.go:TestMarkReadInvokesClient</code></td>
 <td>unverified</td>
@@ -920,8 +949,8 @@ no private Telegram transcript is stored in this repository.</p>
 <tr>
 <td><code>me</code></td>
 <td><code>internal/commands/auth_test.go</code> offline and envelope tests; read-only tests</td>
-<td>unverified</td>
-<td>Cached/live fetch seams asserted; no live identity evidence</td>
+<td><a href="../verification-2026-09-26/">bounded Saved Messages check</a></td>
+<td>Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only</td>
 </tr>
 <tr>
 <td><code>mute</code></td>
@@ -962,20 +991,20 @@ no private Telegram transcript is stored in this repository.</p>
 <tr>
 <td><code>resolve</code></td>
 <td><code>internal/commands/phase24_test.go:TestResolveAndAccountLimitsExposeExplicitSources</code></td>
-<td>unverified</td>
-<td>Fake-backed typed identity; no live username evidence</td>
+<td><a href="../verification-2026-09-26/">bounded Saved Messages check</a></td>
+<td>Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only</td>
 </tr>
 <tr>
 <td><code>search</code></td>
 <td><code>internal/commands/messages_read_test.go</code> empty/case tests, <code>TestRemoteSearchUsesExplicitServerClient</code>, <code>TestRemoteRowsBoundPagesAndTerminateContinuation</code>; <code>internal/client/remote_read_test.go:TestRemoteReadsDoNotWriteCacheOrReadStateOnFailure</code></td>
-<td>unverified</td>
-<td>Defaults to cache; bounded Telegram filters, failure, and pagination behavior are offline-tested, live source remains unverified</td>
+<td><a href="../verification-2026-09-26/">bounded Saved Messages check</a></td>
+<td>Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only</td>
 </tr>
 <tr>
 <td><code>send</code></td>
 <td><code>internal/commands/messages_write_test.go</code> gate, dry-run, fuzzy, idempotency, topic tests</td>
-<td>unverified</td>
-<td>No live send</td>
+<td><a href="../verification-2026-09-26/">bounded Saved Messages check</a></td>
+<td>Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only</td>
 </tr>
 <tr>
 <td><code>send-by-username</code></td>
@@ -1100,20 +1129,20 @@ no private Telegram transcript is stored in this repository.</p>
 <tr>
 <td><code>upload-album</code></td>
 <td><code>internal/commands/upload_album_test.go</code> extensive dry-run, order, mapping, idempotency, failure tests; <code>internal/client/upload_album_test.go</code> TL-shape tests</td>
-<td>unverified</td>
-<td>No live album mutation</td>
+<td><a href="../verification-2026-09-26/">bounded Saved Messages check</a></td>
+<td>Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only</td>
 </tr>
 <tr>
 <td><code>upload-document</code></td>
 <td><code>internal/commands/media_test.go</code> invocation/dry-run/idempotency tests</td>
-<td>unverified</td>
-<td>No live upload</td>
+<td><a href="../verification-2026-09-26/">bounded Saved Messages check</a></td>
+<td>Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only</td>
 </tr>
 <tr>
 <td><code>upload-photo</code></td>
 <td><code>internal/commands/media_test.go:TestUploadPhotoDryRunSkipsClient</code></td>
-<td>unverified</td>
-<td>No live upload</td>
+<td><a href="../verification-2026-09-26/">bounded Saved Messages check</a></td>
+<td>Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only</td>
 </tr>
 <tr>
 <td><code>upload-video</code></td>
@@ -1171,8 +1200,8 @@ updated whenever Cobra commands change.</p>
 <tr>
 <td><code>media-find</code></td>
 <td><code>TestMediaHashWorkflowOffline</code>, store hash tests</td>
-<td>not applicable</td>
-<td>Local index remains usable after file removal; no live availability guarantee</td>
+<td><a href="../verification-2026-09-26/">bounded Saved Messages check</a></td>
+<td>Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only</td>
 </tr>
 </tbody>
 </table>
@@ -1182,6 +1211,13 @@ updated whenever Cobra commands change.</p>
 and the download hash tests. These are offline fixtures; no live Telegram transfer
 or message mutation is claimed.</p>
 <p>Visual matching: <code>TestVisualHashResizeAndRecompression</code>, <code>TestVisualHashRejectsInvalidSmallAndCanceled</code>, <code>TestVisualSearchRankingIsolationAndStaleMedia</code>, and <code>TestVisualWorkflowOfflineAfterFileRemoval</code> cover <code>media-similar</code> and the <code>--visual</code> flags. Results are approximate candidates, not content identity. No live Telegram calls.</p>
+<h2 id="2026-09-26-additions">2026-09-26 additions<a class="headerlink" href="#2026-09-26-additions" title="Permanent link">&para;</a></h2>
+<p>Formatting coverage includes <code>internal/text/entities_test.go</code>, command tests for
+UTF-16 validation and request fingerprints, adapter tests for send/edit flags,
+live-cache metadata, and album caption placement. The durable ledger tests now
+exercise archive, mute, contact and logout requests before RPC. Verified-download
+regressions retain hashes through path changes and local file removal, while
+suppressing replaced/deleted media. See the verification report for live limits.</p>
 
 
 

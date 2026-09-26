@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://b1rd33.github.io/tgctl-go/phase-progress/">
+        <link rel="canonical" href="https://b1rd33.github.io/tgctl-go/verification-2026-09-26/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Phase progress ledger - tgctl-go</title>
+        <title>Verification, 26 September 2026 - tgctl-go</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#phase-progress-ledger" class="md-skip">
+        <a href="#verification-26-september-2026" class="md-skip">
           Skip to content
         </a>
       
@@ -110,7 +110,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Phase progress ledger
+              Verification, 26 September 2026
             
           </span>
         </div>
@@ -546,36 +546,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#media-hash-lookup-v070" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Media hash lookup (v0.7.0)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#remaining-phase-5-increment-2026-09-26-unreleased" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Remaining phase 5 increment (2026-09-26, unreleased)
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -594,115 +564,87 @@
   
 
 
-<h1 id="phase-progress-ledger">Phase progress ledger<a class="headerlink" href="#phase-progress-ledger" title="Permanent link">&para;</a></h1>
-<p>This ledger records the implementation state for the v0.4–v0.6 reliability
-roadmap, with the remaining phase 5 increment described below. “Complete” means the offline implementation,
-contracts, and repository checks are complete; it does not claim live Telegram
-acceptance.</p>
+<h1 id="verification-26-september-2026">Verification, 26 September 2026<a class="headerlink" href="#verification-26-september-2026" title="Permanent link">&para;</a></h1>
+<p>Tests used the existing authorized account, with mutations restricted to
+synthetic messages in Saved Messages. No customers were contacted. Reports
+contain no account IDs, message IDs, captions, hashes, credentials or paths to
+private account data. The installed v0.7.0 binary established the baseline;
+the candidate was built from <code>codex/finish-cli-roadmap</code>.</p>
 <table>
 <thead>
 <tr>
-<th>Phase</th>
-<th>Status</th>
-<th>Evidence</th>
-<th>Commit</th>
-<th>Remaining gate</th>
+<th>Check</th>
+<th>Result and scope</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>1. Establish reliable coverage</td>
-<td>complete (offline evidence)</td>
-<td>Baseline v0.3.1 pinned; one-row current command matrix and repository checks established</td>
-<td><code>cefcfa3</code></td>
-<td>Live command matrix and fixture-dependent assertions remain unrun</td>
+<td>Identity and selection</td>
+<td>Cached and live <code>me</code> returned the same account; live <code>resolve self</code> matched it</td>
 </tr>
 <tr>
-<td>2. Make account and target selection explicit</td>
-<td>implemented (offline evidence)</td>
-<td><code>self</code>/<code>me</code>, account-bound resolution and isolation, known/unknown Premium metadata, app-config limits, stable setup path, selection/setup/dry-run edge-case tests</td>
-<td><code>81beb22</code></td>
-<td>Disposable live account read and Premium comparison; server-side username reassignment and limit drift remain live-only</td>
+<td>Limits and remote reads</td>
+<td><code>account-limits</code>, bounded Saved Messages history, get and search returned successful envelopes; this does not test all account tiers or pagination boundaries</td>
 </tr>
 <tr>
-<td>3. Fetch messages directly from Telegram</td>
-<td>implemented (offline evidence)</td>
-<td>Telegram source for history/search/get, typed bounded cursors, filters, deleted placeholders, adapter propagation, empty/exact-full/short pagination, overlap termination, RPC/cancellation no-write, and malformed/mismatched cursor tests</td>
-<td><code>81beb22</code>, <code>ba9b0ed</code>, <code>564d275</code></td>
-<td>Redacted live reads and stable-data acceptance against Telegram remain unrun</td>
+<td>Basic writes</td>
+<td>Send, identical idempotent replay, edit, explicit reply and forwarding of synthetic self messages succeeded; test messages were deleted</td>
 </tr>
 <tr>
-<td>4. Retrieve conversation context correctly</td>
-<td>implemented (offline core)</td>
-<td>Replies, explicit forum topic history, topic/root-bound cursors, missing/deleted-topic rejection, linked discussion lookup without joining, distinct discussion peers, advisory permissions with slow-mode metadata</td>
-<td><code>81beb22</code>, <code>9a79663</code>, <code>cf1b183</code>, <code>ba9b0ed</code></td>
-<td>Live fixture only for real nested replies/topic pagination, linked-discussion membership denial, and owner/admin/member/restricted server-rights transitions</td>
+<td>Formatted text</td>
+<td>Sent text with a non-BMP emoji before a bold span; remote retrieval confirmed text and UTF-16 entity offsets; an italic edit replaced formatting and a plain edit cleared it</td>
 </tr>
 <tr>
-<td>5. Add everyday account management</td>
-<td>implemented (offline; selected live checks)</td>
-<td>Archive/mute plus contact add/remove, current-session logout and explicit text/caption entities; durable ledger and media-identity regressions</td>
-<td><code>e39fbd4</code>, <code>b63deec</code>, current branch</td>
-<td>Live formatted text/media passed; contact/logout, archive/mute and rights transitions remain fixture-dependent</td>
+<td>Single uploads</td>
+<td>Synthetic PNG photo and document uploads returned IDs; remote text, entities and media presence matched the request</td>
 </tr>
 <tr>
-<td>6. Optional Premium and convenience features</td>
-<td>not started (outside current handoff)</td>
-<td>Original plan's separate optional proposals: voice transcription, translation, Saved Messages tags, custom emoji reactions, drafts/scheduled messages, and transfer progress</td>
-<td>—</td>
-<td>Each feature requires its own proposal, capability/privacy tests, and acceptance gate</td>
+<td>Exact hash lookup</td>
+<td>Original upload digests located their messages. Document download bytes matched the original, and lookup survived removing the downloaded file</td>
 </tr>
 <tr>
-<td>Documentation and release hygiene</td>
-<td>complete</td>
-<td>Generated command docs, skill reference, coverage matrix, public-hygiene checks</td>
-<td><code>e10f990</code></td>
-<td>None for this implementation handoff</td>
+<td>Albums</td>
+<td>Two synthetic pictures shared a Telegram grouped ID; only the first caption carried formatting. Both downloaded successfully without index warnings, and each downloaded digest still found its message after local files were removed</td>
+</tr>
+<tr>
+<td>Cleanup</td>
+<td>Every synthetic message created by these tests was deleted, including an initially overlooked forwarded copy. Temporary fixtures and album downloads were removed</td>
 </tr>
 </tbody>
 </table>
-<p>At the original v0.6 handoff, no Telegram notification or archive mutation was run, and no live acceptance gate is claimed as
-passed. The archive/unarchive and mute/unmute increments are offline-tested and do not include
-the remaining phase 5 operations. Phase 6 remains separate future work. That handoff did not install binaries, create tags, publish artifacts, or push branches.</p>
-<h2 id="media-hash-lookup-v070">Media hash lookup (v0.7.0)<a class="headerlink" href="#media-hash-lookup-v070" title="Permanent link">&para;</a></h2>
-<p>Implemented local <code>media-hash</code>, bounded <code>media-index</code> and <code>media-find</code>.
-SHA-256 records live in an optional account-local index and preserve lookup
-when a downloaded file is removed. Cached deleted/replaced media is excluded.
-The command tests cover pagination, account separation, read-only/write gates,
-missing files, truncation and lookup after file removal. Store tests cover
-stale snapshots and media identities; hash tests cover known digests, size caps,
-symlink/directory rejection and cancellation. No live Telegram calls were made.</p>
-<p>Automatic indexing now covers confirmed uploads and fresh downloads, albums
-and bounded media backfill. Upload hashes come from the private snapshot used
-by the uploader. Representations distinguish original upload, downloaded media
-and manually indexed cached files. Skipped files are not treated as verified
-fresh downloads. Optional index failures preserve successful transfer outcomes.
-Explicit visual indexing and candidate search use bounded JPEG/PNG decoding
-and dhash64-v1, with Hamming-distance ranking and truthful scan limits.
-Tests cover resize/recompression, invalid inputs, account separation, deleted
-media, and lookup after file removal. Automatic transfers continue to use exact
-SHA-256 only. No live transfer tests were run for this release.
-No legacy conversions or cache version changes were added.</p>
-<h2 id="remaining-phase-5-increment-2026-09-26-unreleased">Remaining phase 5 increment (2026-09-26, unreleased)<a class="headerlink" href="#remaining-phase-5-increment-2026-09-26-unreleased" title="Permanent link">&para;</a></h2>
-<p>Implemented contact add/remove, current-session logout and explicit formatting
-for messages, edits and captions. Tests cover write/read-only/confirmation and
-replay gates, opt-in phone sharing, typed contact RPCs, logout ambiguity and
-cleanup, late session writes, UTF-16 boundaries, plain edits clearing formatting,
-cache/live entity metadata and formatting-dependent fingerprints.</p>
-<p>Two reliability defects discovered during this work take priority over these
-features: archive/mute were missing from the underlying durable RPC ledger;
-verified downloads cleared the cached media identity and broke hash lookup.
-Both now have regression tests. Verified downloads update identity and path
-atomically without overwriting a newer replacement or deleted message.</p>
-<p>See <a href="../verification-2026-09-26/">live verification</a> for the bounded Saved Messages
-checks and their limits. Contact mutations and logout remain offline-tested to
-preserve the user's live address book and authorization. Optional phase 6 items
-remain deferred, not required feature parity.</p>
-<p>The roadmap is not fully accepted yet: forum/admin rights transitions and
-linked-discussion tests still need disposable fixtures; channel sponsored-message
-support remains an unresolved A release-scope gate. The separate customer-service
-agent research must establish permitted AI processing scope as well as technical
-feasibility. No unattended customer replies are authorized by these CLI tests.</p>
+<p>The first download lookup assertion exposed a real regression: persisting a
+download path cleared <code>media_id</code>, invalidating both original and downloaded
+hash lookup. The fix publishes verified path and identity atomically and refuses
+to overwrite a newer replacement or deletion. Store and command regressions
+cover this behavior; the document and album live checks passed afterward.</p>
+<p>The initial album formatting invocation also exposed a missing flag registration.
+<code>--entities</code> is now registered and exercised through the actual command, in
+addition to adapter tests. A clean-copy documentation test initially excluded
+untracked new source files; staging the source made the test exercise the full
+candidate, without weakening that check.</p>
+<p>Reproduction uses a freshly built binary with an explicit account and bounded
+timeouts: send uniquely labeled synthetic content to <code>self</code>, retrieve it with
+<code>get-msg --source telegram --read-only</code>, compare values programmatically, then
+delete only returned test IDs using the authenticated self confirmation. For
+hash checks, generate fresh local fixtures, compute SHA-256, inspect <code>media-find</code>,
+download with a small size cap, compare bytes, remove only the returned test
+file, and repeat lookup. On uncertain sends, inspect before attempting a retry.
+Never print raw result envelopes to a public test log.</p>
+<p>Offline acceptance passed:</p>
+<ul>
+<li><code>go test ./... -count=1</code></li>
+<li><code>go test -race ./internal/... -count=1</code></li>
+<li><code>go vet ./...</code></li>
+<li>Native build and <code>GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/tg</code></li>
+<li><code>make docs-commands-check public-hygiene</code>, <code>gofmt</code> and <code>git diff --check</code></li>
+</ul>
+<p>After the final unknown-identity guard was tightened, command/store race tests
+were rerun. These checks are separate from live Telegram acceptance.</p>
+<p>Still unverified live: contact add/remove, logout/re-login, archive/mute state,
+forum and linked-discussion behavior, owner/admin/member/restricted transitions,
+real reconnect gaps, and server flood/error conditions. No destructive session
+or contact test was run against the working account. There is no claim that the
+whole command matrix or all roadmap release gates have passed.</p>
 
 
 
