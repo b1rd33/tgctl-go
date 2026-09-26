@@ -591,10 +591,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#remaining-phase-5-increment-2026-09-26-unreleased" class="md-nav__link">
+  <a href="#remaining-phase-5-increment-v080" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Remaining phase 5 increment (2026-09-26, unreleased)
+        Remaining phase 5 increment (v0.8.0)
       
     </span>
   </a>
@@ -602,10 +602,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#durable-consumer-acknowledgement-2026-09-26-unreleased" class="md-nav__link">
+  <a href="#durable-consumer-acknowledgement-v080" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Durable consumer acknowledgement (2026-09-26, unreleased)
+        Durable consumer acknowledgement (v0.8.0)
       
     </span>
   </a>
@@ -613,10 +613,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#expiring-update-delivery-repair-2026-09-26-unreleased" class="md-nav__link">
+  <a href="#expiring-update-delivery-repair-v080" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Expiring update delivery repair (2026-09-26, unreleased)
+        Expiring update delivery repair (v0.8.0)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v080-release-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.8.0 release scope
       
     </span>
   </a>
@@ -732,7 +743,7 @@ Tests cover resize/recompression, invalid inputs, account separation, deleted
 media, and lookup after file removal. Automatic transfers continue to use exact
 SHA-256 only. No live transfer tests were run for this release.
 No legacy conversions or cache version changes were added.</p>
-<h2 id="remaining-phase-5-increment-2026-09-26-unreleased">Remaining phase 5 increment (2026-09-26, unreleased)<a class="headerlink" href="#remaining-phase-5-increment-2026-09-26-unreleased" title="Permanent link">&para;</a></h2>
+<h2 id="remaining-phase-5-increment-v080">Remaining phase 5 increment (v0.8.0)<a class="headerlink" href="#remaining-phase-5-increment-v080" title="Permanent link">&para;</a></h2>
 <p>Implemented contact add/remove, current-session logout and explicit formatting
 for messages, edits and captions. Tests cover write/read-only/confirmation and
 replay gates, opt-in phone sharing, typed contact RPCs, logout ambiguity and
@@ -752,7 +763,7 @@ linked-discussion tests still need disposable fixtures; channel sponsored-messag
 support remains an unresolved A release-scope gate. The separate customer-service
 agent research must establish permitted AI processing scope as well as technical
 feasibility. No unattended customer replies are authorized by these CLI tests.</p>
-<h2 id="durable-consumer-acknowledgement-2026-09-26-unreleased">Durable consumer acknowledgement (2026-09-26, unreleased)<a class="headerlink" href="#durable-consumer-acknowledgement-2026-09-26-unreleased" title="Permanent link">&para;</a></h2>
+<h2 id="durable-consumer-acknowledgement-v080">Durable consumer acknowledgement (v0.8.0)<a class="headerlink" href="#durable-consumer-acknowledgement-v080" title="Permanent link">&para;</a></h2>
 <p>PR #15 was merged as <code>f441896</code> after CI and a full local race pass. The merged
 binary passed the bounded Saved Messages text workflow and cleanup.</p>
 <p>The next priority-A increment adds <code>listen --once --manual-ack</code>, <code>events-list</code>
@@ -763,7 +774,7 @@ updates. See <a href="../update-consumers/">consumer contract and tests</a>. Thi
 provide multi-consumer subscriptions, a Telegram daemon or customer automation.
 Fixture-dependent live gates and the sponsored-message scope question above
 remain open; optional phase 6 features remain deferred.</p>
-<h2 id="expiring-update-delivery-repair-2026-09-26-unreleased">Expiring update delivery repair (2026-09-26, unreleased)<a class="headerlink" href="#expiring-update-delivery-repair-2026-09-26-unreleased" title="Permanent link">&para;</a></h2>
+<h2 id="expiring-update-delivery-repair-v080">Expiring update delivery repair (v0.8.0)<a class="headerlink" href="#expiring-update-delivery-repair-v080" title="Permanent link">&para;</a></h2>
 <p>A regression reproduced old message/edit payloads remaining in the pending
 outbox after an expiring update cleared the message cache. The repair purges
 pending payloads for the complete peer/message identity in the expiry transaction,
@@ -774,6 +785,12 @@ media TTL, unchanged unrelated receipts, stale full/short update replay, consume
 restart, malformed unrelated rows and rollback/checkpoint failure barriers.
 Expiry mutations are tested with synthetic offline fixtures, not private live
 messages. Already delivered/exported copies remain the consumer's responsibility.</p>
+<h2 id="v080-release-scope">v0.8.0 release scope<a class="headerlink" href="#v080-release-scope" title="Permanent link">&para;</a></h2>
+<p>This release packages the merged phase 5 account/formatting work and subsequent
+update-delivery repairs. It does not expand channel functionality or declare
+full roadmap acceptance. The open sponsored-display requirement and disposable
+forum/admin fixtures remain tracked above. Selected live checks and synthetic
+failure coverage are kept distinct. No optional phase 6 features are included.</p>
 
 
 

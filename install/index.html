@@ -912,30 +912,29 @@
 <li>Give it any title (e.g. "Personal Archiver"); platform = "Desktop"</li>
 <li>Copy the resulting <code>api_id</code> (an integer) and <code>api_hash</code> (32-char hex)</li>
 </ol>
-<p>Put them in a <code>.env</code> file in the directory where you'll run <code>tg</code>:</p>
-<p>The values labeled <code>api_id</code> and <code>api_hash</code> on
-<a href="https://my.telegram.org/apps">my.telegram.org/apps</a> become <code>TG_API_ID</code>
-and <code>TG_API_HASH</code> in <code>.env</code>.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>cp<span class="w"> </span>.env.example<span class="w"> </span>.env
+<p>Run the interactive setup command to save them in the stable configuration
+root. The API hash is hidden when entered in a terminal:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>tg<span class="w"> </span>setup<span class="w"> </span>--human
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nv">TG_API_ID</span><span class="o">=</span><span class="m">12345678</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nv">TG_API_HASH</span><span class="o">=</span>abcdef0123456789abcdef0123456789
-</span></code></pre></div>
-<p>Or set them as shell env vars:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_API_ID</span><span class="o">=</span><span class="m">12345678</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_API_HASH</span><span class="o">=</span>abcdef0123456789abcdef0123456789
-</span></code></pre></div>
-<p><code>tg</code> reads <code>.env</code> from its stable data root. Set <code>TGCTL_HOME</code> to an absolute existing installation root, or use the OS user-configuration directory plus <code>tgctl</code>. See <a href="../reliability/">reliability</a>. You can also export credentials in your shell profile.</p>
+<p>By default, the root is <code>~/Library/Application Support/tgctl</code> on macOS,
+<code>~/.config/tgctl</code> on Linux (or the configured XDG directory), and
+<code>%AppData%/tgctl</code> on Windows. Set <code>TGCTL_HOME</code> to an absolute path before setup
+and subsequent commands when using a different root. The current working
+directory does not select the account or credential file.</p>
+<p>You can also supply <code>TG_API_ID</code> and <code>TG_API_HASH</code> through your process environment.
+Keep credentials private; do not put them in source control. See
+<a href="../reliability/">reliability</a> for account paths and ownership.</p>
 <h2 id="first-login">First login<a class="headerlink" href="#first-login" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>tg<span class="w"> </span>login
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>tg<span class="w"> </span>--account<span class="w"> </span>default<span class="w"> </span>login<span class="w"> </span>--human
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>tg<span class="w"> </span>--account<span class="w"> </span>default<span class="w"> </span>discover<span class="w"> </span>--allow-write<span class="w"> </span>--json
 </span></code></pre></div>
 <p>You'll be prompted for your phone number, then a code Telegram will
 send you in the Telegram app. After that,
 <code>accounts/default/tg.session</code> is created locally and you stay logged in.</p>
 <h2 id="verify">Verify<a class="headerlink" href="#verify" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>tg<span class="w"> </span>me
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>tg<span class="w"> </span>doctor
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>tg<span class="w"> </span>stats
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>tg<span class="w"> </span>--account<span class="w"> </span>default<span class="w"> </span>me<span class="w"> </span>--read-only<span class="w"> </span>--json
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>tg<span class="w"> </span>--account<span class="w"> </span>default<span class="w"> </span>doctor<span class="w"> </span>--read-only<span class="w"> </span>--json
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>tg<span class="w"> </span>--account<span class="w"> </span>default<span class="w"> </span>stats<span class="w"> </span>--read-only<span class="w"> </span>--json
 </span></code></pre></div>
 <p><code>tg me</code> shows your authenticated account info. <code>tg doctor</code> checks
 credentials, session, DB, schema, and version. <code>tg stats</code> shows your
@@ -943,24 +942,17 @@ local cache state.</p>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <p><strong><code>tg: command not found</code></strong> — Go did not put the binary on PATH. Check
 <code>go env GOPATH</code> and add <code>$GOPATH/bin</code> to your shell PATH.</p>
-<p><strong>Auth errors</strong> — run <code>tg doctor --json</code> to see exactly which check
-fails. The <code>--live</code> flag also pings Telegram to confirm network
-connectivity.</p>
-<p><strong><code>TG_API_ID and TG_API_HASH must be set</code></strong> — you are probably running
-<code>tg</code> from a directory that does not contain <code>.env</code>. Either <code>cd</code> back to
-the directory with <code>.env</code>, or export both variables:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nb">cd</span><span class="w"> </span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/Projects/tgctl-go"</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>login
-</span></code></pre></div>
-<p>or:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_API_ID</span><span class="o">=</span><span class="m">12345678</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TG_API_HASH</span><span class="o">=</span>abcdef0123456789abcdef0123456789
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>tg<span class="w"> </span>--account<span class="w"> </span><span class="nb">test</span><span class="w"> </span>login
-</span></code></pre></div>
-<p><strong>Account flagged or limited</strong> — message <code>@SpamBot</code> from your Telegram
-client. New accounts and accounts running automation against many
-strangers are at higher risk; established personal accounts running
-tgctl-go for personal use are at very low risk.</p>
+<p><strong>Auth errors</strong> — run <code>tg --account default doctor --read-only --json</code> for
+local configuration/session/cache diagnostics. Use <code>me --read-only --json</code> to
+check the existing live authorization. Read-only live commands need an existing
+ownership sidecar and account identity; after a new login, initialize the cache
+with <code>tg --account default discover --allow-write --json</code>.</p>
+<p><strong><code>TG_API_ID and TG_API_HASH must be set</code></strong> — run <code>tg setup --human</code> for the
+same stable root used by your commands, or provide both process environment
+variables. Changing directories does not make the CLI load another <code>.env</code>.</p>
+<p><strong>Account flagged or limited</strong> — use Telegram's official client to inspect the
+restriction and contact <code>@SpamBot</code> if appropriate. Respect reported waits and
+restrictions; an established account is not a guarantee against server limits.</p>
 <h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../quickstart/">Quickstart</a> — first commands after install</li>
