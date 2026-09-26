@@ -9,7 +9,7 @@ no private Telegram transcript is stored in this repository.
 
 | Command | Offline asserted evidence | Live execution | Status / limitation |
 | --- | --- | --- | --- |
-| `account-limits` | `internal/commands/phase24_test.go:TestResolveAndAccountLimitsExposeExplicitSources` | unverified | Fake-backed shape; live app-config values remain unverified |
+| `account-limits` | `internal/commands/phase24_test.go:TestResolveAndAccountLimitsExposeExplicitSources` | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
 | `account-sessions` | `internal/commands/admin_test.go:TestAccountSessionsUsesListSessions` | unverified | Read path asserted; no live session inventory in repo |
 | `accounts-add` | `internal/commands/read_only_test.go:TestAccountMutationsRejectReadOnlyWithoutFilesystemChanges` | unverified | Guard and account isolation covered |
 | `accounts-list` | account selection tests | unverified | Listing behavior covered indirectly |
@@ -30,17 +30,19 @@ no private Telegram transcript is stored in this repository.
 | `chat-title` | `internal/commands/admin_test.go:TestChatTitleInvokesClient` | unverified | Offline fake invocation asserted |
 | `chats-info` | `internal/commands/admin_test.go:TestChatsInfoAndMembersReadCommands` | unverified | Read client invocation asserted |
 | `completion` | Cobra registration exercised by binary help generation | unverified | Shell output not behaviorally tested |
+| `contact-add` | `internal/commands/account_management_test.go`, `internal/client/account_management_test.go` | unverified | Typed confirmation, isolated account, replay, opt-in phone sharing, committed close failure; no live address-book mutation |
+| `contact-remove` | same account-management tests | unverified | Single typed user; conversation is retained |
 | `contacts` | `internal/commands/read_extra_test.go:TestStatsContactsUnreadReadFromCache` | unverified | Cache-only |
 | `db-backup` | `internal/store/backup_test.go` | unverified | Local snapshot behavior asserted |
 | `db-restore` | `internal/store/backup_test.go` | unverified | Empty-destination and validation behavior asserted |
-| `delete-msg` | `internal/commands/destructive_test.go` delete confirmation and execution tests; `internal/client/destructive_rpc_test.go` peer/count tests | unverified | No live deletion |
+| `delete-msg` | `internal/commands/destructive_test.go` delete confirmation and execution tests; `internal/client/destructive_rpc_test.go` peer/count tests | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
 | `demote` | `internal/commands/admin_test.go:TestDemoteRequiresResolvedChatConfirmation` | unverified | Offline confirmation only |
 | `discover` | `internal/commands/localdb_test.go:TestDiscoverUpsertsChats` | unverified | Fake-backed cache write asserted |
 | `discussion-message` | `internal/commands/phase24_test.go` thread command coverage; `internal/client/remote_read_test.go:TestRepliesAndDiscussionAdaptersPreservePeerRouting` | unverified | Fake/TL-backed response and peer routing; no live linked discussion |
 | `doctor` | account selection and doctor tests | unverified | Diagnostics asserted; no live report |
-| `download-album` | `internal/commands/media_album_download_test.go` dry-run, partial, overwrite, recovery tests | unverified | Fake-backed local/media behavior |
-| `download-media` | `internal/commands/media_download_test.go` gate, selector, artifact identity, recovery tests | unverified | Fake-backed local/media behavior |
-| `edit-msg` | `internal/commands/messages_write_test.go:TestEditMsgInvokesClient` | unverified | No live edit |
+| `download-album` | `internal/commands/media_album_download_test.go` dry-run, partial, overwrite, recovery tests | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
+| `download-media` | `internal/commands/media_download_test.go` gate, selector, artifact identity, recovery tests | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
+| `edit-msg` | `internal/commands/messages_write_test.go:TestEditMsgInvokesClient` | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
 | `export` | `internal/commands/export_test.go` JSONL/CSV/HTML, overwrite, manifest tests | unverified | Local-only by contract |
 | `folder-add-chat` | `internal/commands/topics_folders_test.go` folder behavior and `internal/client/permissions_test.go` patch preservation | unverified | No live folder mutation |
 | `folder-create` | `internal/commands/topics_folders_test.go:TestFolderCreateReplaysIdempotency` | unverified | Fake-backed idempotency |
@@ -50,25 +52,26 @@ no private Telegram transcript is stored in this repository.
 | `folder-show` | `internal/commands/topics_folders_test.go:TestFoldersListAndShowUseClient` | unverified | Fake-backed read |
 | `folders-list` | `internal/commands/topics_folders_test.go:TestFoldersListAndShowUseClient` | unverified | Fake-backed read |
 | `folders-reorder` | folder patch preservation tests | unverified | No live folder mutation |
-| `forward` | `internal/commands/messages_write_test.go:TestForwardInvokesClient` | unverified | No live forward |
-| `get-msg` | `internal/commands/messages_read_test.go` get and deleted-row tests; `internal/client/remote_read_test.go:TestRemoteGetAdapterPreservesDeletedPlaceholder` | unverified | Defaults to cache; bounded Telegram deleted-message retrieval is TL-tested, live source remains unverified |
+| `forward` | `internal/commands/messages_write_test.go:TestForwardInvokesClient` | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
+| `get-msg` | `internal/commands/messages_read_test.go` get and deleted-row tests; `internal/client/remote_read_test.go:TestRemoteGetAdapterPreservesDeletedPlaceholder` | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
 | `help` | Cobra help generation used by docs generator | unverified | Rendering, not command semantics |
 | `kick` | `internal/client/destructive_rpc_test.go:TestKickReportsPartialCommitAndDoesNotClearExistingRestrictions` | unverified | Offline fake/TL behavior only |
 | `leave-chat` | `internal/commands/destructive_test.go` user rejection and group execution | unverified | No live leave |
-| `list-msgs` | `internal/commands/messages_read_test.go` date/filter tests, `TestRemoteHistoryUsesBoundedPageAndTypedCursor`, `TestRemoteRowsBoundPagesAndTerminateContinuation`; `internal/store/cursor_test.go` timestamp/remote cursor tests | unverified | Cache and bounded Telegram pagination are offline-tested; live source remains unverified |
+| `list-msgs` | `internal/commands/messages_read_test.go` date/filter tests, `TestRemoteHistoryUsesBoundedPageAndTypedCursor`, `TestRemoteRowsBoundPagesAndTerminateContinuation`; `internal/store/cursor_test.go` timestamp/remote cursor tests | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
 | `listen` | `internal/commands/live_test.go` event, filters, output failure; update storage tests | unverified | Controlled live event not run |
 | `login` | `internal/commands/login_test.go` QR secret-output test and read-only guards | unverified | No auth mutation/live login |
+| `logout` | account-management tests; session storage and durable RPC ledger tests | unverified | Remote confirmation before local removal; unknown outcome preserves credential; late flush and cleanup failures tested |
 | `mark-read` | `internal/commands/messages_write_test.go:TestMarkReadInvokesClient` | unverified | No live read marker |
-| `me` | `internal/commands/auth_test.go` offline and envelope tests; read-only tests | unverified | Cached/live fetch seams asserted; no live identity evidence |
+| `me` | `internal/commands/auth_test.go` offline and envelope tests; read-only tests | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
 | `mute` | `internal/commands/notifications_test.go` parsing, gates, replay, isolation, cancellation and committed-outcome tests; `internal/client/notifications_test.go` typed-peer and optional-field request tests | unverified | Changes only per-peer `mute_until`; no live notification mutation |
 | `operations-list` | `internal/commands/recovery.go` plus write ledger tests | unverified | Durable outcome inspection covered through store/client tests |
 | `pin-msg` | `internal/commands/messages_write_test.go:TestPinUnpinInvokesClient` | unverified | No live pin |
 | `promote` | `internal/commands/admin_test.go:TestPromoteRequiresResolvedChatConfirmation` | unverified | Offline confirmation only |
 | `react` | `internal/commands/messages_write_test.go:TestReactRejectsEmptyEmoji`, `TestReactBigFlagDoesNotClaimPremiumEligibility` | unverified | Offline animation/Premium-label semantics; no live reaction |
 | `replies` | `internal/commands/phase24_test.go:TestRepliesRunnerBindsCursorToRootAndChat`; `internal/client/remote_read_test.go:TestRepliesAndDiscussionAdaptersPreservePeerRouting` | unverified | Cursor binding/continuation and fake/TL request routing; no live thread fixture |
-| `resolve` | `internal/commands/phase24_test.go:TestResolveAndAccountLimitsExposeExplicitSources` | unverified | Fake-backed typed identity; no live username evidence |
-| `search` | `internal/commands/messages_read_test.go` empty/case tests, `TestRemoteSearchUsesExplicitServerClient`, `TestRemoteRowsBoundPagesAndTerminateContinuation`; `internal/client/remote_read_test.go:TestRemoteReadsDoNotWriteCacheOrReadStateOnFailure` | unverified | Defaults to cache; bounded Telegram filters, failure, and pagination behavior are offline-tested, live source remains unverified |
-| `send` | `internal/commands/messages_write_test.go` gate, dry-run, fuzzy, idempotency, topic tests | unverified | No live send |
+| `resolve` | `internal/commands/phase24_test.go:TestResolveAndAccountLimitsExposeExplicitSources` | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
+| `search` | `internal/commands/messages_read_test.go` empty/case tests, `TestRemoteSearchUsesExplicitServerClient`, `TestRemoteRowsBoundPagesAndTerminateContinuation`; `internal/client/remote_read_test.go:TestRemoteReadsDoNotWriteCacheOrReadStateOnFailure` | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
+| `send` | `internal/commands/messages_write_test.go` gate, dry-run, fuzzy, idempotency, topic tests | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
 | `send-by-username` | send username tests and selector pipeline | unverified | No live send |
 | `set-permissions` | `internal/commands/admin_test.go:TestSetPermissionsAcceptsSendMessagesFlag`; `internal/client/permissions_test.go` patch tests | unverified | No live admin fixture |
 | `setup` | `internal/commands/setup_test.go` credential, preservation, read-only, stable-root tests | unverified | Explicit and default destinations covered offline |
@@ -89,9 +92,9 @@ no private Telegram transcript is stored in this repository.
 | `unarchive` | `internal/commands/peer_folder_test.go:TestArchiveUnarchiveRouteOnePeerAndReplayByRequest`; `internal/client/peer_folder_test.go:TestSetPeerFolderRoutesTypedPeersAndArchiveIDs` | unverified | Typed group/user/channel payloads, folder ID 0, same single-peer durable pipeline; no live mutation |
 | `unpin-msg` | `internal/commands/messages_write_test.go:TestPinUnpinInvokesClient` | unverified | No live unpin |
 | `unread` | `internal/commands/read_extra_test.go:TestStatsContactsUnreadReadFromCache` | unverified | Cache-only |
-| `upload-album` | `internal/commands/upload_album_test.go` extensive dry-run, order, mapping, idempotency, failure tests; `internal/client/upload_album_test.go` TL-shape tests | unverified | No live album mutation |
-| `upload-document` | `internal/commands/media_test.go` invocation/dry-run/idempotency tests | unverified | No live upload |
-| `upload-photo` | `internal/commands/media_test.go:TestUploadPhotoDryRunSkipsClient` | unverified | No live upload |
+| `upload-album` | `internal/commands/upload_album_test.go` extensive dry-run, order, mapping, idempotency, failure tests; `internal/client/upload_album_test.go` TL-shape tests | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
+| `upload-document` | `internal/commands/media_test.go` invocation/dry-run/idempotency tests | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
+| `upload-photo` | `internal/commands/media_test.go:TestUploadPhotoDryRunSkipsClient` | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
 | `upload-video` | media tests cover shared upload path | unverified | Exact video live/fixture evidence absent |
 | `upload-voice` | media tests cover shared upload path | unverified | Exact voice live/fixture evidence absent |
 | `version` | `internal/commands/root_test.go` version/envelope/provenance tests | unverified | Local utility |
@@ -115,7 +118,7 @@ updated whenever Cobra commands change.
 | --- | --- | --- | --- |
 | `media-hash` | `TestHashFile`, `TestMediaHashWorkflowOffline` | not applicable | Exact-byte digest, file caps, symlink/directory rejection and cancellation |
 | `media-index` | `TestMediaHashWorkflowOffline`, store hash tests | not applicable | Local-only, bounded pages, write gates, missing files and stale identity guards |
-| `media-find` | `TestMediaHashWorkflowOffline`, store hash tests | not applicable | Local index remains usable after file removal; no live availability guarantee |
+| `media-find` | `TestMediaHashWorkflowOffline`, store hash tests | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
 
 Automatic transfer indexing is asserted by `TestUploadIndexesConfirmedSnapshotAndPreservesSuccess`,
 `TestAlbumIndexesConfirmedOriginals`, `TestUnconfirmedUploadDoesNotCreateHashIndex`,
@@ -124,3 +127,12 @@ and the download hash tests. These are offline fixtures; no live Telegram transf
 or message mutation is claimed.
 
 Visual matching: `TestVisualHashResizeAndRecompression`, `TestVisualHashRejectsInvalidSmallAndCanceled`, `TestVisualSearchRankingIsolationAndStaleMedia`, and `TestVisualWorkflowOfflineAfterFileRemoval` cover `media-similar` and the `--visual` flags. Results are approximate candidates, not content identity. No live Telegram calls.
+
+## 2026-09-26 additions
+
+Formatting coverage includes `internal/text/entities_test.go`, command tests for
+UTF-16 validation and request fingerprints, adapter tests for send/edit flags,
+live-cache metadata, and album caption placement. The durable ledger tests now
+exercise archive, mute, contact and logout requests before RPC. Verified-download
+regressions retain hashes through path changes and local file removal, while
+suppressing replaced/deleted media. See the verification report for live limits.

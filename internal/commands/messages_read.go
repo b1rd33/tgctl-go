@@ -15,6 +15,7 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/resolve"
 	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
+	textutil "github.com/b1rd33/tgctl-go/internal/text"
 )
 
 // ChatRef is the JSON-serializable shape used by every read command.
@@ -35,19 +36,20 @@ type MessageSummaryDTO struct {
 
 // FullMessageDTO mirrors Python `_full_message`.
 type FullMessageDTO struct {
-	ChatID       int64   `json:"chat_id"`
-	MessageID    int64   `json:"message_id"`
-	GroupedID    int64   `json:"grouped_id,omitempty"`
-	SenderID     *int64  `json:"sender_id"`
-	Date         string  `json:"date"`
-	Text         *string `json:"text"`
-	IsOutgoing   bool    `json:"is_outgoing"`
-	ReplyToMsgID *int64  `json:"reply_to_msg_id"`
-	HasMedia     bool    `json:"has_media"`
-	MediaType    *string `json:"media_type"`
-	MediaPath    *string `json:"media_path"`
-	RawJSON      any     `json:"raw_json"`
-	Deleted      bool    `json:"deleted,omitempty"`
+	Entities     []textutil.Entity `json:"entities"`
+	ChatID       int64             `json:"chat_id"`
+	MessageID    int64             `json:"message_id"`
+	GroupedID    int64             `json:"grouped_id,omitempty"`
+	SenderID     *int64            `json:"sender_id"`
+	Date         string            `json:"date"`
+	Text         *string           `json:"text"`
+	IsOutgoing   bool              `json:"is_outgoing"`
+	ReplyToMsgID *int64            `json:"reply_to_msg_id"`
+	HasMedia     bool              `json:"has_media"`
+	MediaType    *string           `json:"media_type"`
+	MediaPath    *string           `json:"media_path"`
+	RawJSON      any               `json:"raw_json"`
+	Deleted      bool              `json:"deleted,omitempty"`
 }
 
 func toSummaryDTO(s store.MessageSummary) MessageSummaryDTO {
@@ -79,6 +81,7 @@ func toFullMessageDTO(m *store.Message) FullMessageDTO {
 		var raw any
 		if err := json.Unmarshal([]byte(*m.RawJSON), &raw); err == nil {
 			dto.RawJSON = raw
+			dto.Entities = textutil.ReadEntities(*m.RawJSON)
 		}
 	}
 	return dto
@@ -113,6 +116,7 @@ func remoteFullMessageDTO(m client.BackfillMessage) FullMessageDTO {
 	dto := FullMessageDTO{ChatID: m.ChatID, MessageID: m.MessageID, GroupedID: m.GroupedID, SenderID: sender, Date: m.Date, Text: text, IsOutgoing: m.IsOutgoing, ReplyToMsgID: reply, HasMedia: m.HasMedia, MediaType: media, Deleted: m.Deleted}
 	if m.RawJSON != "" {
 		_ = json.Unmarshal([]byte(m.RawJSON), &dto.RawJSON)
+		dto.Entities = textutil.ReadEntities(m.RawJSON)
 	}
 	return dto
 }

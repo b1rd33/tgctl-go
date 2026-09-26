@@ -6,13 +6,24 @@ import (
 	"github.com/gotd/td/session"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 // AtomicSessionStorage publishes a complete, private session or preserves the
 // previous one. Callers must own the associated SessionLock for its lifetime.
-type AtomicSessionStorage struct{ Path string }
+type AtomicSessionStorage struct {
+	Path     string
+	mu       sync.Mutex
+	logoutMu sync.Mutex // serializes logout finalization with releasing session ownership
+	cleared  bool
+}
 
 func (s *AtomicSessionStorage) LoadSession(ctx context.Context) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cleared {
+		return nil, session.ErrNotFound
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -23,6 +34,11 @@ func (s *AtomicSessionStorage) LoadSession(ctx context.Context) ([]byte, error) 
 	return b, err
 }
 func (s *AtomicSessionStorage) StoreSession(ctx context.Context, data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cleared {
+		return errors.New("session was logged out")
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -54,4 +70,23 @@ func (s *AtomicSessionStorage) StoreSession(ctx context.Context, data []byte) er
 		return err
 	}
 	return publishSession(f.Name(), path)
+}
+
+// Clear runs after confirmed remote logout while the session lock is owned.
+// Late transport flushes cannot recreate a revoked credential.
+func (s *AtomicSessionStorage) Clear() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cleared = true
+	path, err := filepath.EvalSymlinks(s.Path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if err = os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
 }

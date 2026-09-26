@@ -1,6 +1,6 @@
 # Commands
 
-`tg --help` shows 90 commands. This page is generated from Cobra help output.
+`tg --help` shows 93 commands. This page is generated from Cobra help output.
 
 Every command supports the global flags shown by `tg --help`: `--account`, `--full`, `--json`, `--human`, `--lock-wait`, `--read-only`, and `--version` where applicable.
 
@@ -29,6 +29,8 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg chat-title`](#tg-chat-title) | Edit chat title |
 | [`tg chats-info`](#tg-chats-info) | Show chat info for comma-separated chat ids |
 | [`tg completion`](#tg-completion) | Generate the autocompletion script for tg for the specified shell. |
+| [`tg contact-add`](#tg-contact-add) | Add a known user to contacts |
+| [`tg contact-remove`](#tg-contact-remove) | Remove a known contact without deleting the conversation |
 | [`tg contacts`](#tg-contacts) | List cached contacts |
 | [`tg db-backup`](#tg-db-backup) | Create a consistent private cache snapshot (session and media excluded) |
 | [`tg db-restore`](#tg-db-restore) | Restore a cache snapshot into an account with no existing database |
@@ -57,6 +59,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg list-msgs`](#tg-list-msgs) | List cached messages in a chat with optional date filters |
 | [`tg listen`](#tg-listen) | Listen for live Telegram updates |
 | [`tg login`](#tg-login) | Interactively authorize this account against Telegram |
+| [`tg logout`](#tg-logout) | Revoke this account's current session; keep cached history and downloads |
 | [`tg mark-read`](#tg-mark-read) | Mark history read up to and including --up-to |
 | [`tg me`](#tg-me) | Print authenticated user info |
 | [`tg media-find`](#tg-media-find) | Find cached Telegram media by exact SHA-256 |
@@ -647,6 +650,67 @@ tg completion zsh > ~/.zsh/completions/_tg
 |---|---|
 | `-h, --help` | help for completion |
 
+## `tg contact-add`
+
+Add a known user to contacts
+
+**Use**
+
+```text
+tg contact-add <user> [flags]
+```
+
+**Example**
+
+```bash
+tg contact-add <user> [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--allow-write` | Required for any Telegram-side write |
+| `--confirm string` | Typed confirm against the resolved id |
+| `--dry-run` | Print payload preview without contacting Telegram |
+| `--first-name string` | Required contact first name |
+| `--fuzzy` | Allow title-based selectors for write commands |
+| `-h, --help` | help for contact-add |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--idempotency-key string` | Per-account replay-safe key |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--last-name string` | Contact last name |
+| `--share-phone` | Explicitly allow this contact to see your phone number |
+
+## `tg contact-remove`
+
+Remove a known contact without deleting the conversation
+
+**Use**
+
+```text
+tg contact-remove <user> [flags]
+```
+
+**Example**
+
+```bash
+tg contact-remove <user> [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--allow-write` | Required for any Telegram-side write |
+| `--confirm string` | Typed confirm against the resolved id |
+| `--dry-run` | Print payload preview without contacting Telegram |
+| `--fuzzy` | Allow title-based selectors for write commands |
+| `-h, --help` | help for contact-remove |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--idempotency-key string` | Per-account replay-safe key |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+
 ## `tg contacts`
 
 List cached contacts
@@ -942,6 +1006,7 @@ tg edit-msg 123456789 1 "updated" --allow-write --json
 | `--allow-write` | Required for any Telegram-side write |
 | `--confirm string` | Typed confirm against the resolved id |
 | `--dry-run` | Print payload preview without contacting Telegram |
+| `--entities string` | Explicit JSON text entities with UTF-16 offsets (plain text by default) |
 | `--fuzzy` | Allow title-based selectors for write commands |
 | `-h, --help` | help for edit-msg |
 | `--human` | Force human-readable output (default on a TTY) |
@@ -1432,6 +1497,35 @@ tg login
 | `--qr` | Authorize by scanning a Telegram QR code (API credentials still required) |
 | `--qr-uri` | Print the QR login URI instead of rendering terminal blocks |
 
+## `tg logout`
+
+Revoke this account's current session; keep cached history and downloads
+
+**Use**
+
+```text
+tg logout [flags]
+```
+
+**Example**
+
+```bash
+tg logout [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--allow-write` | Required for any Telegram-side write |
+| `--confirm string` | Typed confirm against the resolved id |
+| `--dry-run` | Print payload preview without contacting Telegram |
+| `--fuzzy` | Allow title-based selectors for write commands |
+| `-h, --help` | help for logout |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--idempotency-key string` | Per-account replay-safe key |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+
 ## `tg mark-read`
 
 Mark history read up to and including --up-to
@@ -1847,6 +1941,7 @@ tg send 123456789 "hello" --allow-write --json
 | `--allow-write` | Required for any Telegram-side write |
 | `--confirm string` | Typed confirm against the resolved id |
 | `--dry-run` | Print payload preview without contacting Telegram |
+| `--entities string` | Explicit JSON text entities with UTF-16 offsets (plain text by default) |
 | `--fuzzy` | Allow title-based selectors for write commands |
 | `-h, --help` | help for send |
 | `--human` | Force human-readable output (default on a TTY) |
@@ -1880,6 +1975,7 @@ tg send-by-username @username "hello" --allow-write --json
 | `--allow-write` | Required for any Telegram-side write |
 | `--confirm string` | Typed confirm against the resolved id |
 | `--dry-run` | Print payload preview without contacting Telegram |
+| `--entities string` | Explicit JSON text entities with UTF-16 offsets (plain text by default) |
 | `--fuzzy` | Allow title-based selectors for write commands |
 | `-h, --help` | help for send-by-username |
 | `--human` | Force human-readable output (default on a TTY) |
@@ -2449,6 +2545,7 @@ tg upload-album <chat> <file>... [flags] --json
 | `--allow-write` | Required for any Telegram-side write |
 | `--caption string` | Album caption (placed on the first item) |
 | `--dry-run` | Print payload preview without contacting Telegram |
+| `--entities string` | Explicit JSON text entities with UTF-16 offsets (plain text by default) |
 | `--fuzzy` | Allow title-based selectors for write commands |
 | `-h, --help` | help for upload-album |
 | `--human` | Force human-readable output (default on a TTY) |
@@ -2484,6 +2581,7 @@ tg upload-document 123456789 ./file.txt --allow-write --json
 | `--caption string` | Media caption |
 | `--confirm string` | Typed confirm against the resolved id |
 | `--dry-run` | Print payload preview without contacting Telegram |
+| `--entities string` | Explicit JSON text entities with UTF-16 offsets (plain text by default) |
 | `--filename string` | Override uploaded filename |
 | `--fuzzy` | Allow title-based selectors for write commands |
 | `-h, --help` | help for upload-document |
@@ -2518,6 +2616,7 @@ tg upload-photo 123456789 ./photo.png --allow-write --json
 | `--caption string` | Media caption |
 | `--confirm string` | Typed confirm against the resolved id |
 | `--dry-run` | Print payload preview without contacting Telegram |
+| `--entities string` | Explicit JSON text entities with UTF-16 offsets (plain text by default) |
 | `--fuzzy` | Allow title-based selectors for write commands |
 | `-h, --help` | help for upload-photo |
 | `--human` | Force human-readable output (default on a TTY) |
@@ -2551,6 +2650,7 @@ tg upload-video 123456789 ./video.mp4 --allow-write --json
 | `--caption string` | Media caption |
 | `--confirm string` | Typed confirm against the resolved id |
 | `--dry-run` | Print payload preview without contacting Telegram |
+| `--entities string` | Explicit JSON text entities with UTF-16 offsets (plain text by default) |
 | `--fuzzy` | Allow title-based selectors for write commands |
 | `-h, --help` | help for upload-video |
 | `--human` | Force human-readable output (default on a TTY) |
@@ -2585,6 +2685,7 @@ tg upload-voice 123456789 ./voice.ogg --allow-write --json
 | `--caption string` | Media caption |
 | `--confirm string` | Typed confirm against the resolved id |
 | `--dry-run` | Print payload preview without contacting Telegram |
+| `--entities string` | Explicit JSON text entities with UTF-16 offsets (plain text by default) |
 | `--fuzzy` | Allow title-based selectors for write commands |
 | `-h, --help` | help for upload-voice |
 | `--human` | Force human-readable output (default on a TTY) |

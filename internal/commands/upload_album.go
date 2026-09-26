@@ -17,6 +17,7 @@ import (
 	"github.com/b1rd33/tgctl-go/internal/media"
 	"github.com/b1rd33/tgctl-go/internal/safety"
 	"github.com/b1rd33/tgctl-go/internal/store"
+	textutil "github.com/b1rd33/tgctl-go/internal/text"
 	"github.com/b1rd33/tgctl-go/internal/writes"
 )
 
@@ -32,6 +33,10 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := "upload-album"
 			caption, _ := cmd.Flags().GetString("caption")
+			entities, err := commandEntities(cmd, caption, true)
+			if err != nil {
+				return emitDispatchedFailure(cmd, name, err)
+			}
 			replyTo, _ := cmd.Flags().GetInt64("reply-to")
 			if err := validateOptionalPositiveInt32(replyTo, "--reply-to"); err != nil {
 				return emitDispatchedFailure(cmd, name, err)
@@ -75,7 +80,7 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 			if err != nil {
 				return emitDispatchedFailure(cmd, name, err)
 			}
-			fingerprint, err := albumFingerprint(account, resolved.target.ChatID, identities, mediaKind, caption, replyTo, silent, supportsStreaming)
+			fingerprint, err := albumFingerprint(account, resolved.target.ChatID, identities, mediaKind, caption, replyTo, silent, supportsStreaming, entities)
 			if err != nil {
 				return emitDispatchedFailure(cmd, name, err)
 			}
@@ -106,7 +111,7 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 					}
 					ctx = safety.WithFileDigests(ctx, digests)
 					resp, err := c.UploadAlbum(ctx, client.UploadAlbumReq{
-						ChatID: chatID, Items: items, Caption: caption, ReplyTo: replyTo,
+						ChatID: chatID, Items: items, Caption: caption, ReplyTo: replyTo, Entities: entities,
 						Silent: silent, SupportsStreaming: supportsStreaming, MediaKind: mediaKind, MaxBytes: maxBytes,
 						MaxSizeMB: maxSizeMB,
 					})
@@ -192,6 +197,7 @@ func uploadAlbumCommand(cfg CommandsConfig) *cobra.Command {
 	cmd.Flags().Bool("supports-streaming", false, "Mark video items as streamable")
 	cmd.Flags().String("idempotency-fingerprint", "", "internal album request fingerprint")
 	_ = cmd.Flags().MarkHidden("idempotency-fingerprint")
+	addEntityFlag(cmd)
 	addAlbumUploadWriteFlags(cmd)
 	return cmd
 }
@@ -346,17 +352,19 @@ func redactAlbumUploadError(err error, items []client.UploadAlbumItem, caption s
 	return &redactedAlbumUploadError{message: redacted, err: err}
 }
 
-func albumFingerprint(account string, chatID int64, files []albumFileIdentity, mediaKind, caption string, replyTo int64, silent, streaming bool) (string, error) {
+func albumFingerprint(account string, chatID int64, files []albumFileIdentity, mediaKind, caption string, replyTo int64, silent, streaming bool, entities []textutil.Entity) (string, error) {
+
 	value := struct {
-		Account string              `json:"account"`
-		ChatID  int64               `json:"chat_id"`
-		Files   []albumFileIdentity `json:"files"`
-		Kind    string              `json:"media_kind"`
-		Caption string              `json:"caption"`
-		ReplyTo int64               `json:"reply_to"`
-		Silent  bool                `json:"silent"`
-		Stream  bool                `json:"supports_streaming"`
-	}{account, chatID, files, mediaKind, caption, replyTo, silent, streaming}
+		Entities []textutil.Entity   `json:"entities,omitempty"`
+		Account  string              `json:"account"`
+		ChatID   int64               `json:"chat_id"`
+		Files    []albumFileIdentity `json:"files"`
+		Kind     string              `json:"media_kind"`
+		Caption  string              `json:"caption"`
+		ReplyTo  int64               `json:"reply_to"`
+		Silent   bool                `json:"silent"`
+		Stream   bool                `json:"supports_streaming"`
+	}{entities, account, chatID, files, mediaKind, caption, replyTo, silent, streaming}
 	b, err := json.Marshal(value)
 	if err != nil {
 		return "", err

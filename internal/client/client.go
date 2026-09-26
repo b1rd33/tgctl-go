@@ -5,6 +5,7 @@ package client
 import (
 	"context"
 	"fmt"
+	textutil "github.com/b1rd33/tgctl-go/internal/text"
 	"time"
 
 	"github.com/b1rd33/tgctl-go/internal/media"
@@ -75,6 +76,7 @@ type TopicHistoryResult struct {
 
 // SendMessageReq mirrors the input to messages.SendMessage.
 type SendMessageReq struct {
+	Entities  []textutil.Entity
 	ChatID    int64
 	Text      string
 	ReplyTo   int64 // 0 = no reply
@@ -90,6 +92,7 @@ type SendMessageResp struct {
 
 // UploadFileReq mirrors messages.SendMedia with an uploaded file.
 type UploadFileReq struct {
+	Entities          []textutil.Entity
 	ChatID            int64
 	Path              string
 	Kind              string
@@ -124,9 +127,10 @@ type UploadAlbumItem struct {
 // that already resolved it; normal production callers should provide ChatID
 // and let the account entity cache resolve the peer.
 type UploadAlbumReq struct {
-	ChatID int64
-	Peer   tg.InputPeerClass
-	Items  []UploadAlbumItem
+	Entities []textutil.Entity
+	ChatID   int64
+	Peer     tg.InputPeerClass
+	Items    []UploadAlbumItem
 	// MediaKind optionally forces every item to be one of auto, photo, video,
 	// audio, or document. Auto derives the kind from the local file.
 	MediaKind         string
@@ -243,6 +247,7 @@ func (e *CommittedMediaDownloadError) Unwrap() error {
 
 // EditMessageReq mirrors messages.EditMessage.
 type EditMessageReq struct {
+	Entities  []textutil.Entity
 	ChatID    int64
 	MessageID int64
 	NewText   string
@@ -551,21 +556,22 @@ type MemberInfo struct {
 }
 
 type ListenEvent struct {
-	EventID       int64  `json:"event_id,omitempty"`
-	IsOutgoing    bool   `json:"is_outgoing"`
-	ReplyToMsgID  int64  `json:"reply_to_msg_id,omitempty"`
-	EditDate      int    `json:"edit_date,omitempty"`
-	ReadMaxID     int    `json:"read_max_id,omitempty"`
-	UpdateKind    string `json:"update_kind"`
-	ChatID        int64  `json:"chat_id"`
-	MessageID     int64  `json:"message_id"`
-	SenderID      int64  `json:"sender_id,omitempty"`
-	Date          string `json:"date,omitempty"`
-	Text          string `json:"text,omitempty"`
-	MediaType     string `json:"media_type,omitempty"`
-	MediaIdentity string `json:"media_identity,omitempty"`
-	GroupedID     int64  `json:"grouped_id,omitempty"`
-	Deleted       bool   `json:"deleted,omitempty"`
+	Entities      []textutil.Entity `json:"entities"`
+	EventID       int64             `json:"event_id,omitempty"`
+	IsOutgoing    bool              `json:"is_outgoing"`
+	ReplyToMsgID  int64             `json:"reply_to_msg_id,omitempty"`
+	EditDate      int               `json:"edit_date,omitempty"`
+	ReadMaxID     int               `json:"read_max_id,omitempty"`
+	UpdateKind    string            `json:"update_kind"`
+	ChatID        int64             `json:"chat_id"`
+	MessageID     int64             `json:"message_id"`
+	SenderID      int64             `json:"sender_id,omitempty"`
+	Date          string            `json:"date,omitempty"`
+	Text          string            `json:"text,omitempty"`
+	MediaType     string            `json:"media_type,omitempty"`
+	MediaIdentity string            `json:"media_identity,omitempty"`
+	GroupedID     int64             `json:"grouped_id,omitempty"`
+	Deleted       bool              `json:"deleted,omitempty"`
 }
 
 // TerminateSessionReq mirrors account.ResetAuthorization.
@@ -600,8 +606,11 @@ type Client interface {
 	UnblockUser(ctx context.Context, req BlockUserReq) error
 	ListSessions(ctx context.Context) ([]SessionRef, error)
 	TerminateSession(ctx context.Context, req TerminateSessionReq) error
+	Logout(context.Context) error
 	DiscoverDialogs(ctx context.Context, limit int) ([]ChatInfo, error)
 	SyncContacts(ctx context.Context) ([]ContactInfo, error)
+	AddContact(context.Context, AddContactReq) error
+	RemoveContact(context.Context, int64) error
 	BackfillMessages(ctx context.Context, req BackfillReq) (BackfillResult, error)
 	ListTopics(ctx context.Context, chatID int64, limit int, query string) ([]TopicInfo, error)
 	CreateTopic(ctx context.Context, req CreateTopicReq) (CreateTopicResp, error)

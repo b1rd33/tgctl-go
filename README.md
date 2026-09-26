@@ -16,7 +16,7 @@ Anything you'd otherwise click through Telegram Desktop to do, but at scale or o
 - **Offline history** — cache and export message history for local analysis
 - **Building bots without Bot API** — full MTProto user-account access via `gotd/td`, not the limited Bot API
 
-It is *not* meant to spam, scrape contacts, or evade rate limits — there's a sliding-window rate limiter and an audit log specifically to keep you on the safe side of Telegram's terms.
+It is *not* meant to spam, scrape contacts, or evade rate limits — there's a sliding-window rate limiter and an audit log to reduce accidental misuse. These controls do not establish compliance with Telegram's terms; see [the remaining scope constraints](docs/reliability-roadmap.md#account-safety-and-terms-constraints).
 
 ## Install
 

@@ -49,40 +49,6 @@ func indexDownloadedMediaHash(ctx context.Context, db *sql.DB, chatID, messageID
 	return nil
 }
 
-// bindDownloadedMediaIdentity fills the cache identity for a previously
-// uncached message only when its path is still the one persisted by this
-// download. A known identity mismatch is rejected, because indexing under a
-// stale identity would make later lookups return the wrong bytes.
-func bindDownloadedMediaIdentity(db *sql.DB, chatID, messageID int64, path, expectedIdentity, downloadedIdentity string) (string, error) {
-	if downloadedIdentity == "" {
-		return expectedIdentity, nil
-	}
-	if expectedIdentity != "" && expectedIdentity != downloadedIdentity {
-		return "", fmt.Errorf("downloaded media identity differs from the cache snapshot")
-	}
-	if expectedIdentity != "" {
-		return expectedIdentity, nil
-	}
-	res, err := db.Exec(`
-		UPDATE tg_messages
-		SET media_id=?
-		WHERE chat_id=? AND message_id=? AND COALESCE(media_path,'')=?
-		  AND COALESCE(media_id,'')='' AND COALESCE(edit_date,0)=0 AND deleted=0`,
-		downloadedIdentity, chatID, messageID, path)
-	if err != nil {
-		return "", fmt.Errorf("bind downloaded media identity: %w", err)
-	}
-	if affected, err := res.RowsAffected(); err != nil {
-		return "", fmt.Errorf("confirm downloaded media identity: %w", err)
-	} else if affected == 0 {
-		row, lookupErr := store.GetOne(db, chatID, messageID, false)
-		if lookupErr != nil || row.MediaPath == nil || *row.MediaPath != path || row.MediaIdentity == nil || *row.MediaIdentity != downloadedIdentity {
-			return "", fmt.Errorf("downloaded media identity could not be bound safely")
-		}
-	}
-	return downloadedIdentity, nil
-}
-
 const downloadedMediaHashWarning = "exact media hash indexing failed; download succeeded and can be indexed later with media-index"
 
 // indexBackfillDownloadedHashes indexes only media freshly downloaded during

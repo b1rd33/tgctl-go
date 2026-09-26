@@ -13,6 +13,7 @@ import (
 
 	"github.com/b1rd33/tgctl-go/internal/media"
 	"github.com/b1rd33/tgctl-go/internal/safety"
+	textutil "github.com/b1rd33/tgctl-go/internal/text"
 )
 
 const (
@@ -84,6 +85,9 @@ func validateAlbumItems(req UploadAlbumReq) ([]validatedAlbumItem, int64, error)
 	}
 	items := make([]validatedAlbumItem, len(req.Items))
 	for i, item := range req.Items {
+		if err := textutil.ValidateEntities(item.Caption, nil, 2048); err != nil {
+			return nil, 0, safety.NewBadArgs("invalid caption at item %d: %s", i, err)
+		}
 		sourcePath := item.Path
 		kind := strings.ToLower(strings.TrimSpace(item.Kind))
 		if kind == "" {
@@ -390,6 +394,13 @@ func extractAlbumResponse(u tg.UpdatesClass, randomIDs []int64, items []validate
 }
 
 func (g *GotdClient) UploadAlbum(ctx context.Context, req UploadAlbumReq) (UploadAlbumResp, error) {
+	caption := req.Caption
+	if len(req.Items) > 0 && req.Items[0].Caption != "" {
+		caption = req.Items[0].Caption
+	}
+	if err := textutil.ValidateEntities(caption, req.Entities, 2048); err != nil {
+		return UploadAlbumResp{}, albumFailure("validation", -1, safety.NewBadArgs("%s", err))
+	}
 	if err := validateOptionalTelegramInt32(req.ReplyTo, "reply_to"); err != nil {
 		return UploadAlbumResp{}, albumFailure("validation", -1, err)
 	}
@@ -472,7 +483,11 @@ func (g *GotdClient) UploadAlbum(ctx context.Context, req UploadAlbumReq) (Uploa
 		if i == 0 && caption == "" {
 			caption = req.Caption
 		}
-		multi = append(multi, tg.InputSingleMedia{Media: reusable, RandomID: id, Message: caption})
+		entry := tg.InputSingleMedia{Media: reusable, RandomID: id, Message: caption}
+		if i == 0 {
+			entry.Entities = textutil.TelegramEntities(req.Entities)
+		}
+		multi = append(multi, entry)
 	}
 	if err := ctx.Err(); err != nil {
 		return UploadAlbumResp{}, albumFailure("cancel", -1, err)

@@ -33,11 +33,12 @@ the same Cobra help used to build `docs/commands.md`.
 
 - **Identity and account state:** `account-limits`, `account-sessions`, `accounts-add`,
   `accounts-list`, `accounts-remove`, `accounts-show`, `accounts-use`,
-  `login`, `me`, `setup`, `terminate-session`.
+  `login`, `logout`, `me`, `setup`, `terminate-session`.
 - **Discovery, cache, and reads:** `backfill`, `backfill-entities`,
   `chats-info`, `chat-members`, `chat-pinned-list`, `contacts`, `discover`,
   `doctor`, `discussion-message`, `get-msg`, `list-msgs`, `replies`, `resolve`,
   `search`, `show`, `stats`, `sync-contacts`, `topic-history`, `topics-list`, `unread`.
+- **Contact maintenance:** `contact-add`, `contact-remove`.
 - **Messages:** `delete-msg`, `edit-msg`, `forward`, `mark-read`, `pin-msg`,
   `react`, `send`, `send-by-username`, `unpin-msg`.
 - **Media:** `media-hash`, `media-index`, `media-find`, `media-similar`, `download-album`, `download-media`, `upload-album`,
@@ -145,6 +146,39 @@ stdout defaults to JSON; use `--human` only for a person at a terminal.
 - **`export`** is local-only: it reads the SQLite snapshot and media root,
   emits JSONL/CSV/HTML, and can create/verify a manifest without contacting
   Telegram. `completion`, `help`, and `version` are local shell utilities.
+
+## Contact maintenance, logout and formatting
+
+- `contact-add <user> --first-name <name>` and `contact-remove <user>`
+  require `--allow-write --confirm <resolved-user-id>`. Resolve a known user
+  first. Adding a contact does not grant a phone-privacy exception unless
+  `--share-phone` is explicit; existing privacy rules still apply. Refresh
+  the contact mirror separately with `sync-contacts` after success.
+- `tg --account work logout --allow-write --confirm work` revokes only that
+  CLI authorization. It removes the session credential after confirmed
+  success and keeps cached history, media and account configuration. Do not
+  run it as a routine test. An uncertain response leaves the credential
+  intact and requires inspection; do not interpret local file removal as
+  remote revocation. Use a new idempotency key after a new login.
+- Text sends, edits, `send-by-username` and all uploads accept `--entities`
+  as a JSON array of `type`, `offset`, `length`, with `url` for `text_url`
+  or `language` for `pre`. Offsets and lengths use UTF-16 units; an emoji
+  outside the BMP uses two units. Supported outgoing types: bold, italic,
+  underline, strike, spoiler, code, pre, blockquote and text_url (http/https).
+  Plain text is the default, with no Markdown/HTML parsing or auto-splitting.
+  An edit replaces formatting; omission of entities clears it. Album
+  formatting belongs to the first caption only.
+- Local caps: 64 KiB input, 4096 UTF-16 units for text, 2048 for captions,
+  and 100 entities. Telegram's account-specific limits may be lower and its
+  response remains authoritative. `get-msg` and live events expose typed
+  entities; `null` means no typed metadata is available in that cached row,
+  while `[]` means a fresh read confirmed no entities. Refresh from Telegram
+  when exact formatting matters. Full Telegram-source raw data retains other incoming entity details; they
+  are outside the supported outgoing entity subset.
+- Hash lookup binds to Telegram media identity. A verified download preserves
+  this binding atomically; deleted or replaced messages are excluded. A
+  successful byte transfer can still report a cache/index warning; never
+  resend a message to repair an index.
 
 ## Setup and login
 

@@ -230,7 +230,12 @@ func persistUpdateEvent(tx *sql.Tx, e ListenEvent) error {
 	if e.ReplyToMsgID != 0 {
 		reply = &e.ReplyToMsgID
 	}
-	return store.UpsertLiveMessage(tx, store.LiveMessage{ChatID: e.ChatID, MessageID: e.MessageID, SenderID: sender, Date: e.Date, Text: &e.Text, IsOutgoing: e.IsOutgoing, ReplyToMsgID: reply, HasMedia: e.MediaType != "", MediaType: &e.MediaType, MediaIdentity: &e.MediaIdentity, GroupedID: e.GroupedID, EditDate: e.EditDate})
+	encoded, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+	raw := string(encoded)
+	return store.UpsertLiveMessage(tx, store.LiveMessage{RawJSON: &raw, ChatID: e.ChatID, MessageID: e.MessageID, SenderID: sender, Date: e.Date, Text: &e.Text, IsOutgoing: e.IsOutgoing, ReplyToMsgID: reply, HasMedia: e.MediaType != "", MediaType: &e.MediaType, MediaIdentity: &e.MediaIdentity, GroupedID: e.GroupedID, EditDate: e.EditDate})
 }
 
 type recoveryAPI struct {

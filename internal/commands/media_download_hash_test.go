@@ -18,6 +18,15 @@ func TestDownloadMediaIndexesSuccessfulDownloadedBytes(t *testing.T) {
 	cfg, fake, dir := setupWriteEnv(t)
 	output := filepath.Join(dir, "media", "1")
 	path := configureDownload(t, cfg, fake, 1, 9, output, false)
+	fake.DownloadResp.MediaIdentity = "document:70"
+	seed, err := store.Connect(filepath.Join(dir, "telegram.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = seed.Exec("INSERT INTO tg_messages(chat_id,message_id,date,has_media,media_type,media_id) VALUES(1,9,'2026-08-01T00:00:09Z',1,'document','document:70')"); err != nil {
+		t.Fatal(err)
+	}
+	seed.Close()
 
 	out, code := runRoot(t, cfg, "download-media", "1", "9", "--allow-write", "--json")
 	if code != 0 || !strings.Contains(out, `"ok":true`) {
@@ -38,6 +47,12 @@ func TestDownloadMediaIndexesSuccessfulDownloadedBytes(t *testing.T) {
 	}
 	if len(matches) != 1 || matches[0].Representation != "downloaded" || matches[0].MessageID != 9 || matches[0].Bytes != size {
 		t.Fatalf("matches=%#v", matches)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if matches, err = store.FindMediaHash(context.Background(), db, digest, 10); err != nil || len(matches) != 1 {
+		t.Fatal("hash lost after deleting file")
 	}
 }
 

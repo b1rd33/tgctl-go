@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Record archive, notification, contact and logout RPCs in the durable request ledger before calling Telegram.
+- Keep verified download paths and Telegram media identities together so original/downloaded hash lookup survives later file removal; reject stale replacements and deletions.
+- Add `contact-add`, `contact-remove` and confirmed current-session `logout`, preserving unrelated sessions, cached history and downloads. Phone sharing is opt-in.
+- Add explicit UTF-16 `--entities` for text, edits and upload captions. Preserve incoming entity types in full reads and live updates; plain edits clear old formatting.
+- Bound stdin and validate formatting locally before transport; include formatting in idempotency fingerprints.
+
 ## v0.7.0 — 2026-09-20
 
 - Add explicit JPEG/PNG visual indexing with `media-hash --visual`, `media-index --visual` and bounded `media-similar` candidate lookup. Report distance, approximation and incomplete scans rather than implying exact matches.
