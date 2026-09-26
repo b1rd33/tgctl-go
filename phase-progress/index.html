@@ -452,6 +452,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../update-consumers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Update consumers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../reliability-roadmap/" class="md-nav__link">
         
   
@@ -574,6 +601,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#durable-consumer-acknowledgement-2026-09-26-unreleased" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Durable consumer acknowledgement (2026-09-26, unreleased)
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -642,7 +680,7 @@ acceptance.</p>
 <td>5. Add everyday account management</td>
 <td>implemented (offline; selected live checks)</td>
 <td>Archive/mute plus contact add/remove, current-session logout and explicit text/caption entities; durable ledger and media-identity regressions</td>
-<td><code>e39fbd4</code>, <code>b63deec</code>, current branch</td>
+<td><code>e39fbd4</code>, <code>b63deec</code>, <code>f441896</code></td>
 <td>Live formatted text/media passed; contact/logout, archive/mute and rights transitions remain fixture-dependent</td>
 </tr>
 <tr>
@@ -703,6 +741,17 @@ linked-discussion tests still need disposable fixtures; channel sponsored-messag
 support remains an unresolved A release-scope gate. The separate customer-service
 agent research must establish permitted AI processing scope as well as technical
 feasibility. No unattended customer replies are authorized by these CLI tests.</p>
+<h2 id="durable-consumer-acknowledgement-2026-09-26-unreleased">Durable consumer acknowledgement (2026-09-26, unreleased)<a class="headerlink" href="#durable-consumer-acknowledgement-2026-09-26-unreleased" title="Permanent link">&para;</a></h2>
+<p>PR #15 was merged as <code>f441896</code> after CI and a full local race pass. The merged
+binary passed the bounded Saved Messages text workflow and cleanup.</p>
+<p>The next priority-A increment adds <code>listen --once --manual-ack</code>, <code>events-list</code>
+and receipt-bound <code>events-ack</code>. It closes the gap between successful stdout
+output and a consumer committing its own inbox, using the existing outbox.
+Replaying a persisted event no longer reapplies old state over newer cached
+updates. See <a href="../update-consumers/">consumer contract and tests</a>. This does not
+provide multi-consumer subscriptions, a Telegram daemon or customer automation.
+Fixture-dependent live gates and the sponsored-message scope question above
+remain open; optional phase 6 features remain deferred.</p>
 
 
 

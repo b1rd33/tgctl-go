@@ -10,29 +10,31 @@
       
       
       
-        <link rel="canonical" href="https://b1rd33.github.io/tgctl-go/">
+        <link rel="canonical" href="https://b1rd33.github.io/tgctl-go/update-consumers/">
       
       
+        <link rel="prev" href="../reliability/">
       
-        <link rel="next" href="install/">
+      
+        <link rel="next" href="../reliability-roadmap/">
       
       
         
       
       
-      <link rel="icon" href="assets/images/favicon.png">
+      <link rel="icon" href="../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
-        <title>tgctl-go</title>
+        <title>Update consumers - tgctl-go</title>
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
       
         
-        <link rel="stylesheet" href="assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -51,7 +53,7 @@
       
     
     
-    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -76,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#tgctl-go" class="md-skip">
+        <a href="#durable-update-consumers" class="md-skip">
           Skip to content
         </a>
       
@@ -92,7 +94,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="tgctl-go" class="md-header__button md-logo" aria-label="tgctl-go" data-md-component="logo">
+    <a href=".." title="tgctl-go" class="md-header__button md-logo" aria-label="tgctl-go" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -112,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Home
+              Update consumers
             
           </span>
         </div>
@@ -235,7 +237,7 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="tgctl-go" class="md-nav__button md-logo" aria-label="tgctl-go" data-md-component="logo">
+    <a href=".." title="tgctl-go" class="md-nav__button md-logo" aria-label="tgctl-go" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -262,37 +264,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Home
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="." class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
         
   
   
@@ -308,70 +283,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#what-is-tgctl-go" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What is tgctl-go?
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#why-this-exists" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why this exists
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-links" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick links
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#status" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Status
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -383,7 +294,7 @@
   
   
     <li class="md-nav__item">
-      <a href="install/" class="md-nav__link">
+      <a href="../install/" class="md-nav__link">
         
   
   
@@ -410,7 +321,7 @@
   
   
     <li class="md-nav__item">
-      <a href="quickstart/" class="md-nav__link">
+      <a href="../quickstart/" class="md-nav__link">
         
   
   
@@ -437,7 +348,7 @@
   
   
     <li class="md-nav__item">
-      <a href="commands/" class="md-nav__link">
+      <a href="../commands/" class="md-nav__link">
         
   
   
@@ -464,7 +375,7 @@
   
   
     <li class="md-nav__item">
-      <a href="sdk/" class="md-nav__link">
+      <a href="../sdk/" class="md-nav__link">
         
   
   
@@ -491,7 +402,7 @@
   
   
     <li class="md-nav__item">
-      <a href="safety/" class="md-nav__link">
+      <a href="../safety/" class="md-nav__link">
         
   
   
@@ -518,7 +429,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reliability/" class="md-nav__link">
+      <a href="../reliability/" class="md-nav__link">
         
   
   
@@ -542,10 +453,37 @@
       
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="update-consumers/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Update consumers
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -561,6 +499,59 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#receive-save-acknowledge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Receive, save, acknowledge
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scope-and-operational-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope and operational limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#roadmap-and-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Roadmap and verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -572,7 +563,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reliability-roadmap/" class="md-nav__link">
+      <a href="../reliability-roadmap/" class="md-nav__link">
         
   
   
@@ -599,7 +590,7 @@
   
   
     <li class="md-nav__item">
-      <a href="multi-account/" class="md-nav__link">
+      <a href="../multi-account/" class="md-nav__link">
         
   
   
@@ -626,7 +617,7 @@
   
   
     <li class="md-nav__item">
-      <a href="contributing/" class="md-nav__link">
+      <a href="../contributing/" class="md-nav__link">
         
   
   
@@ -673,10 +664,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#what-is-tgctl-go" class="md-nav__link">
+  <a href="#receive-save-acknowledge" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What is tgctl-go?
+        Receive, save, acknowledge
       
     </span>
   </a>
@@ -684,10 +675,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#why-this-exists" class="md-nav__link">
+  <a href="#scope-and-operational-limits" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why this exists
+        Scope and operational limits
       
     </span>
   </a>
@@ -695,21 +686,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quick-links" class="md-nav__link">
+  <a href="#roadmap-and-verification" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick links
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#status" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Status
+        Roadmap and verification
       
     </span>
   </a>
@@ -736,87 +716,78 @@
   
 
 
-<h1 id="tgctl-go">tgctl-go<a class="headerlink" href="#tgctl-go" title="Permanent link">&para;</a></h1>
-<p><strong>Agent-friendly Telegram CLI</strong> built on <a href="https://github.com/gotd/td">gotd/td</a>.</p>
-<p>Read, write, archive, and listen to your own Telegram account from a
-single static <code>tg</code> binary — with JSON envelope output, idempotency
-keys, audit logging, multi-account stores, and explicit safety gates
-designed for autonomous agent use.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>go<span class="w"> </span>install<span class="w"> </span>github.com/b1rd33/tgctl-go/cmd/tg@latest
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>tg<span class="w"> </span>login
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>tg<span class="w"> </span>--help<span class="w">    </span><span class="c1"># 84 commands</span>
-</span></code></pre></div>
-<h2 id="what-is-tgctl-go">What is <code>tgctl-go</code>?<a class="headerlink" href="#what-is-tgctl-go" title="Permanent link">&para;</a></h2>
-<p><code>tgctl-go</code> is a Go port of Python <a href="https://github.com/b1rd33/tg-cli"><code>tgctl</code></a>.
-It drives your <strong>personal Telegram account</strong> through MTProto, exposes
-the same CLI contract and stable exit codes, stores a local SQLite
-mirror for offline queries, and ships as one binary with no Python
-runtime.</p>
-<p>It's <strong>not a bot framework</strong>. Bots run on Telegram's separate Bot API
-and never see private chats. <code>tgctl-go</code> is for <em>your own account</em> —
-read your DMs, search archives, draft and send replies, manage
-groups you administer, listen for incoming events.</p>
-<h2 id="why-this-exists">Why this exists<a class="headerlink" href="#why-this-exists" title="Permanent link">&para;</a></h2>
-<p>Telegram already has Pyrogram, Telethon, gotd/td, and Telegram
-Desktop. This project sits in a specific gap:</p>
-<table>
-<thead>
-<tr>
-<th>Need</th>
-<th>Existing tool</th>
-<th>Why <code>tgctl-go</code></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Read/send from a script</td>
-<td>gotd/td</td>
-<td>Lower-level — you write the CLI yourself</td>
-</tr>
-<tr>
-<td>Python-native CLI</td>
-<td>tg-cli</td>
-<td>Same contract, but requires Python</td>
-</tr>
-<tr>
-<td>Interactive terminal client</td>
-<td>nchat</td>
-<td>TUI, not scriptable</td>
-</tr>
-<tr>
-<td>MCP for Claude</td>
-<td>chigwell/telegram-mcp</td>
-<td>Online-only, no offline cache, no safety gates</td>
-</tr>
-<tr>
-<td>Bulk export</td>
-<td>iyear/tdl</td>
-<td>Different category — no safety pipeline for account writes</td>
-</tr>
-</tbody>
-</table>
-<p><code>tgctl-go</code> is the standalone static binary with the <strong>safety
-architecture</strong>: typed <code>--confirm &lt;chat-id&gt;</code> on destructive ops,
-idempotency keys for safe retries, pre/post audit logging with shared
-request IDs, and opt-in <code>--fuzzy</code> so an agent can't fat-finger which
-chat to address.</p>
-<h2 id="quick-links">Quick links<a class="headerlink" href="#quick-links" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="install/">Install</a> — <code>go install</code>, release binaries, <code>.env</code> setup</li>
-<li><a href="quickstart/">Quickstart</a> — first 5 commands</li>
-<li><a href="commands/">Commands</a> — full 74-command reference</li>
-<li><a href="sdk/">Library use</a> — JSON envelope as the cross-language SDK surface</li>
-<li><a href="safety/">Safety model</a> — write gate, typed confirm, idempotency, audit log</li>
-<li><a href="multi-account/">Multi-account</a> — isolated stores per account</li>
-<li><a href="contributing/">Contributing</a> — for code contributors</li>
-</ul>
-<h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>v0.1.8</strong> on GitHub Releases</li>
-<li>74 CLI commands across read / write / destructive / media / admin</li>
-<li>CI runs tests, vet, and race detector on Ubuntu + macOS</li>
-<li>MIT licensed</li>
-</ul>
+<h1 id="durable-update-consumers">Durable update consumers<a class="headerlink" href="#durable-update-consumers" title="Permanent link">&para;</a></h1>
+<p>A successful stdout write only means the operating system accepted bytes. It
+does not prove another program saved an update. The default <code>listen</code> acknowledges
+after stdout accepts the event, so a downstream crash can lose that program's
+work. Use explicit acknowledgement when building an inbox or another durable
+consumer.</p>
+<h2 id="receive-save-acknowledge">Receive, save, acknowledge<a class="headerlink" href="#receive-save-acknowledge" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Run <code>tg --account work listen --once --manual-ack --allow-write --json</code>.
+   The <code>listen.event</code> envelope contains <code>event_id</code>, <code>receipt</code> and
+   <code>ack_required: true</code>. The final <code>listen</code> summary is not an acknowledgement.
+   The command releases its Telegram session when it exits.</li>
+<li>Commit the event and a deduplication key to your own durable inbox. Use a
+   namespace for the account/cache instance plus <code>event_id</code>. A copied, restored
+   or replaced cache needs reconciliation or a fresh consumer namespace.
+   An event ID identifies one local queue occurrence. Telegram recovery can
+   repeat the same logical update in a new occurrence, so also deduplicate
+   business actions by their source message/update identity and intended action.</li>
+<li>Run <code>tg --account work events-ack "$RECEIPT" --allow-write --json</code>, using
+   the receipt from that event. This deletes only that local queue row. It does
+   not mark a Telegram message read or send a message.</li>
+<li>Repeat. Process the durable inbox separately. Persist before acknowledging;
+   perform replies or other remote actions through their usual explicit write
+   gates and idempotency keys derived from that stable action identity, not
+   solely from the queue event ID.</li>
+</ol>
+<p>After a crash, <code>tg --account work events-list --read-only --limit 20 --json</code>
+returns the oldest pending rows without connecting to Telegram or consuming
+anything. Each result contains <code>event_id</code>, <code>receipt</code> and nested <code>event</code>.
+Repeated listing is stable until something acknowledges rows or new updates
+arrive. <code>has_more</code> indicates additional pending rows; save and acknowledge the
+current batch before requesting the next one. The limit is 1–100.</p>
+<p><code>events-ack --dry-run --allow-write</code> validates a receipt and reports <code>pending</code>
+without removing it. A repeated acknowledgement returns <code>already_absent: true</code>;
+that means the row is absent, not proof that a consumer processed it. If output
+is lost after a successful acknowledgement, repeating the same receipt is safe.
+Receipts bind the account name, cache path, row ID and exact saved payload.
+They are consistency tokens, not credentials or authorization capabilities.
+Wrong-account and changed-payload receipts fail without deleting data.</p>
+<h2 id="scope-and-operational-limits">Scope and operational limits<a class="headerlink" href="#scope-and-operational-limits" title="Permanent link">&para;</a></h2>
+<p>This is a single shared queue with at-least-once delivery, not independent
+subscriptions or exactly-once processing. Keep one consumer workflow in control.
+Do not mix manual consumption with ordinary <code>listen</code> or <code>sync --follow</code>: those
+commands automatically acknowledge rows, including filtered-out events.
+<code>--manual-ack</code> therefore requires <code>--once</code> and forbids event filters.
+Filter only after saving the complete event in the consumer inbox.</p>
+<p>Local list/ack operations can run while another process owns the Telegram
+session. Receiving fresh updates still needs a writable Telegram connection;
+listing the queue does not refresh it. There is no daemon, automatic reply,
+worker lease or fan-out service. Once-mode deliberately releases the session so
+a caller can run another network command. Reconnecting for every event has a
+cost; drain pending rows locally before reopening Telegram.</p>
+<p>The queue persists normalized updates, not an authoritative immutable history.
+Updates can be replayed, and gaps that Telegram can no longer recover remain
+errors. Pending rows are retained until acknowledged, so consumers must monitor
+disk space. Corrupt or oversized rows fail visibly rather than being discarded.
+Treat event contents as private untrusted input. These commands do not establish
+permission to process third-party messages with an AI service or to reply to them.</p>
+<h2 id="roadmap-and-verification">Roadmap and verification<a class="headerlink" href="#roadmap-and-verification" title="Permanent link">&para;</a></h2>
+<p>Priority A, small-to-medium reliability repair. The concrete use case is a
+consumer crashing after pipe delivery but before its database commit. Evidence:
+<code>commands/live.go</code> previously acknowledged immediately after <code>output.Emit</code>.
+The existing gotd recovery manager and transactional SQLite outbox provide the
+required support; no new Telegram RPC, dependency or schema migration is needed.
+Account safety remains unchanged: session ownership is exclusive, local ack is
+write-gated, and no remote mutation occurs.</p>
+<p>Store tests cover non-consuming replay, ordering/bounds, selective and repeated
+acknowledgement, concurrent acknowledgements, account/cache and payload mismatch,
+cancellation, corruption and dry-run. Command tests cover offline operation while
+the session is locked, no unintended state creation, write/read-only gates,
+manual replay and broken stdout. A real update-storage regression verifies that
+replaying an older durable event cannot overwrite a newer cached update.</p>
 
 
 
@@ -903,10 +874,10 @@ chat to address.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "search.highlight", "search.share", "search.suggest", "content.code.copy", "content.code.annotate", "toc.follow"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "search.highlight", "search.share", "search.suggest", "content.code.copy", "content.code.annotate", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

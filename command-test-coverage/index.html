@@ -452,6 +452,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../update-consumers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Update consumers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../reliability-roadmap/" class="md-nav__link">
         
   
@@ -833,6 +860,18 @@ no private Telegram transcript is stored in this repository.</p>
 <td>Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only</td>
 </tr>
 <tr>
+<td><code>events-ack</code></td>
+<td><code>internal/commands/events_test.go</code>, <code>internal/store/events_test.go</code></td>
+<td><a href="../verification-2026-09-26/">preview only</a></td>
+<td>Offline local queue write: exact receipt, dry-run, account isolation, repeated and concurrent acknowledgement</td>
+</tr>
+<tr>
+<td><code>events-list</code></td>
+<td>same event tests</td>
+<td><a href="../verification-2026-09-26/">pending replay check</a></td>
+<td>Non-consuming bounded replay while session is locked; no Telegram refresh</td>
+</tr>
+<tr>
 <td><code>export</code></td>
 <td><code>internal/commands/export_test.go</code> JSONL/CSV/HTML, overwrite, manifest tests</td>
 <td>unverified</td>
@@ -924,9 +963,9 @@ no private Telegram transcript is stored in this repository.</p>
 </tr>
 <tr>
 <td><code>listen</code></td>
-<td><code>internal/commands/live_test.go</code> event, filters, output failure; update storage tests</td>
-<td>unverified</td>
-<td>Controlled live event not run</td>
+<td><code>internal/commands/live_test.go</code>, <code>events_test.go</code> event/filter/output failure and manual replay; update storage regressions</td>
+<td><a href="../verification-2026-09-26/">process restart replay</a></td>
+<td>Existing pending event retained; new incoming event/gap recovery not verified live</td>
 </tr>
 <tr>
 <td><code>login</code></td>

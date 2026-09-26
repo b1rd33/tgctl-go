@@ -16,7 +16,7 @@
         <link rel="prev" href="../safety/">
       
       
-        <link rel="next" href="../reliability-roadmap/">
+        <link rel="next" href="../update-consumers/">
       
       
         
@@ -580,6 +580,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../update-consumers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Update consumers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../reliability-roadmap/" class="md-nav__link">
         
   
@@ -798,7 +825,7 @@
 <p>Deletion verifies every message's authoritative peer before sending a destructive RPC. Channel-local deletion is refused because the API affects everyone. The reported deleted count counts verified requested messages; <code>pts_count</code> is separate protocol metadata. Dry-run is a local preview: ownership is verified remotely only during execution.</p>
 <h2 id="updates-unread-and-history">Updates, unread and history<a class="headerlink" href="#updates-unread-and-history" title="Permanent link">&para;</a></h2>
 <p>Writable clients use gotd's recovery manager with durable pts/qts/date/seq and channel state. A persistence failure closes a checkpoint barrier; gotd cannot advance over failed application. Unsupported too-long gaps fail explicitly. A first connection establishes a protocol baseline, not a complete historical archive.</p>
-<p>Normalized full/short/combined updates preserve peer kind, outgoing/reply/edit/media metadata and common versus channel deletion scope. Persistent outbox events have <code>event_id</code>. Acknowledgment follows successful consumption; a crash between output and acknowledgment can replay the event. Consumers should deduplicate event IDs. <code>--once</code> acknowledges its successful event before exiting. The outbox is durable and disk-backed, not an unbounded in-memory queue; disk failure stops recovery.</p>
+<p>Normalized full/short/combined updates preserve peer kind, outgoing/reply/edit/media metadata and common versus channel deletion scope. Persistent outbox events have <code>event_id</code>. Default acknowledgement follows successful stdout output; this does not prove a downstream program saved the event. A crash before acknowledgement can replay it. For durable consumers, <code>listen --once --manual-ack</code> retains the row until an explicit <code>events-ack</code>; <code>events-list</code> replays pending rows offline. See <a href="../update-consumers/">durable update consumers</a> for the single-consumer contract, deduplication and recovery limits. Ordinary <code>--once</code> still acknowledges automatically. The outbox is durable and disk-backed, not an unbounded in-memory queue; disk failure stops recovery.</p>
 <p>Deleted messages remain tombstoned across stale backfill. Newer edits win over older history, and changed media invalidates old file associations. Unsupported expiring messages/media are skipped or refused rather than archived; expiry-aware storage/export is deliberately unsupported.</p>
 <p><code>discover</code> returns actual dialogs, including archive pagination, not auxiliary message senders. Results expose read markers and source/coverage metadata. <code>unread</code> means cached incoming messages above known dialog read markers; missing history, stale markers and topic-specific read state mean this is not a complete server inbox or topic-unread view. Refresh with discover/sync. <code>chat-pinned-list</code> searches pinned messages in its selected chat and reports its 100-result bound. <code>chats-info</code> fetches current peer-dialog details.</p>
 <p><code>show</code>, <code>search</code>, and <code>list-msgs</code> return cache source/coverage and <code>next_cursor</code>; reuse it as <code>--cursor</code> with the same filters/order. Date plus message ID breaks timestamp ties. A full page may provide a cursor whose following page is empty. These reads are not a frozen snapshot across concurrent edits. CLI <code>--limit</code> is bounded at 10000. Backfill/sync report truncation and next history offset separately from protocol checkpoints; partial history work cannot advance the history checkpoint.</p>
