@@ -54,3 +54,20 @@ forum and linked-discussion behavior, owner/admin/member/restricted transitions,
 real reconnect gaps, and server flood/error conditions. No destructive session
 or contact test was run against the working account. There is no claim that the
 whole command matrix or all roadmap release gates have passed.
+
+## Durable consumer acknowledgement follow-up
+
+The candidate on `codex/durable-consumer-ack` passed a live restart test against
+existing pending updates: two separate `listen --once --manual-ack` processes
+returned the same event ID and receipt. Offline `events-list --limit 1` matched
+that receipt; `events-ack --dry-run` reported it pending, and another list proved
+it remained queued. No real pending event was acknowledged or removed, and raw
+payloads/receipts were not printed. This verifies replay across process restarts,
+not arrival of a newly generated incoming message or recovery of a network gap.
+Actual queue deletion, repeat acknowledgement and concurrent acknowledgement
+were verified with isolated synthetic databases.
+
+Full unit and race suites, vet, native/Windows builds, command-reference checks,
+formatting and diff checks passed for this follow-up. The bundled skill documents
+the new consumer contract; the installed skill remains paired with the installed
+release until a matching binary is installed.

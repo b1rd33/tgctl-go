@@ -292,3 +292,41 @@ func TestExpiringUpdatePurgesManagedContentAndCannotResurrect(t *testing.T) {
 		t.Fatal("stale replay reintroduced expiring text")
 	}
 }
+
+func TestDurableReplayDoesNotReapplyCommittedUpdates(t *testing.T) {
+	db := updateTestDB(t)
+	s := newUpdateStorage(db)
+	ctx := context.Background()
+	for _, update := range []tg.UpdateClass{
+		&tg.UpdateNewMessage{Message: &tg.Message{ID: 9, PeerID: &tg.PeerUser{UserID: 7}, Date: 100, Message: "original"}},
+		&tg.UpdateEditMessage{Message: &tg.Message{ID: 9, PeerID: &tg.PeerUser{UserID: 7}, Date: 100, Message: "newer"}},
+	} {
+		if err := s.Handle(ctx, &tg.UpdateShort{Update: update}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	g := &GotdClient{db: db, updateStore: s}
+	e, err := g.ListenOnce(ctx)
+	if err != nil || e.Text != "original" || e.EventID == 0 {
+		t.Fatal("missing queued original", e, err)
+	}
+	if err := ApplyListenEvent(db, e); err != nil {
+		t.Fatal(err)
+	}
+	var text string
+	if err := db.QueryRow("SELECT text FROM tg_messages WHERE chat_id=7 AND message_id=9").Scan(&text); err != nil || text != "newer" {
+		t.Fatal("replay overwrote latest cache", text, err)
+	}
+	// Only explicit acknowledgement advances delivery to the later edit.
+	repeated, err := g.ListenOnce(ctx)
+	if err != nil || repeated.EventID != e.EventID {
+		t.Fatal("unacknowledged replay missing", err)
+	}
+	if err := g.AcknowledgeEvent(ctx, e.EventID); err != nil {
+		t.Fatal(err)
+	}
+	next, err := g.ListenOnce(ctx)
+	if err != nil || next.Text != "newer" || next.EventID <= e.EventID {
+		t.Fatal("later edit missing", err)
+	}
+}

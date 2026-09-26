@@ -271,6 +271,11 @@ func (a recoveryAPI) UpdatesGetChannelDifference(ctx context.Context, r *tg.Upda
 }
 
 func ApplyListenEvent(db *sql.DB, event ListenEvent) error {
+	// Durable events were applied in the same transaction that queued them.
+	// Reapplying an older pending event could undo a newer edit or read marker.
+	if event.EventID != 0 {
+		return nil
+	}
 	tx, err := db.Begin()
 	if err != nil {
 		return err

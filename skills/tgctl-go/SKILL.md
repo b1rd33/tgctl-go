@@ -43,7 +43,7 @@ the same Cobra help used to build `docs/commands.md`.
   `react`, `send`, `send-by-username`, `unpin-msg`.
 - **Media:** `media-hash`, `media-index`, `media-find`, `media-similar`, `download-album`, `download-media`, `upload-album`,
   `upload-document`, `upload-photo`, `upload-video`, `upload-voice`.
-- **Synchronization and archives:** `export`, `listen`, `sync`, `operations-list`, `db-backup`, `db-restore`.
+- **Synchronization and archives:** `export`, `listen`, `events-list`, `events-ack`, `sync`, `operations-list`, `db-backup`, `db-restore`.
 - **Dialog folders:** `folder-add-chat`, `folder-create`, `folder-delete`,
   `folder-edit`, `folder-remove-chat`, `folder-show`, `folders-list`,
   `folders-reorder`, `archive`, `unarchive`.
@@ -142,7 +142,18 @@ stdout defaults to JSON; use `--human` only for a person at a terminal.
   idempotency gates and preserve preview, sound, silent, and story settings.
 - **`listen` and `sync`** are long-running/event workflows. `sync` persists
   checkpoints and can use `--follow --once`; `listen` streams update envelopes
-  and should be bounded with `--once` in deterministic tests.
+  and should be bounded with `--once` in deterministic tests. Ordinary listen
+  acknowledges once stdout accepts the event; that is insufficient for a durable
+  downstream inbox. Use `listen --once --manual-ack --allow-write`, persist the
+  event and deduplication key, then `events-ack <receipt> --allow-write`.
+  `events-list --read-only --limit 20` inspects/replays pending rows without
+  Telegram or consuming them. Manual mode forbids filters. The queue is shared:
+  do not concurrently use auto-ack listen or sync-follow. Receipts bind the
+  account/cache/row/payload; repeated ack reports absence, not proof of processing.
+  Queue IDs identify local occurrences; recovery may repeat a logical update
+  with a new ID. Deduplicate business actions by source message/update and
+  intended action, and derive outgoing idempotency keys from that stable identity.
+  No customer reply or AI-processing authorization follows from event access.
 - **`export`** is local-only: it reads the SQLite snapshot and media root,
   emits JSONL/CSV/HTML, and can create/verify a manifest without contacting
   Telegram. `completion`, `help`, and `version` are local shell utilities.
