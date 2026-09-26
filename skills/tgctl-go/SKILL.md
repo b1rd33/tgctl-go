@@ -150,6 +150,9 @@ stdout defaults to JSON; use `--human` only for a person at a terminal.
   Telegram or consuming them. Manual mode forbids filters. The queue is shared:
   do not concurrently use auto-ack listen or sync-follow. Receipts bind the
   account/cache/row/payload; repeated ack reports absence, not proof of processing.
+  Queue IDs identify local occurrences; recovery may repeat a logical update
+  with a new ID. Deduplicate business actions by source message/update and
+  intended action, and derive outgoing idempotency keys from that stable identity.
   No customer reply or AI-processing authorization follows from event access.
 - **`export`** is local-only: it reads the SQLite snapshot and media root,
   emits JSONL/CSV/HTML, and can create/verify a manifest without contacting

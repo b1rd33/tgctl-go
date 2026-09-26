@@ -15,12 +15,16 @@ consumer.
 2. Commit the event and a deduplication key to your own durable inbox. Use a
    namespace for the account/cache instance plus `event_id`. A copied, restored
    or replaced cache needs reconciliation or a fresh consumer namespace.
+   An event ID identifies one local queue occurrence. Telegram recovery can
+   repeat the same logical update in a new occurrence, so also deduplicate
+   business actions by their source message/update identity and intended action.
 3. Run `tg --account work events-ack "$RECEIPT" --allow-write --json`, using
    the receipt from that event. This deletes only that local queue row. It does
    not mark a Telegram message read or send a message.
 4. Repeat. Process the durable inbox separately. Persist before acknowledging;
    perform replies or other remote actions through their usual explicit write
-   gates and idempotency keys.
+   gates and idempotency keys derived from that stable action identity, not
+   solely from the queue event ID.
 
 After a crash, `tg --account work events-list --read-only --limit 20 --json`
 returns the oldest pending rows without connecting to Telegram or consuming
