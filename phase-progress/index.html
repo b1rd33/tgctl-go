@@ -612,6 +612,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#expiring-update-delivery-repair-2026-09-26-unreleased" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Expiring update delivery repair (2026-09-26, unreleased)
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -752,6 +763,17 @@ updates. See <a href="../update-consumers/">consumer contract and tests</a>. Thi
 provide multi-consumer subscriptions, a Telegram daemon or customer automation.
 Fixture-dependent live gates and the sponsored-message scope question above
 remain open; optional phase 6 features remain deferred.</p>
+<h2 id="expiring-update-delivery-repair-2026-09-26-unreleased">Expiring update delivery repair (2026-09-26, unreleased)<a class="headerlink" href="#expiring-update-delivery-repair-2026-09-26-unreleased" title="Permanent link">&para;</a></h2>
+<p>A regression reproduced old message/edit payloads remaining in the pending
+outbox after an expiring update cleared the message cache. The repair purges
+pending payloads for the complete peer/message identity in the expiry transaction,
+keeps a content-free notice, and prevents stale recovery updates from requeuing
+content rejected by a tombstone. No schema conversion or dependency change.</p>
+<p><code>internal/client/update_privacy_test.go</code> covers users, basic groups, channels,
+media TTL, unchanged unrelated receipts, stale full/short update replay, consumer
+restart, malformed unrelated rows and rollback/checkpoint failure barriers.
+Expiry mutations are tested with synthetic offline fixtures, not private live
+messages. Already delivered/exported copies remain the consumer's responsibility.</p>
 
 
 
