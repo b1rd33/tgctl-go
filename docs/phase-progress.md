@@ -41,7 +41,7 @@ media, and lookup after file removal. Automatic transfers continue to use exact
 SHA-256 only. No live transfer tests were run for this release.
 No legacy conversions or cache version changes were added.
 
-## Remaining phase 5 increment (2026-09-26, unreleased)
+## Remaining phase 5 increment (v0.8.0)
 
 Implemented contact add/remove, current-session logout and explicit formatting
 for messages, edits and captions. Tests cover write/read-only/confirmation and
@@ -66,7 +66,7 @@ support remains an unresolved A release-scope gate. The separate customer-servic
 agent research must establish permitted AI processing scope as well as technical
 feasibility. No unattended customer replies are authorized by these CLI tests.
 
-## Durable consumer acknowledgement (2026-09-26, unreleased)
+## Durable consumer acknowledgement (v0.8.0)
 
 PR #15 was merged as `f441896` after CI and a full local race pass. The merged
 binary passed the bounded Saved Messages text workflow and cleanup.
@@ -80,7 +80,7 @@ provide multi-consumer subscriptions, a Telegram daemon or customer automation.
 Fixture-dependent live gates and the sponsored-message scope question above
 remain open; optional phase 6 features remain deferred.
 
-## Expiring update delivery repair (2026-09-26, unreleased)
+## Expiring update delivery repair (v0.8.0)
 
 A regression reproduced old message/edit payloads remaining in the pending
 outbox after an expiring update cleared the message cache. The repair purges
@@ -93,3 +93,11 @@ media TTL, unchanged unrelated receipts, stale full/short update replay, consume
 restart, malformed unrelated rows and rollback/checkpoint failure barriers.
 Expiry mutations are tested with synthetic offline fixtures, not private live
 messages. Already delivered/exported copies remain the consumer's responsibility.
+
+## v0.8.0 release scope
+
+This release packages the merged phase 5 account/formatting work and subsequent
+update-delivery repairs. It does not expand channel functionality or declare
+full roadmap acceptance. The open sponsored-display requirement and disposable
+forum/admin fixtures remain tracked above. Selected live checks and synthetic
+failure coverage are kept distinct. No optional phase 6 features are included.
