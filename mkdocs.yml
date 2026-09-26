@@ -75,6 +75,7 @@ nav:
   - Safety model: safety.md
   - Reliability: reliability.md
   - Update consumers: update-consumers.md
+  - Local reader: reader.md
   - Capability roadmap: reliability-roadmap.md
   - Multi-account: multi-account.md
   - Contributing: contributing.md

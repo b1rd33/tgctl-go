@@ -13,7 +13,7 @@ func dialogEntityInfo(users []tg.UserClass, chats []tg.ChatClass) map[int64]Chat
 	out := map[int64]ChatInfo{}
 	for _, u := range users {
 		if v, ok := u.(*tg.User); ok {
-			out[v.ID] = ChatInfo{ID: v.ID, Type: "user", Title: DisplayName(v.FirstName, v.LastName, v.Username, v.ID), Username: v.Username, Source: "telegram"}
+			out[v.ID] = ChatInfo{ID: v.ID, Type: "user", Bot: v.Bot, Title: DisplayName(v.FirstName, v.LastName, v.Username, v.ID), Username: v.Username, Source: "telegram"}
 		}
 	}
 	for _, c := range chats {

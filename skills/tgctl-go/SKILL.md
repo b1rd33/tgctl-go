@@ -61,6 +61,13 @@ the same Cobra help used to build `docs/commands.md`.
   administrator details may be unavailable. Slow-mode next-send time describes
   the authenticated account, even when a different member is selected.
 - **Shell utilities:** `completion`, `help`, `version`.
+- **Human reading surface:** `reader <explicit-chat>` serves one temporary
+  localhost page. It requires explicit `--account` and `--allow-write` for
+  genuine sponsored callbacks; `--read-only` rejects startup. The private URL
+  contains an access token. Never log/share it or automate engagement with real
+  ads. Browser tests use the synthetic fixture in `internal/reader/browser_test.go`.
+  Unsupported required ad content withholds the page. This does not establish
+  sponsored-display coverage for existing headless commands.
 
 ### Universal CLI contract
 
@@ -202,6 +209,14 @@ stdout defaults to JSON; use `--human` only for a person at a terminal.
   resend a message to repair an index.
 
 ## Setup and login
+
+For a human reader, run `tg --account work reader self --allow-write --human`
+and open the private URL yourself. Session locks are released between requests;
+the existing authorized session and account cache must already be initialized.
+Use the page's Refresh button. Close reader, Ctrl-C or the 15-minute default
+timeout stops the server; closing only the tab does not. Ordinary attachments
+remain in Telegram. Never test real advertisement views, clicks or reports
+through automation. The CLI does not mark history read from this surface.
 
 `TG_API_ID` and `TG_API_HASH` are required for both phone and QR login. The
 setup command preserves unrelated `.env` entries, writes mode `0600` on Unix,
@@ -363,6 +378,7 @@ Before changing or releasing the public repository:
 go test ./... -count=1
 go test -race ./... -count=1
 go vet ./...
+node --test internal/reader/logic_test.mjs
 go build ./...
 GOOS=windows GOARCH=amd64 go build ./...
 test -z "$(gofmt -l .)"

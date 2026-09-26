@@ -29,7 +29,7 @@ type writeLedgerInvoker struct {
 
 func isMutation(method string) bool {
 	switch method {
-	case "FoldersEditPeerFoldersRequest", "AccountUpdateNotifySettingsRequest", "ContactsAddContactRequest", "ContactsDeleteContactsRequest", "AuthLogOutRequest":
+	case "FoldersEditPeerFoldersRequest", "AccountUpdateNotifySettingsRequest", "ContactsAddContactRequest", "ContactsDeleteContactsRequest", "AuthLogOutRequest", "MessagesViewSponsoredMessageRequest", "MessagesClickSponsoredMessageRequest", "MessagesReportSponsoredMessageRequest":
 		return true
 	}
 	for _, prefix := range []string{"MessagesSend", "MessagesForward", "MessagesEdit", "MessagesDelete", "MessagesUpdate", "MessagesCreate", "MessagesRead", "MessagesExport", "ChannelsEdit", "ChannelsDelete", "ChannelsLeave", "ChannelsRead", "ContactsBlock", "ContactsUnblock", "AccountResetAuthorization"} {

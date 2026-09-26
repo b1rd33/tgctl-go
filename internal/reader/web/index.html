@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>tgctl reader</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M12 5c-3-2-6-2-9-1v15c3-1 6-1 9 1m0-15c3-2 6-2 9-1v15c-3-1-6-1-9 1V5Z"
+          /></svg
+        >tgctl reader
+      </div>
+      <div class="session">
+        <span>Local session</span><button id="close">Close reader</button>
+      </div>
+    </header>
+    <main>
+      <div class="heading">
+        <div>
+          <h1 id="title">Opening chat…</h1>
+          <p id="subtitle">Connecting to your selected account</p>
+        </div>
+        <nav aria-label="History">
+          <button id="older" disabled>Older messages</button
+          ><button id="refresh" disabled>Refresh</button>
+        </nav>
+      </div>
+      <p id="status" role="status" aria-live="polite">Loading messages…</p>
+      <section id="content" aria-label="Chat history" hidden>
+        <div id="bot-ad"></div>
+        <div id="messages"></div>
+        <div id="latest" class="divider">Latest message</div>
+        <div id="channel-ad"></div>
+        <p class="footnote">Messages are not marked as read.</p>
+      </section>
+    </main>
+    <dialog id="dialog" aria-labelledby="dialog-title">
+      <h2 id="dialog-title"></h2>
+      <div id="dialog-body"></div>
+      <div id="dialog-actions"></div>
+    </dialog>
+  </body>
+</html>

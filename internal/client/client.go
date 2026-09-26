@@ -320,6 +320,7 @@ type SessionRef struct {
 }
 
 type ChatInfo struct {
+	Bot                  bool                 `json:"bot,omitempty"`
 	Gigagroup            bool                 `json:"gigagroup,omitempty"`
 	Source               string               `json:"source,omitempty"`
 	ReadInboxMaxID       int                  `json:"read_inbox_max_id"`

@@ -408,6 +408,7 @@ func Execute() int {
 // the source of truth for per-account paths and also receives accounts-*
 // subcommand calls.
 func RegisterAll(root *cobra.Command, mgr *accounts.Manager, cfg CommandsConfig) {
+	registerReader(root, cfg)
 	registerAuth(root, mgr)
 	registerAccountLimits(root, cfg)
 	registerReadCommands(root, mgr, cfg)

@@ -197,6 +197,8 @@ func parseFlags(help string) []flag {
 
 func exampleFor(name, use string) string {
 	switch name {
+	case "reader":
+		return "tg --account work reader self --allow-write --human"
 	case "login":
 		return "tg login"
 	case "me":

@@ -1,5 +1,43 @@
 # Verification, 26 September 2026
 
+## Local reader follow-up
+
+The `codex/local-reader` candidate passed 1,356 Go tests across 18 packages,
+including the full race suite, plus vet, native/Windows builds, generated
+command-reference checks, repository hygiene, four browser-policy tests and
+the skill validator. The manual browser fixture is skipped in ordinary suites.
+
+Synthetic browser acceptance exercised history and continuation, sponsor-info
+and report dialogs, cancellation of external links, report option round-trips,
+close and fetch-failure states, mobile layout without horizontal overflow,
+PNG avatar/media presentation, audible-video fullscreen behavior, and
+media/fullscreen callback flags. The separate expand control did not produce
+a link click. No callback occurred while a new ad was below the viewport;
+programmatic untrusted clicks were ignored. Bot ads appeared above history
+with a blue Recommended prefix and the avatar on the right. Literal HTML
+remained text, and browser diagnostics showed no application errors. All these
+callbacks went to a synthetic backend, never Telegram.
+
+Fetch-only live acceptance used Saved Messages and Telegram's official
+`SecretAdTestChannel`, with two-message limits. The former returned no ad and
+the latter returned one. A separate read-only identity command succeeded while
+each reader sat idle, verifying release of session ownership between requests.
+The write-operation list was unchanged before and after each fetch. No real
+view, click, report, message send, or read acknowledgement was generated.
+
+The browser plugin's bundled native module failed signature validation; the
+available in-app browser controls were used for synthetic UI verification.
+Reference and rendered screenshots were visually compared for header, reading
+column, typography, dividers, ad placement, controls and responsive layout.
+Screenshots contain only fixture data and are not committed as product assets.
+
+This acceptance does not cover every ad entity/pattern or ordinary attachment
+playback; unsupported required formats withhold the page. It does not close
+the headless-channel display scope question or the separate disposable-account,
+forum, contact/session and permission-transition live gates described below.
+
+## Earlier CLI acceptance
+
 Tests used the existing authorized account, with mutations restricted to
 synthetic messages in Saved Messages. No customers were contacted. Reports
 contain no account IDs, message IDs, captions, hashes, credentials or paths to
