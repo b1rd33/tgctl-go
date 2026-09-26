@@ -3,8 +3,13 @@ module github.com/b1rd33/tgctl-go
 go 1.25.0
 
 require (
+	github.com/gotd/td v0.144.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/sys v0.44.0
+	golang.org/x/term v0.43.0
+	golang.org/x/text v0.37.0
+	modernc.org/sqlite v1.50.0
+	rsc.io/qr v0.2.0
 )
 
 require (
@@ -22,7 +27,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gotd/ige v0.2.2 // indirect
 	github.com/gotd/neo v0.1.5 // indirect
-	github.com/gotd/td v0.144.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
@@ -44,13 +48,9 @@ require (
 	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/term v0.43.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	modernc.org/libc v1.72.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.50.0 // indirect
-	rsc.io/qr v0.2.0 // indirect
 )

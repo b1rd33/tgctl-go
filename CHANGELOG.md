@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.8.0 — 2026-09-26
 
 - Purge pending payloads when an expiring-message update is observed, alongside the cached content. Keep a content-free notice and prevent stale recovery updates from republishing tombstoned messages.
 
@@ -12,6 +12,15 @@
 - Add `contact-add`, `contact-remove` and confirmed current-session `logout`, preserving unrelated sessions, cached history and downloads. Phone sharing is opt-in.
 - Add explicit UTF-16 `--entities` for text, edits and upload captions. Preserve incoming entity types in full reads and live updates; plain edits clear old formatting.
 - Bound stdin and validate formatting locally before transport; include formatting in idempotency fingerprints.
+
+- Correct installation guidance to use the stable configuration directory and remove obsolete doctor flags.
+
+This release packages the merged reliability and account-workflow changes.
+Disposable forum/admin and two-account permission tests remain unverified.
+Sponsored channel/bot display support remains absent and an open scope requirement;
+this is not a claim that the whole roadmap or channel-client requirements are met.
+See [verification](docs/verification-2026-09-26.md) and the
+[phase ledger](docs/phase-progress.md) for test boundaries.
 
 ## v0.7.0 — 2026-09-20
 

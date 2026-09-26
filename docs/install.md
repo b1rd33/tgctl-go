@@ -59,34 +59,28 @@ Telegram requires you to register a personal app once. It's free and takes ~2 mi
 3. Give it any title (e.g. "Personal Archiver"); platform = "Desktop"
 4. Copy the resulting `api_id` (an integer) and `api_hash` (32-char hex)
 
-Put them in a `.env` file in the directory where you'll run `tg`:
-
-The values labeled `api_id` and `api_hash` on
-[my.telegram.org/apps](https://my.telegram.org/apps) become `TG_API_ID`
-and `TG_API_HASH` in `.env`.
+Run the interactive setup command to save them in the stable configuration
+root. The API hash is hidden when entered in a terminal:
 
 ```bash
-cp .env.example .env
+tg setup --human
 ```
 
-```bash
-TG_API_ID=12345678
-TG_API_HASH=abcdef0123456789abcdef0123456789
-```
+By default, the root is `~/Library/Application Support/tgctl` on macOS,
+`~/.config/tgctl` on Linux (or the configured XDG directory), and
+`%AppData%/tgctl` on Windows. Set `TGCTL_HOME` to an absolute path before setup
+and subsequent commands when using a different root. The current working
+directory does not select the account or credential file.
 
-Or set them as shell env vars:
-
-```bash
-export TG_API_ID=12345678
-export TG_API_HASH=abcdef0123456789abcdef0123456789
-```
-
-`tg` reads `.env` from its stable data root. Set `TGCTL_HOME` to an absolute existing installation root, or use the OS user-configuration directory plus `tgctl`. See [reliability](reliability.md). You can also export credentials in your shell profile.
+You can also supply `TG_API_ID` and `TG_API_HASH` through your process environment.
+Keep credentials private; do not put them in source control. See
+[reliability](reliability.md) for account paths and ownership.
 
 ## First login
 
 ```bash
-tg login
+tg --account default login --human
+tg --account default discover --allow-write --json
 ```
 
 You'll be prompted for your phone number, then a code Telegram will
@@ -96,9 +90,9 @@ send you in the Telegram app. After that,
 ## Verify
 
 ```bash
-tg me
-tg doctor
-tg stats
+tg --account default me --read-only --json
+tg --account default doctor --read-only --json
+tg --account default stats --read-only --json
 ```
 
 `tg me` shows your authenticated account info. `tg doctor` checks
@@ -110,31 +104,19 @@ local cache state.
 **`tg: command not found`** — Go did not put the binary on PATH. Check
 `go env GOPATH` and add `$GOPATH/bin` to your shell PATH.
 
-**Auth errors** — run `tg doctor --json` to see exactly which check
-fails. The `--live` flag also pings Telegram to confirm network
-connectivity.
+**Auth errors** — run `tg --account default doctor --read-only --json` for
+local configuration/session/cache diagnostics. Use `me --read-only --json` to
+check the existing live authorization. Read-only live commands need an existing
+ownership sidecar and account identity; after a new login, initialize the cache
+with `tg --account default discover --allow-write --json`.
 
-**`TG_API_ID and TG_API_HASH must be set`** — you are probably running
-`tg` from a directory that does not contain `.env`. Either `cd` back to
-the directory with `.env`, or export both variables:
+**`TG_API_ID and TG_API_HASH must be set`** — run `tg setup --human` for the
+same stable root used by your commands, or provide both process environment
+variables. Changing directories does not make the CLI load another `.env`.
 
-```bash
-cd "$HOME/Projects/tgctl-go"
-tg --account test login
-```
-
-or:
-
-```bash
-export TG_API_ID=12345678
-export TG_API_HASH=abcdef0123456789abcdef0123456789
-tg --account test login
-```
-
-**Account flagged or limited** — message `@SpamBot` from your Telegram
-client. New accounts and accounts running automation against many
-strangers are at higher risk; established personal accounts running
-tgctl-go for personal use are at very low risk.
+**Account flagged or limited** — use Telegram's official client to inspect the
+restriction and contact `@SpamBot` if appropriate. Respect reported waits and
+restrictions; an established account is not a guarantee against server limits.
 
 ## See also
 

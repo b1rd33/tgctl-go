@@ -4,7 +4,7 @@ project_name: tgctl-go
 
 before:
   hooks:
-    - go mod tidy
+    - go mod tidy -diff
 
 builds:
   - id: tg
@@ -43,7 +43,7 @@ brews:
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: "https://github.com/b1rd33/tgctl-go"
-    description: "Go port of Python tgctl: single static `tg` binary for Telegram"
+    description: "Account-scoped Telegram CLI with local search and media tools"
     license: MIT
     install: |
       bin.install "tg"
