@@ -11,7 +11,7 @@ acceptance.
 | 2. Make account and target selection explicit | implemented (offline evidence) | `self`/`me`, account-bound resolution and isolation, known/unknown Premium metadata, app-config limits, stable setup path, selection/setup/dry-run edge-case tests | `81beb22` | Disposable live account read and Premium comparison; server-side username reassignment and limit drift remain live-only |
 | 3. Fetch messages directly from Telegram | implemented (offline evidence) | Telegram source for history/search/get, typed bounded cursors, filters, deleted placeholders, adapter propagation, empty/exact-full/short pagination, overlap termination, RPC/cancellation no-write, and malformed/mismatched cursor tests | `81beb22`, `ba9b0ed`, `564d275` | Redacted live reads and stable-data acceptance against Telegram remain unrun |
 | 4. Retrieve conversation context correctly | implemented (offline core) | Replies, explicit forum topic history, topic/root-bound cursors, missing/deleted-topic rejection, linked discussion lookup without joining, distinct discussion peers, advisory permissions with slow-mode metadata | `81beb22`, `9a79663`, `cf1b183`, `ba9b0ed` | Live fixture only for real nested replies/topic pagination, linked-discussion membership denial, and owner/admin/member/restricted server-rights transitions |
-| 5. Add everyday account management | implemented (offline; selected live checks) | Archive/mute plus contact add/remove, current-session logout and explicit text/caption entities; durable ledger and media-identity regressions | `e39fbd4`, `b63deec`, current branch | Live formatted text/media passed; contact/logout, archive/mute and rights transitions remain fixture-dependent |
+| 5. Add everyday account management | implemented (offline; selected live checks) | Archive/mute plus contact add/remove, current-session logout and explicit text/caption entities; durable ledger and media-identity regressions | `e39fbd4`, `b63deec`, `f441896` | Live formatted text/media passed; contact/logout, archive/mute and rights transitions remain fixture-dependent |
 | 6. Optional Premium and convenience features | not started (outside current handoff) | Original plan's separate optional proposals: voice transcription, translation, Saved Messages tags, custom emoji reactions, drafts/scheduled messages, and transfer progress | — | Each feature requires its own proposal, capability/privacy tests, and acceptance gate |
 | Documentation and release hygiene | complete | Generated command docs, skill reference, coverage matrix, public-hygiene checks | `e10f990` | None for this implementation handoff |
 
@@ -65,3 +65,17 @@ linked-discussion tests still need disposable fixtures; channel sponsored-messag
 support remains an unresolved A release-scope gate. The separate customer-service
 agent research must establish permitted AI processing scope as well as technical
 feasibility. No unattended customer replies are authorized by these CLI tests.
+
+## Durable consumer acknowledgement (2026-09-26, unreleased)
+
+PR #15 was merged as `f441896` after CI and a full local race pass. The merged
+binary passed the bounded Saved Messages text workflow and cleanup.
+
+The next priority-A increment adds `listen --once --manual-ack`, `events-list`
+and receipt-bound `events-ack`. It closes the gap between successful stdout
+output and a consumer committing its own inbox, using the existing outbox.
+Replaying a persisted event no longer reapplies old state over newer cached
+updates. See [consumer contract and tests](update-consumers.md). This does not
+provide multi-consumer subscriptions, a Telegram daemon or customer automation.
+Fixture-dependent live gates and the sponsored-message scope question above
+remain open; optional phase 6 features remain deferred.

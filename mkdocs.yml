@@ -74,6 +74,7 @@ nav:
   - Library use: sdk.md
   - Safety model: safety.md
   - Reliability: reliability.md
+  - Update consumers: update-consumers.md
   - Capability roadmap: reliability-roadmap.md
   - Multi-account: multi-account.md
   - Contributing: contributing.md

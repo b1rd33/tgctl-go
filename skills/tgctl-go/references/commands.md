@@ -1,6 +1,6 @@
 # Commands
 
-`tg --help` shows 93 commands. This page is generated from Cobra help output.
+`tg --help` shows 95 commands. This page is generated from Cobra help output.
 
 Every command supports the global flags shown by `tg --help`: `--account`, `--full`, `--json`, `--human`, `--lock-wait`, `--read-only`, and `--version` where applicable.
 
@@ -42,6 +42,8 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg download-album`](#tg-download-album) | Download one cached Telegram media group |
 | [`tg download-media`](#tg-download-media) | Download media attached to a message |
 | [`tg edit-msg`](#tg-edit-msg) | Edit a previously sent message |
+| [`tg events-ack`](#tg-events-ack) | Acknowledge one event after saving it in your own durable inbox |
+| [`tg events-list`](#tg-events-list) | Read pending cached updates without consuming them or opening Telegram |
 | [`tg export`](#tg-export) | Export cached Telegram history locally |
 | [`tg folder-add-chat`](#tg-folder-add-chat) | Mutate folder chat membership |
 | [`tg folder-create`](#tg-folder-create) | Create a dialog folder |
@@ -1013,6 +1015,57 @@ tg edit-msg 123456789 1 "updated" --allow-write --json
 | `--idempotency-key string` | Per-account replay-safe key |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
 
+## `tg events-ack`
+
+Acknowledge one event after saving it in your own durable inbox
+
+**Use**
+
+```text
+tg events-ack <receipt> [flags]
+```
+
+**Example**
+
+```bash
+tg events-ack <receipt> [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--allow-write` | Required for local DB writes |
+| `--dry-run` | Validate receipt without removing the event |
+| `-h, --help` | help for events-ack |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+
+## `tg events-list`
+
+Read pending cached updates without consuming them or opening Telegram
+
+**Use**
+
+```text
+tg events-list [flags]
+```
+
+**Example**
+
+```bash
+tg events-list [flags] --json
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `-h, --help` | help for events-list |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--limit int` | Maximum pending events (1–100) (default 20) |
+
 ## `tg export`
 
 Export cached Telegram history locally
@@ -1467,6 +1520,7 @@ tg listen --once --json
 | `-h, --help` | help for listen |
 | `--human` | Force human-readable output (default on a TTY) |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--manual-ack` | With --once, retain the delivered event until events-ack confirms durable consumption |
 | `--once` | Exit after one filter-matching update |
 | `--only-dms` | Emit only 1-on-1 user messages; skip groups/channels |
 | `--only-groups` | Emit only group/channel messages; skip 1-on-1 DMs |

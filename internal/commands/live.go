@@ -15,15 +15,27 @@ import (
 )
 
 func registerLiveCommands(root *cobra.Command, cfg CommandsConfig) {
+	registerEventCommands(root, cfg)
 	cmd := &cobra.Command{
 		Use:          "listen",
 		Short:        "Listen for live Telegram updates",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			once, _ := cmd.Flags().GetBool("once")
+			manualAck, _ := cmd.Flags().GetBool("manual-ack")
 			onlyDMs, _ := cmd.Flags().GetBool("only-dms")
 			onlyGroups, _ := cmd.Flags().GetBool("only-groups")
-			dbPath, sessionPath, auditPath, pathErr := resolveWritePaths(cmd, cfg.Paths)
+			if manualAck && (!once || onlyDMs || onlyGroups) {
+				return emitDispatchedFailure(cmd, "listen", safety.NewBadArgs("--manual-ack requires --once without event filters; pending events must not be skipped"))
+			}
+			if err := safety.RequireWriteAllowed(localWriteArgs(cmd)); err != nil {
+				return emitDispatchedFailure(cmd, "listen", err)
+			}
+			account, err := selectedAccount(cmd, cfg.Paths)
+			if err != nil {
+				return emitDispatchedFailure(cmd, "listen", err)
+			}
+			dbPath, sessionPath, auditPath, pathErr := accountPathsForMode(cfg.Paths, account, false)
 			if pathErr != nil {
 				return emitDispatchedFailure(cmd, "listen", pathErr)
 			}
@@ -47,9 +59,24 @@ func registerLiveCommands(root *cobra.Command, cfg CommandsConfig) {
 					if err := applyLiveEvent(db, event); err != nil {
 						return fmt.Errorf("persist live update: %w", err)
 					}
-					env := output.Success("listen.event", event, output.NewRequestID(), nil)
+					var data any = event
+					if manualAck {
+						receipt, err := store.PendingEventReceipt(ctx, db, store.EventScope(dbPath, account), event.EventID)
+						if err != nil {
+							return fmt.Errorf("cannot prepare durable event receipt: %w", err)
+						}
+						data = struct {
+							client.ListenEvent
+							Receipt     string `json:"receipt"`
+							AckRequired bool   `json:"ack_required"`
+						}{event, receipt, true}
+					}
+					env := output.Success("listen.event", data, output.NewRequestID(), nil)
 					if output.Emit(env, output.EmitOptions{JSON: true, Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr()}) != output.OK {
 						return fmt.Errorf("live update persisted but output delivery failed")
+					}
+					if manualAck {
+						return nil
 					}
 					return client.AcknowledgeListenEvent(ctx, c, event)
 				}
@@ -92,6 +119,7 @@ func registerLiveCommands(root *cobra.Command, cfg CommandsConfig) {
 		},
 	}
 	cmd.Flags().Bool("once", false, "Exit after one filter-matching update")
+	cmd.Flags().Bool("manual-ack", false, "With --once, retain the delivered event until events-ack confirms durable consumption")
 	cmd.Flags().Bool("only-dms", false, "Emit only 1-on-1 user messages; skip groups/channels")
 	cmd.Flags().Bool("only-groups", false, "Emit only group/channel messages; skip 1-on-1 DMs")
 	cmd.MarkFlagsMutuallyExclusive("only-dms", "only-groups")

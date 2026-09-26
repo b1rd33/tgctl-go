@@ -43,6 +43,8 @@ no private Telegram transcript is stored in this repository.
 | `download-album` | `internal/commands/media_album_download_test.go` dry-run, partial, overwrite, recovery tests | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
 | `download-media` | `internal/commands/media_download_test.go` gate, selector, artifact identity, recovery tests | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
 | `edit-msg` | `internal/commands/messages_write_test.go:TestEditMsgInvokesClient` | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
+| `events-ack` | `internal/commands/events_test.go`, `internal/store/events_test.go` | [preview only](verification-2026-09-26.md) | Offline local queue write: exact receipt, dry-run, account isolation, repeated and concurrent acknowledgement |
+| `events-list` | same event tests | [pending replay check](verification-2026-09-26.md) | Non-consuming bounded replay while session is locked; no Telegram refresh |
 | `export` | `internal/commands/export_test.go` JSONL/CSV/HTML, overwrite, manifest tests | unverified | Local-only by contract |
 | `folder-add-chat` | `internal/commands/topics_folders_test.go` folder behavior and `internal/client/permissions_test.go` patch preservation | unverified | No live folder mutation |
 | `folder-create` | `internal/commands/topics_folders_test.go:TestFolderCreateReplaysIdempotency` | unverified | Fake-backed idempotency |
@@ -58,7 +60,7 @@ no private Telegram transcript is stored in this repository.
 | `kick` | `internal/client/destructive_rpc_test.go:TestKickReportsPartialCommitAndDoesNotClearExistingRestrictions` | unverified | Offline fake/TL behavior only |
 | `leave-chat` | `internal/commands/destructive_test.go` user rejection and group execution | unverified | No live leave |
 | `list-msgs` | `internal/commands/messages_read_test.go` date/filter tests, `TestRemoteHistoryUsesBoundedPageAndTypedCursor`, `TestRemoteRowsBoundPagesAndTerminateContinuation`; `internal/store/cursor_test.go` timestamp/remote cursor tests | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
-| `listen` | `internal/commands/live_test.go` event, filters, output failure; update storage tests | unverified | Controlled live event not run |
+| `listen` | `internal/commands/live_test.go`, `events_test.go` event/filter/output failure and manual replay; update storage regressions | [process restart replay](verification-2026-09-26.md) | Existing pending event retained; new incoming event/gap recovery not verified live |
 | `login` | `internal/commands/login_test.go` QR secret-output test and read-only guards | unverified | No auth mutation/live login |
 | `logout` | account-management tests; session storage and durable RPC ledger tests | unverified | Remote confirmation before local removal; unknown outcome preserves credential; late flush and cleanup failures tested |
 | `mark-read` | `internal/commands/messages_write_test.go:TestMarkReadInvokesClient` | unverified | No live read marker |

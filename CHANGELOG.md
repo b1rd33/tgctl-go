@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add explicit durable consumer acknowledgement: `listen --once --manual-ack`, offline `events-list`, and receipt-scoped `events-ack`. Retain pending events until a consumer confirms it saved them.
+- Avoid reapplying already-persisted outbox events over newer cached updates.
+
 - Record archive, notification, contact and logout RPCs in the durable request ledger before calling Telegram.
 - Keep verified download paths and Telegram media identities together so original/downloaded hash lookup survives later file removal; reject stale replacements and deletions.
 - Add `contact-add`, `contact-remove` and confirmed current-session `logout`, preserving unrelated sessions, cached history and downloads. Phone sharing is opt-in.
