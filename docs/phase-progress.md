@@ -79,3 +79,17 @@ updates. See [consumer contract and tests](update-consumers.md). This does not
 provide multi-consumer subscriptions, a Telegram daemon or customer automation.
 Fixture-dependent live gates and the sponsored-message scope question above
 remain open; optional phase 6 features remain deferred.
+
+## Expiring update delivery repair (2026-09-26, unreleased)
+
+A regression reproduced old message/edit payloads remaining in the pending
+outbox after an expiring update cleared the message cache. The repair purges
+pending payloads for the complete peer/message identity in the expiry transaction,
+keeps a content-free notice, and prevents stale recovery updates from requeuing
+content rejected by a tombstone. No schema conversion or dependency change.
+
+`internal/client/update_privacy_test.go` covers users, basic groups, channels,
+media TTL, unchanged unrelated receipts, stale full/short update replay, consumer
+restart, malformed unrelated rows and rollback/checkpoint failure barriers.
+Expiry mutations are tested with synthetic offline fixtures, not private live
+messages. Already delivered/exported copies remain the consumer's responsibility.

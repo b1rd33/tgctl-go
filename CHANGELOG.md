@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Purge pending payloads when an expiring-message update is observed, alongside the cached content. Keep a content-free notice and prevent stale recovery updates from republishing tombstoned messages.
+
 - Add explicit durable consumer acknowledgement: `listen --once --manual-ack`, offline `events-list`, and receipt-scoped `events-ack`. Retain pending events until a consumer confirms it saved them.
 - Avoid reapplying already-persisted outbox events over newer cached updates.
 
