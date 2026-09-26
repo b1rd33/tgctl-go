@@ -9,6 +9,7 @@ no private Telegram transcript is stored in this repository.
 
 | Command | Offline asserted evidence | Live execution | Status / limitation |
 | --- | --- | --- | --- |
+| `reader` | `internal/reader/server_test.go`, `logic_test.mjs`, `internal/client/sponsored_test.go`, `internal/commands/reader_test.go` | Saved Messages and official ad-channel fetch-only acceptance; no real sponsored engagement | Private localhost capability, account/peer binding, bounded history/media, callback ledger and duplicate/unknown guards. Browser interactions use synthetic ads; see [reader limits](reader.md) |
 | `account-limits` | `internal/commands/phase24_test.go:TestResolveAndAccountLimitsExposeExplicitSources` | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
 | `account-sessions` | `internal/commands/admin_test.go:TestAccountSessionsUsesListSessions` | unverified | Read path asserted; no live session inventory in repo |
 | `accounts-add` | `internal/commands/read_only_test.go:TestAccountMutationsRejectReadOnlyWithoutFilesystemChanges` | unverified | Guard and account isolation covered |

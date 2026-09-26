@@ -23,6 +23,9 @@ func TestAccountMutationsAreDurableBeforeRPC(t *testing.T) {
 		&tg.ContactsAddContactRequest{ID: &tg.InputUser{UserID: 7, AccessHash: 70}, FirstName: "Test"},
 		&tg.ContactsDeleteContactsRequest{ID: []tg.InputUserClass{&tg.InputUser{UserID: 7, AccessHash: 70}}},
 		&tg.AuthLogOutRequest{},
+		&tg.MessagesViewSponsoredMessageRequest{RandomID: []byte("synthetic-ad")},
+		&tg.MessagesClickSponsoredMessageRequest{RandomID: []byte("synthetic-ad"), Media: true},
+		&tg.MessagesReportSponsoredMessageRequest{RandomID: []byte("synthetic-ad"), Option: []byte("synthetic-option")},
 	}
 	for _, req := range requests {
 		t.Run(fmt.Sprintf("%T", req), func(t *testing.T) {

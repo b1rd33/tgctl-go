@@ -46,6 +46,7 @@ func runRoot(t *testing.T, cfg CommandsConfig, args ...string) (string, int) {
 	t.Helper()
 	root := NewRootCommand()
 	registerSetup(root)
+	registerReader(root, cfg)
 	registerWriteCommands(root, cfg)
 	registerMediaCommands(root, cfg)
 	registerTopicCommands(root, cfg)

@@ -1,6 +1,16 @@
 # Phase progress ledger
 
-This ledger records the implementation state for the v0.4–v0.6 reliability
+## Local reader follow-up (v0.9.0)
+
+The approved bounded reader adds a temporary account/peer-bound localhost
+surface with channel/bot sponsored messages, five-minute caching, visibility
+checks, human click/report handling and durable callback outcomes. Unsupported
+required content withholds the page. See [reader scope and verification](reader.md).
+This does not close the independent question for existing headless channel
+surfaces. Two-account permission and disposable forum/session acceptance remain
+fixture-dependent; optional phase 6 features remain outside this work.
+
+The original ledger below records the implementation state for the v0.4–v0.6 reliability
 roadmap, with the remaining phase 5 increment described below. “Complete” means the offline implementation,
 contracts, and repository checks are complete; it does not claim live Telegram
 acceptance.

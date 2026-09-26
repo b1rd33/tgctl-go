@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.9.0 — 2026-09-26
+
+- Add an explicit-account, temporary `reader` on localhost with bounded history and supported channel/bot sponsored messages. Session ownership is released between requests; ordinary attachments stay in Telegram.
+- Protect the private browser capability with Host/Origin checks, bounded requests and expiry. Use the existing durable write/audit/idempotency path for genuine ad interactions; never automatically repeat uncertain callbacks.
+- Add synthetic browser fixtures and offline tests for visibility policy, safe links, formatting, cache expiry, report options, account isolation and server shutdown. Update the command reference and Telegram skill.
+
+Unsupported required advertisement formats withhold the page. Existing headless
+channel display requirements and disposable-account/forum acceptance remain open;
+this release does not claim full roadmap or Telegram terms acceptance.
+
 ## v0.8.1 — 2026-09-26
 
 - Correct selected-member and current-account permission inspection: combine group defaults and personal restrictions, honor administrator and broadcast roles, expiry and boost exemptions, and preserve unavailable rights as unknown.

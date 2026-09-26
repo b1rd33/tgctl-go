@@ -1,6 +1,6 @@
 # Commands
 
-`tg --help` shows 95 commands. This page is generated from Cobra help output.
+`tg --help` shows 96 commands. This page is generated from Cobra help output.
 
 Every command supports the global flags shown by `tg --help`: `--account`, `--full`, `--json`, `--human`, `--lock-wait`, `--read-only`, and `--version` where applicable.
 
@@ -73,6 +73,7 @@ Every command supports the global flags shown by `tg --help`: `--account`, `--fu
 | [`tg pin-msg`](#tg-pin-msg) | Pin a message in a chat |
 | [`tg promote`](#tg-promote) | promote user in chat |
 | [`tg react`](#tg-react) | Send a reaction to a message |
+| [`tg reader`](#tg-reader) | Serve bounded chat history on loopback, with sponsored messages and genuine browser interaction reporting. |
 | [`tg replies`](#tg-replies) | Retrieve a bounded server page of replies to a message |
 | [`tg resolve`](#tg-resolve) | Resolve a selector to a marked Telegram peer identity |
 | [`tg search`](#tg-search) | Search cached messages in a chat |
@@ -1887,6 +1888,34 @@ tg react 123456789 1 "👍" --allow-write --json
 | `--human` | Force human-readable output (default on a TTY) |
 | `--idempotency-key string` | Per-account replay-safe key |
 | `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+
+## `tg reader`
+
+Serve bounded chat history on loopback, with sponsored messages and genuine browser interaction reporting.
+
+**Use**
+
+```text
+tg reader <chat> [flags]
+```
+
+**Example**
+
+```bash
+tg --account work reader self --allow-write --human
+```
+
+**Flags**
+
+| Flag | Description |
+|---|---|
+| `--allow-write` | Allow genuine sponsored view/click/report callbacks and local audit/ledger writes |
+| `--dry-run` | Validate the local reader plan without opening a listener or contacting Telegram |
+| `--duration duration` | Maximum reader lifetime (1–60 minutes) (default 15m0s) |
+| `-h, --help` | help for reader |
+| `--human` | Force human-readable output (default on a TTY) |
+| `--json` | Force JSON envelope output (default when stdout is not a TTY) |
+| `--limit int` | Messages per page (1–100; at most 20 continuation pages) (default 50) |
 
 ## `tg replies`
 

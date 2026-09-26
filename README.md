@@ -6,6 +6,8 @@ A single static `tg` binary that drives your real Telegram account from the comm
 
 A Telegram account CLI built with Go and gotd. Structured output, explicit write gates, and one binary with no runtime dependencies.
 
+A temporary human reading surface is available with `tg --account work reader self --allow-write --human`. See [local reader scope and limits](docs/reader.md).
+
 ## What it's for
 
 Anything you'd otherwise click through Telegram Desktop to do, but at scale or on a schedule. Concrete uses people are running it for today:
