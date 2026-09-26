@@ -160,7 +160,14 @@ func (s *updateStorage) Handle(ctx context.Context, u tg.UpdatesClass) (resultEr
 		if err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, "INSERT INTO tg_event_outbox(event) VALUES(?)", string(encoded)); err != nil {
+		// A stale recovery update can be rejected by a deletion/expiry tombstone
+		// above. Do not publish its payload through the outbox after the cache
+		// has already refused it. Content-free deletion/expiry notices still pass.
+		content := event.ChatID != 0 && event.MessageID != 0 && !event.Deleted && event.UpdateKind != "unsupported_expiring_message"
+		if _, err := tx.ExecContext(ctx, `INSERT INTO tg_event_outbox(event)
+			SELECT ? WHERE NOT ? OR NOT EXISTS (
+				SELECT 1 FROM tg_messages WHERE chat_id=? AND message_id=? AND deleted=1
+			)`, string(encoded), content, event.ChatID, event.MessageID); err != nil {
 			return err
 		}
 	}
@@ -203,6 +210,14 @@ func persistUpdateEvent(tx *sql.Tx, e ListenEvent) error {
 		return err
 	}
 	if e.UpdateKind == "unsupported_expiring_message" {
+		// Expiry applies to pending deliveries as well as the message cache.
+		// Match the complete peer/message identity; other channels can reuse IDs.
+		// Preserve unrelated malformed rows for explicit diagnosis.
+		if _, err := tx.Exec(`DELETE FROM tg_event_outbox WHERE CASE WHEN json_valid(event)
+			THEN json_extract(event,'$.chat_id')=? AND json_extract(event,'$.message_id')=?
+			ELSE 0 END`, e.ChatID, e.MessageID); err != nil {
+			return err
+		}
 		if err := purgeExpiringMedia(tx, e.ChatID, e.MessageID); err != nil {
 			return err
 		}

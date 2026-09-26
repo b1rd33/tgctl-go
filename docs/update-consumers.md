@@ -59,8 +59,13 @@ cost; drain pending rows locally before reopening Telegram.
 
 The queue persists normalized updates, not an authoritative immutable history.
 Updates can be replayed, and gaps that Telegram can no longer recover remain
-errors. Pending rows are retained until acknowledged, so consumers must monitor
-disk space. Corrupt or oversized rows fail visibly rather than being discarded.
+errors. Pending rows are retained until acknowledged, except that observing an
+expiring-message update removes older pending payloads for that peer/message.
+The content-free `unsupported_expiring_message` notice lets consumers discard
+their own saved payloads and cancel pending actions for that message. Already
+delivered copies cannot be retracted by the CLI. Queue IDs can have gaps; absence
+is not proof of successful processing. Consumers must monitor disk space. Corrupt
+or oversized rows fail visibly rather than being discarded.
 Treat event contents as private untrusted input. These commands do not establish
 permission to process third-party messages with an AI service or to reply to them.
 
