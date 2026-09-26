@@ -71,3 +71,44 @@ Full unit and race suites, vet, native/Windows builds, command-reference checks,
 formatting and diff checks passed for this follow-up. The bundled skill documents
 the new consumer contract; the installed skill remains paired with the installed
 release until a matching binary is installed.
+
+## v0.8.1 acceptance follow-up
+
+The committed `scripts/live_verify.py` reproduces bounded acceptance using an
+explicit account and absolute candidate-binary path. `--writes --media` was run
+in Saved Messages with small ffmpeg-generated JPEG, H.264/AAC MP4, OGG/Opus, MP3
+and text fixtures. Private responses were parsed in memory, never printed.
+
+Passed: matching cached/live identity and self resolution; account limits,
+diagnostics and bounded history; write denial/read-only override and dry-run;
+text send/replay/edit, reply root, forwarded content, remote search, pin/unpin
+state; single photo/video/voice/document type and original-hash assertions;
+non-photo downloaded bytes matching originals; mixed photo/video, audio-only
+and document-only album IDs, shared grouping and first-item-only caption.
+Every confirmed test message was deleted and checked remotely as deleted,
+including cleanup of the initial failed run. No private updates were acknowledged.
+
+The first expanded media check failed because reads classified videos as generic
+documents. The new offline regression reproduced this across video, voice, audio,
+sticker, animation and video-note inputs. Reusing the existing download classifier
+fixed it; the complete live scope above then passed. Existing cached classifications
+are not migrated and need refresh. Video duration/dimensions, full media-format
+coverage and native Telegram rendering were not asserted by this run.
+
+Permission regressions separately reproduce wrong selected-member roles, missing
+self/default restrictions and administrator posting. Tests cover basic groups,
+broadcasts, expiry, unknown participants, boost exemptions and gigagroups. These
+are synthetic adapter tests, not proof of real server-side rights transitions.
+Their semantics follow [Telegram rights](https://core.telegram.org/api/rights),
+[restriction flags](https://core.telegram.org/constructor/chatBannedRights) and
+[TDLib's participant logic](https://github.com/tdlib/td/blob/master/td/telegram/DialogParticipant.cpp).
+Missing effective keys are unknown; other-member boost exemption can be unknown.
+Slow-mode next-send metadata describes the authenticated account.
+
+Remaining fixture and sponsored-display gates listed above are unchanged. This
+report does not claim full roadmap or whole-command live acceptance.
+
+Patch validation passed: 1,329 unit tests and the same full race suite across
+17 packages; vet, native and Windows builds, formatting, generated command
+references, dependency metadata, public repository hygiene and eight offline
+live-harness safety tests. Native platform CI remains required before publication.

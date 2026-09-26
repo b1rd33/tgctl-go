@@ -29,8 +29,12 @@ func registerAdminCommands(root *cobra.Command, cfg CommandsConfig) {
 
 func chatPermissionsCommand(cfg CommandsConfig) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "chat-permissions <chat> [user]",
-		Short:        "Inspect current or selected member rights for a chat",
+		Use:   "chat-permissions <chat> [user]",
+		Short: "Inspect current or selected member rights for a chat",
+		Long: "Inspect advisory rights for the current account or a selected user in a group/channel.\n\n" +
+			"fresh_at dates the snapshot. Missing effective keys mean unknown, not denied.\n" +
+			"default_restrictions_apply is null when another member's boost exemption is unknown.\n" +
+			"Slow-mode next-send time describes the authenticated account. Telegram decides authorization.",
 		Args:         cobra.RangeArgs(1, 2),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

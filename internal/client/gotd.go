@@ -2424,111 +2424,6 @@ func (g *GotdClient) GetChatsInfo(ctx context.Context, ids []int64) ([]ChatInfo,
 	return result, nil
 }
 
-func (g *GotdClient) GetChatPermissions(ctx context.Context, chatID, userID int64) (PermissionInfo, error) {
-	chats, err := g.GetChatsInfo(ctx, []int64{chatID})
-	if err != nil {
-		return PermissionInfo{}, err
-	}
-	if len(chats) != 1 {
-		return PermissionInfo{}, safety.NewBadArgs("requested peer metadata was not returned by Telegram")
-	}
-	info := PermissionInfo{Chat: chats[0], UserID: userID, Role: "unknown", Effective: effectiveRights(chats[0].AdminRights, chats[0].DefaultBannedRights), Advisory: true}
-	if chats[0].Creator {
-		info.Role = "creator"
-	} else if hasAdminRights(chats[0].AdminRights) {
-		info.Role = "admin"
-	} else {
-		info.Role = "member"
-	}
-	peer, err := g.peerFromChatID(ctx, chatID)
-	if err != nil {
-		return PermissionInfo{}, err
-	}
-	channel, ok := peer.(*tg.InputPeerChannel)
-	if !ok {
-		return info, nil
-	}
-	full, err := g.api.ChannelsGetFullChannel(ctx, &tg.InputChannel{ChannelID: channel.ChannelID, AccessHash: channel.AccessHash})
-	if err != nil {
-		return PermissionInfo{}, mapRPCErr(err)
-	}
-	if full != nil {
-		if channelFull, ok := full.FullChat.(*tg.ChannelFull); ok {
-			info.Chat.SlowmodeSeconds = channelFull.SlowmodeSeconds
-			info.Chat.SlowmodeNextSendDate = int64(channelFull.SlowmodeNextSendDate)
-			info.Chat.SlowmodeKnown = true
-		}
-	}
-	if userID == 0 || chats[0].Type != "supergroup" && chats[0].Type != "channel" {
-		return info, nil
-	}
-	var target tg.InputPeerClass
-	if userID == g.selfID {
-		target = &tg.InputPeerSelf{}
-	} else {
-		target, err = g.peerFromChatID(ctx, userID)
-		if err != nil {
-			return PermissionInfo{}, err
-		}
-	}
-	participant, err := g.api.ChannelsGetParticipant(ctx, &tg.ChannelsGetParticipantRequest{
-		Channel: &tg.InputChannel{ChannelID: channel.ChannelID, AccessHash: channel.AccessHash}, Participant: target,
-	})
-	if err != nil {
-		return PermissionInfo{}, mapRPCErr(err)
-	}
-	info.Role, info.AdminRights, info.BannedRights = participantPermission(participant.Participant)
-	info.Effective = effectiveRights(info.AdminRights, info.BannedRights)
-	return info, nil
-}
-
-func hasAdminRights(rights *tg.ChatAdminRights) bool {
-	if rights == nil {
-		return false
-	}
-	return rights.Other || rights.ChangeInfo || rights.DeleteMessages || rights.BanUsers || rights.InviteUsers || rights.PinMessages || rights.ManageTopics || rights.PostMessages || rights.EditMessages || rights.ManageCall || rights.AddAdmins
-}
-
-func effectiveRights(admin *tg.ChatAdminRights, banned *tg.ChatBannedRights) map[string]bool {
-	out := map[string]bool{}
-	if admin != nil {
-		out["change_info"] = admin.ChangeInfo
-		out["delete_messages"] = admin.DeleteMessages
-		out["ban_users"] = admin.BanUsers
-		out["invite_users"] = admin.InviteUsers
-		out["pin_messages"] = admin.PinMessages
-		out["manage_topics"] = admin.ManageTopics
-		out["post_messages"] = admin.PostMessages
-		out["edit_messages"] = admin.EditMessages
-		out["manage_call"] = admin.ManageCall
-		out["add_admins"] = admin.AddAdmins
-		out["send_messages"] = admin.PostMessages
-	}
-	if banned != nil {
-		out["send_messages"] = !banned.SendMessages
-		out["send_media"] = !banned.SendMedia
-		out["send_stickers"] = !banned.SendStickers
-		out["send_polls"] = !banned.SendPolls
-		out["embed_links"] = !banned.EmbedLinks
-	}
-	return out
-}
-
-func participantPermission(participant tg.ChannelParticipantClass) (string, *tg.ChatAdminRights, *tg.ChatBannedRights) {
-	switch p := participant.(type) {
-	case *tg.ChannelParticipantCreator:
-		return "creator", nil, nil
-	case *tg.ChannelParticipantAdmin:
-		return "admin", &p.AdminRights, nil
-	case *tg.ChannelParticipantBanned:
-		return "banned", nil, &p.BannedRights
-	case *tg.ChannelParticipantLeft:
-		return "left", nil, nil
-	default:
-		return "member", nil, nil
-	}
-}
-
 func (g *GotdClient) ListenOnce(ctx context.Context) (ListenEvent, error) {
 	if g.updateStore != nil {
 		return g.listenDurable(ctx)
@@ -2646,12 +2541,20 @@ func expiringMessage(m *tg.Message) bool {
 }
 
 func messageMediaType(media tg.MessageMediaClass) string {
-	switch media.(type) {
-	case nil:
+	if isTypedNil(media) {
 		return ""
+	}
+	switch media := media.(type) {
 	case *tg.MessageMediaPhoto:
 		return "photo"
 	case *tg.MessageMediaDocument:
+		var attributes []tg.DocumentAttributeClass
+		if document, ok := media.Document.(*tg.Document); ok && document != nil {
+			attributes = document.Attributes
+		}
+		if kind, _, err := classifyDocument(media, attributes); err == nil {
+			return kind
+		}
 		return "document"
 	default:
 		return fmt.Sprintf("%T", media)

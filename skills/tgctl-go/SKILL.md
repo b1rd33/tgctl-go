@@ -55,7 +55,11 @@ the same Cobra help used to build `docs/commands.md`.
 - **Forum topics:** `topic-create`, `topic-edit`, `topic-pin`, `topic-unpin`.
 - **Permissions:** `chat-permissions` inspects current or selected-member
   rights and available slow-mode metadata as advisory state; server
-  authorization is still authoritative.
+  authorization is still authoritative. `fresh_at` dates the snapshot; omitted
+  `effective` keys mean unknown, not denied. `default_restrictions_apply` is
+  null when another member's boost exemption cannot be established. Basic-group
+  administrator details may be unavailable. Slow-mode next-send time describes
+  the authenticated account, even when a different member is selected.
 - **Shell utilities:** `completion`, `help`, `version`.
 
 ### Universal CLI contract
@@ -121,6 +125,9 @@ stdout defaults to JSON; use `--human` only for a person at a terminal.
 - **`account-limits`** reads authenticated Premium capability plus app-config
   limits. Unknown Premium or missing limits remain explicitly unknown; the
   reported upload cap is not a replacement for the operator's local cap.
+- Fresh reads and updates classify Telegram video, voice, audio, animation,
+  sticker and video-note attributes consistently with downloads. Older cache
+  rows can retain generic document labels until refreshed.
 - **Media commands** upload one file or a 2–10 item group, or download media
   into the account-scoped media root. Use the album rules below and the
   complete reference for per-kind flags and size limits.
@@ -337,15 +344,14 @@ a numeric chat ID and distinct already-authorized account names. It sends one
 allowed probe and one denied probe, expects exit 10 and `PERMISSION_DENIED`
 for the restricted member, keeps raw output ephemeral, and does not ban,
 promote, delete, mass-message, or deliberately create a real `FLOOD_WAIT`.
-The broader `scripts/live_verify.sh` exercises many write commands and is not
-an album test; run it only against an isolated target. Separately test album
-upload/download with Saved Messages or another disposable chat using valid
-photo, video, audio, and document fixtures. The album matrix should cover a
-valid JPEG plus normal H.264/AAC video carousel, audio-only and document-only
-groups, order, first-item caption, returned IDs, shared `grouped_id`, backfill,
-album download output, idempotent replay, and zero-network dry-run. Keep
-fixtures and transcripts ephemeral. The permission script does not create or
-delete accounts or chats.
+Use `python3 scripts/live_verify.py --binary /absolute/path/to/tg --account test`
+for bounded reads. Add `--writes --media` for synthetic Saved Messages text,
+replies, forwards, pins, valid single media transfers and photo/video, audio-only
+and document-only albums (ffmpeg required). It verifies identity, preserves the
+session lock, prints labels only, and deletes confirmed probes with a remote
+check. Unknown sends stop for ledger inspection without retry. It does not
+consume pending events or cover forum/contact/session mutations. Never copy a
+session into a test account or use a customer chat as a substitute fixture.
 
 ## Verification and release
 

@@ -101,3 +101,25 @@ update-delivery repairs. It does not expand channel functionality or declare
 full roadmap acceptance. The open sponsored-display requirement and disposable
 forum/admin fixtures remain tracked above. Selected live checks and synthetic
 failure coverage are kept distinct. No optional phase 6 features are included.
+
+## Permission and media classification repair (v0.8.1)
+
+`chat-permissions` now queries the actual selected participant (including self)
+and basic-group membership. It combines current default and member restrictions,
+handles administrators, broadcast posting, gigagroups and expired bans, and omits
+unknown effective rights. Boost exemptions for other members remain explicitly
+unknown. The snapshot is advisory and timestamped; no write is authorized by it.
+Regression tests reproduced incorrect self restrictions, defaults, admin sending
+and basic-group subject selection before the fixes.
+
+The expanded live harness exposed generic `document` labels on video and voice
+reads. Reads and updates now reuse the semantic classifier used by downloads.
+Old cached rows are not rewritten; refresh them when exact type matters.
+Obsolete live scripts that copied sessions or printed private results have been
+removed. The replacement tests only controlled Saved Messages state.
+
+Remaining acceptance work requires a separately authenticated disposable account
+and disposable forum/discussion fixtures for contact/session/rights and topic
+transitions. Sponsored display requires a separately approved visible reader;
+headless JSON and fabricated ad views do not close that requirement. Optional
+phase 6 features remain deferred. These repairs do not declare all gates closed.

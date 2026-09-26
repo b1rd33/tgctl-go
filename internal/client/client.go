@@ -53,13 +53,15 @@ type AccountLimits struct {
 }
 
 type PermissionInfo struct {
-	Chat         ChatInfo             `json:"chat"`
-	UserID       int64                `json:"user_id,omitempty"`
-	Role         string               `json:"role"`
-	AdminRights  *tg.ChatAdminRights  `json:"admin_rights,omitempty"`
-	BannedRights *tg.ChatBannedRights `json:"banned_rights,omitempty"`
-	Effective    map[string]bool      `json:"effective"`
-	Advisory     bool                 `json:"advisory"`
+	DefaultRestrictionsApply *bool                `json:"default_restrictions_apply"`
+	FreshAt                  string               `json:"fresh_at"`
+	Chat                     ChatInfo             `json:"chat"`
+	UserID                   int64                `json:"user_id,omitempty"`
+	Role                     string               `json:"role"`
+	AdminRights              *tg.ChatAdminRights  `json:"admin_rights,omitempty"`
+	BannedRights             *tg.ChatBannedRights `json:"banned_rights,omitempty"`
+	Effective                map[string]bool      `json:"effective"`
+	Advisory                 bool                 `json:"advisory"`
 }
 
 type TopicHistoryReq struct {
@@ -318,6 +320,7 @@ type SessionRef struct {
 }
 
 type ChatInfo struct {
+	Gigagroup            bool                 `json:"gigagroup,omitempty"`
 	Source               string               `json:"source,omitempty"`
 	ReadInboxMaxID       int                  `json:"read_inbox_max_id"`
 	ReadStateKnown       bool                 `json:"read_state_known"`

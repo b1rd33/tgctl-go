@@ -12,9 +12,9 @@ no private Telegram transcript is stored in this repository.
 | `account-limits` | `internal/commands/phase24_test.go:TestResolveAndAccountLimitsExposeExplicitSources` | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
 | `account-sessions` | `internal/commands/admin_test.go:TestAccountSessionsUsesListSessions` | unverified | Read path asserted; no live session inventory in repo |
 | `accounts-add` | `internal/commands/read_only_test.go:TestAccountMutationsRejectReadOnlyWithoutFilesystemChanges` | unverified | Guard and account isolation covered |
-| `accounts-list` | account selection tests | unverified | Listing behavior covered indirectly |
+| `accounts-list` | account selection tests | [bounded acceptance](verification-2026-09-26.md) | Explicit-account diagnostics or controlled Saved Messages state; see verification scope |
 | `accounts-remove` | `internal/commands/accounts_command_test.go:TestAccountsRemoveUsesTypedConfirmationContract` | unverified | Destructive path prepared offline only |
-| `accounts-show` | `internal/commands/read_only_global_test.go:TestAccountsShowReadOnlyDoesNotCreatePaths` | unverified | Read-only path covered |
+| `accounts-show` | `internal/commands/read_only_global_test.go:TestAccountsShowReadOnlyDoesNotCreatePaths` | [bounded acceptance](verification-2026-09-26.md) | Explicit-account diagnostics or controlled Saved Messages state; see verification scope |
 | `accounts-use` | account selection tests | unverified | Selection precedence covered |
 | `archive` | `internal/commands/peer_folder_test.go:TestArchiveUnarchiveRouteOnePeerAndReplayByRequest`, `TestArchiveDryRunReadOnlyAndFuzzyGates`, `TestArchiveUsesSelectedAccountAndPreservesIsolation`, `TestArchiveCancellationBeforeCommitIsReportedWithoutSuccess`, `TestArchivePersistenceFailureReportsCommittedOutcome`; `internal/client/peer_folder_test.go:TestSetPeerFolderRoutesTypedPeersAndArchiveIDs` | unverified | Typed user/group/channel payloads, folder ID 1, durable/idempotent gates and committed-unknown handling; no live mutation |
 | `backfill` | `internal/commands/localdb_test.go` backfill cap, rollback, media, recovery, and schema tests | unverified | No live mutation/read fixture in repo |
@@ -24,9 +24,9 @@ no private Telegram transcript is stored in this repository.
 | `chat-description` | admin tests cover shared invocation path | unverified | Exact client assertion not yet present |
 | `chat-invite-link` | admin tests cover shared invocation path | unverified | Exact client assertion not yet present |
 | `chat-members` | `internal/commands/admin_test.go:TestChatsInfoAndMembersReadCommands` | unverified | Read client invocation asserted |
-| `chat-permissions` | `internal/commands/phase24_test.go:TestChatPermissionsReadUsesFakeAndMarksAdvisory`; `internal/client/remote_read_test.go:TestChatPermissionsAdapterIncludesSlowmode` | unverified | Advisory rights and slow-mode metadata coverage; no live forum fixture |
+| `chat-permissions` | `internal/commands/phase24_test.go:TestChatPermissionsReadUsesFakeAndMarksAdvisory`; `internal/client/remote_read_test.go:TestChatPermissionsAdapterIncludesSlowmode`; `internal/client/permission_inspection_test.go` | unverified | Selected member/self, defaults, roles, expiry, boost uncertainty and slow mode; no live rights transitions |
 | `chat-photo` | admin tests cover shared invocation path | unverified | Exact client assertion not yet present |
-| `chat-pinned-list` | `internal/commands/admin_test.go:TestChatsInfoAndMembersReadCommands` | unverified | Read client invocation asserted |
+| `chat-pinned-list` | `internal/commands/admin_test.go:TestChatsInfoAndMembersReadCommands` | [bounded acceptance](verification-2026-09-26.md) | Explicit-account diagnostics or controlled Saved Messages state; see verification scope |
 | `chat-title` | `internal/commands/admin_test.go:TestChatTitleInvokesClient` | unverified | Offline fake invocation asserted |
 | `chats-info` | `internal/commands/admin_test.go:TestChatsInfoAndMembersReadCommands` | unverified | Read client invocation asserted |
 | `completion` | Cobra registration exercised by binary help generation | unverified | Shell output not behaviorally tested |
@@ -39,7 +39,7 @@ no private Telegram transcript is stored in this repository.
 | `demote` | `internal/commands/admin_test.go:TestDemoteRequiresResolvedChatConfirmation` | unverified | Offline confirmation only |
 | `discover` | `internal/commands/localdb_test.go:TestDiscoverUpsertsChats` | unverified | Fake-backed cache write asserted |
 | `discussion-message` | `internal/commands/phase24_test.go` thread command coverage; `internal/client/remote_read_test.go:TestRepliesAndDiscussionAdaptersPreservePeerRouting` | unverified | Fake/TL-backed response and peer routing; no live linked discussion |
-| `doctor` | account selection and doctor tests | unverified | Diagnostics asserted; no live report |
+| `doctor` | account selection and doctor tests | [bounded acceptance](verification-2026-09-26.md) | Explicit-account diagnostics or controlled Saved Messages state; see verification scope |
 | `download-album` | `internal/commands/media_album_download_test.go` dry-run, partial, overwrite, recovery tests | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
 | `download-media` | `internal/commands/media_download_test.go` gate, selector, artifact identity, recovery tests | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
 | `edit-msg` | `internal/commands/messages_write_test.go:TestEditMsgInvokesClient` | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
@@ -66,8 +66,8 @@ no private Telegram transcript is stored in this repository.
 | `mark-read` | `internal/commands/messages_write_test.go:TestMarkReadInvokesClient` | unverified | No live read marker |
 | `me` | `internal/commands/auth_test.go` offline and envelope tests; read-only tests | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
 | `mute` | `internal/commands/notifications_test.go` parsing, gates, replay, isolation, cancellation and committed-outcome tests; `internal/client/notifications_test.go` typed-peer and optional-field request tests | unverified | Changes only per-peer `mute_until`; no live notification mutation |
-| `operations-list` | `internal/commands/recovery.go` plus write ledger tests | unverified | Durable outcome inspection covered through store/client tests |
-| `pin-msg` | `internal/commands/messages_write_test.go:TestPinUnpinInvokesClient` | unverified | No live pin |
+| `operations-list` | `internal/commands/recovery.go` plus write ledger tests | [bounded acceptance](verification-2026-09-26.md) | Explicit-account diagnostics or controlled Saved Messages state; see verification scope |
+| `pin-msg` | `internal/commands/messages_write_test.go:TestPinUnpinInvokesClient` | [bounded acceptance](verification-2026-09-26.md) | Explicit-account diagnostics or controlled Saved Messages state; see verification scope |
 | `promote` | `internal/commands/admin_test.go:TestPromoteRequiresResolvedChatConfirmation` | unverified | Offline confirmation only |
 | `react` | `internal/commands/messages_write_test.go:TestReactRejectsEmptyEmoji`, `TestReactBigFlagDoesNotClaimPremiumEligibility` | unverified | Offline animation/Premium-label semantics; no live reaction |
 | `replies` | `internal/commands/phase24_test.go:TestRepliesRunnerBindsCursorToRootAndChat`; `internal/client/remote_read_test.go:TestRepliesAndDiscussionAdaptersPreservePeerRouting` | unverified | Cursor binding/continuation and fake/TL request routing; no live thread fixture |
@@ -78,7 +78,7 @@ no private Telegram transcript is stored in this repository.
 | `set-permissions` | `internal/commands/admin_test.go:TestSetPermissionsAcceptsSendMessagesFlag`; `internal/client/permissions_test.go` patch tests | unverified | No live admin fixture |
 | `setup` | `internal/commands/setup_test.go` credential, preservation, read-only, stable-root tests | unverified | Explicit and default destinations covered offline |
 | `show` | `internal/commands/messages_read_test.go:TestShowRunnerResolverIntegration`, deleted/envelope, `TestRemoteHistoryUsesBoundedPageAndTypedCursor`, `TestRemoteRowsBoundPagesAndTerminateContinuation` | unverified | Defaults to cache; bounded Telegram history is offline-tested, live source remains unverified |
-| `stats` | `internal/commands/read_extra_test.go:TestStatsContactsUnreadReadFromCache` | unverified | Cache-only |
+| `stats` | `internal/commands/read_extra_test.go:TestStatsContactsUnreadReadFromCache` | [bounded acceptance](verification-2026-09-26.md) | Explicit-account diagnostics or controlled Saved Messages state; see verification scope |
 | `sync` | `internal/commands/sync_test.go` checkpoint, follow, reconnect tests | unverified | No live update stream |
 | `sync-contacts` | `internal/commands/localdb_test.go:TestSyncContactsUpsertsContacts` | unverified | Fake-backed cache write |
 | `terminate-session` | `internal/commands/destructive_test.go:TestTerminateSessionTypedConfirm` | unverified | No live session revocation |
@@ -92,13 +92,13 @@ no private Telegram transcript is stored in this repository.
 | `unban-from-chat` | admin tests cover shared confirmation path | unverified | Exact live denial/success absent |
 | `unblock-user` | `internal/commands/destructive_test.go:TestUnblockUserExecutes` | unverified | Offline fake-backed execution |
 | `unarchive` | `internal/commands/peer_folder_test.go:TestArchiveUnarchiveRouteOnePeerAndReplayByRequest`; `internal/client/peer_folder_test.go:TestSetPeerFolderRoutesTypedPeersAndArchiveIDs` | unverified | Typed group/user/channel payloads, folder ID 0, same single-peer durable pipeline; no live mutation |
-| `unpin-msg` | `internal/commands/messages_write_test.go:TestPinUnpinInvokesClient` | unverified | No live unpin |
+| `unpin-msg` | `internal/commands/messages_write_test.go:TestPinUnpinInvokesClient` | [bounded acceptance](verification-2026-09-26.md) | Explicit-account diagnostics or controlled Saved Messages state; see verification scope |
 | `unread` | `internal/commands/read_extra_test.go:TestStatsContactsUnreadReadFromCache` | unverified | Cache-only |
 | `upload-album` | `internal/commands/upload_album_test.go` extensive dry-run, order, mapping, idempotency, failure tests; `internal/client/upload_album_test.go` TL-shape tests | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
 | `upload-document` | `internal/commands/media_test.go` invocation/dry-run/idempotency tests | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
 | `upload-photo` | `internal/commands/media_test.go:TestUploadPhotoDryRunSkipsClient` | [bounded Saved Messages check](verification-2026-09-26.md) | Scope and assertions are listed in the verification report; other peers and failure modes remain offline-only |
-| `upload-video` | media tests cover shared upload path | unverified | Exact video live/fixture evidence absent |
-| `upload-voice` | media tests cover shared upload path | unverified | Exact voice live/fixture evidence absent |
+| `upload-video` | media tests cover shared upload path | [bounded acceptance](verification-2026-09-26.md) | Explicit-account diagnostics or controlled Saved Messages state; see verification scope |
+| `upload-voice` | media tests cover shared upload path | [bounded acceptance](verification-2026-09-26.md) | Explicit-account diagnostics or controlled Saved Messages state; see verification scope |
 | `version` | `internal/commands/root_test.go` version/envelope/provenance tests | unverified | Local utility |
 
 ## Evidence policy

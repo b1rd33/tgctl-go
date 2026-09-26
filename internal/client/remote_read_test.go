@@ -29,16 +29,6 @@ func TestUserFromSelfPreservesUnknownPremiumState(t *testing.T) {
 	}
 }
 
-func TestEffectiveRightsApplyBansOverAdminDefaults(t *testing.T) {
-	got := effectiveRights(
-		&tg.ChatAdminRights{PostMessages: true, ManageTopics: true},
-		&tg.ChatBannedRights{SendMessages: true, SendMedia: true, EmbedLinks: true},
-	)
-	if !got["manage_topics"] || got["send_messages"] || got["send_media"] || got["embed_links"] {
-		t.Fatalf("effective rights = %#v", got)
-	}
-}
-
 func TestRemoteHistoryAdapterPropagatesAllOffsets(t *testing.T) {
 	db := updateTestDB(t)
 	if err := store.UpsertEntity(db, 7, store.EntityUser, 70); err != nil {
@@ -249,7 +239,7 @@ func TestChatPermissionsAdapterIncludesSlowmode(t *testing.T) {
 	if err := store.UpsertEntity(db, 7, store.EntityChannel, 70); err != nil {
 		t.Fatal(err)
 	}
-	g := &GotdClient{db: db, resolvedPeers: map[int64]tg.InputPeerClass{}, api: tg.NewClient(invokeFunc(func(_ context.Context, in bin.Encoder, out bin.Decoder) error {
+	g := &GotdClient{db: db, selfID: 1, resolvedPeers: map[int64]tg.InputPeerClass{}, api: tg.NewClient(invokeFunc(func(_ context.Context, in bin.Encoder, out bin.Decoder) error {
 		switch req := in.(type) {
 		case *tg.MessagesGetPeerDialogsRequest:
 			out.(*tg.MessagesPeerDialogs).Chats = []tg.ChatClass{&tg.Channel{ID: 7, AccessHash: 70, Megagroup: true, Forum: true, Title: "Forum"}}
@@ -259,7 +249,9 @@ func TestChatPermissionsAdapterIncludesSlowmode(t *testing.T) {
 			if !ok || channel.ChannelID != 7 || channel.AccessHash != 70 {
 				t.Fatalf("full channel request = %+v", req)
 			}
-			out.(*tg.MessagesChatFull).FullChat = &tg.ChannelFull{SlowmodeSeconds: 30, SlowmodeNextSendDate: 123}
+			out.(*tg.MessagesChatFull).FullChat = &tg.ChannelFull{ID: 7, SlowmodeSeconds: 30, SlowmodeNextSendDate: 123}
+		case *tg.ChannelsGetParticipantRequest:
+			out.(*tg.ChannelsChannelParticipant).Participant = &tg.ChannelParticipantSelf{UserID: 1}
 		default:
 			t.Fatalf("unexpected permissions request %T", in)
 		}

@@ -61,7 +61,7 @@ Every new write command needs:
 
 - a `FakeClient` unit test that proves the runner builds the intended request
 - a dry-run test when the command has safety-sensitive arguments
-- a live exercise in [scripts/live_verify.sh](scripts/live_verify.sh) when the
+- a live exercise in [scripts/live_verify.py](scripts/live_verify.py) when the
   command can be tested without contacting unrelated people
 
 Do not bypass the write pipeline for convenience. If the pipeline cannot model
@@ -97,16 +97,12 @@ Live tests must only touch Saved Messages or explicitly created temporary test
 chats. They must clean up temporary Telegram state with traps or equivalent
 failure-safe cleanup.
 
-Live scripts must require test chat/account selectors through environment
-variables. They must not default to a maintainer's account, session, username, or
-local path, and raw transcripts/reports must stay outside the repository.
-Each run uses a mode-0700 temporary workspace, creates raw files with mode 0600,
-and removes the workspace on success, failure, or signal. Raw-output retention
-environment variables are intentionally rejected.
-The import/export simulation additionally requires an explicit dedicated forum
-chat in `TGCTL_LIVE_FORUM_CHAT` and four ordered, comma-separated dedicated
-folder targets in `TGCTL_LIVE_FOLDER_TARGETS`; it never discovers write targets
-from the local cache.
+Live scripts must require explicit test account and binary selections. Saved
+Messages probes verify the cached and live identity before writing. They use the
+normal session lock, never copy authorization files, and print only check labels.
+Raw responses stay in memory; media fixtures use a private temporary directory.
+Unknown write outcomes stop the run and require ledger inspection before retry.
+Other live tests need explicitly provisioned disposable targets.
 
 Before filing an issue or opening a PR, remove Telegram phone numbers, usernames,
 peer/message IDs, invite links, session/auth data, local database paths, message
@@ -122,17 +118,19 @@ the checker to trust a directory or extension.
 
 ## Local Live Verification
 
-Live verification requires credentials in `.env` and an authenticated session in
-`accounts/default/tg.session`.
+Use an already authenticated account and a freshly built binary:
 
 ```bash
-bash scripts/live_verify.sh
-bash scripts/import_export_simulation.sh
+python3 scripts/live_verify.py --binary "$PWD/tg" --account test
+python3 scripts/live_verify.py --binary "$PWD/tg" --account test --writes --media
 ```
 
-The broad live script favors dry runs for risky write surfaces. More targeted
-release scripts may perform real Telegram round-trips, but they must document
-what they touch and why it is safe.
+The default run is read-only. `--writes` tests synthetic Saved Messages text,
+replies, forwarding, search and pins, then deletes its confirmed message IDs and
+verifies deletion. `--media` requires ffmpeg and adds valid photo, video, voice,
+document and album transfers. No customer chats or pending event receipts are
+modified. This bounded suite is not full command acceptance; forum/admin/contact
+and session mutations still require separate disposable fixtures.
 
 ## Documentation
 
